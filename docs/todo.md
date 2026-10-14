@@ -1,0 +1,201 @@
+# TODO & Timeline — SaaS Boilerplate Tier 1
+
+> Rujukan: [spec.md](spec.md) · [plan.md](plan.md)
+> Asumsi: 1 backend developer dibantu AI agent, dikerjakan **di sela waktu luang** (tanpa deadline tanggal).
+> Timeline berupa **durasi kerja efektif** (1 hari = 1 hari penuh fokus), bukan tanggal kalender.
+> Format: `- [ ] tugas (estimasi hari)` · `§` = bagian di spec
+> Estimasi sudah memperhitungkan bantuan AI (kira-kira 40% lebih cepat dari kerja manual).
+
+## Ringkasan Durasi
+
+| Fase | Nama | Durasi |
+|---|---|---|
+| 0 | Setup & Platform | 3 hari |
+| 1 | Outbox & Mail | 3 hari |
+| 2 | Auth | 6 hari |
+| 3 | User | 3 hari |
+| 4 | Organisasi, Tim & Role | 8 hari |
+| 5 | Entitlement | 3 hari |
+| 6 | Billing | 10 hari |
+| 7 | Hardening & Acceptance | 4 hari |
+| | **Total** | **40 hari kerja efektif** |
+| | Buffer | 5 hari |
+
+**Cara membaca:** jika Anda bisa menyisihkan ±2 jam/hari, 1 hari efektif ≈ 3–4 hari kalender. Total sekitar 4–6 bulan. Jika bisa 2 hari penuh tiap akhir pekan, total sekitar 20 minggu (±5 bulan).
+
+Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fase berakhir pada milestone yang bisa dijalankan dan diuji, jadi aman berhenti di antara fase.
+
+---
+
+## Fase 0 — Setup & Platform (3 hari)
+
+- [x] Library diputuskan: `gin`, `pgx`, `sqlc`, `goose`, `zerolog`, `testcontainers-go`
+- [ ] Init repo Go, `go.mod`, struktur folder `cmd/` `internal/` `migrations/` `templates/email/` (§2) (0.25)
+- [ ] Konfigurasi `sqlc.yaml` dan `goose` (0.25)
+- [ ] `docker-compose`: PostgreSQL 18, Mailpit (0.25)
+- [ ] `platform/config`: load env var, validasi (0.25)
+- [ ] `platform/db`: koneksi pool `pgx`, helper transaksi `WithTx` (0.25)
+- [ ] `platform/clock`: interface Clock + fake untuk test (0.1)
+- [ ] `platform/errors`: tipe error + format JSON & kode error (§3) (0.25)
+- [ ] `platform/logger`: `zerolog` JSON dengan `request_id` (§11) (0.1)
+- [ ] Middleware `gin`: request id, recover, logging, CORS, security headers (0.25)
+- [ ] Util: UUID v7 (pakai `uuidv7()` bawaan PostgreSQL 18), cursor pagination, validasi input (0.25)
+- [ ] Endpoint `/healthz` dan `/readyz` (0.1)
+- [ ] Migrasi pertama: ekstensi `citext`, tabel `users` (§4.1) (0.1)
+- [ ] Setup CI (lint, unit test, integration test via `testcontainers-go`) (0.25)
+- [ ] Makefile / task runner: migrate, run, test, seed, sqlc (0.1)
+
+**Selesai bila:** API jalan, health check hijau, CI hijau.
+
+---
+
+## Fase 1 — Outbox & Mail (3 hari)
+
+- [ ] Migrasi `outbox_jobs` (§4.11) (0.1)
+- [ ] Repo outbox: `Enqueue(tx, job)` dalam transaksi pemanggil (0.25)
+- [ ] Worker: polling dengan `SELECT … FOR UPDATE SKIP LOCKED`, status `processing/done/failed` (0.5)
+- [ ] Retry exponential backoff 1m, 5m, 30m, 2j, 6j; gagal ke-5 → `failed` (§10.1) (0.3)
+- [ ] Interface `Mailer` + implementasi SMTP (Mailpit) + implementasi log (0.3)
+- [ ] Renderer template `html/template` (HTML + plain text) + layout dasar (0.3)
+- [ ] Template awal: `verify_email`, `password_reset`, `password_changed` (0.3)
+- [ ] `cmd/worker` entrypoint + graceful shutdown (0.15)
+- [ ] Test: job diproses sekali saat 2 worker jalan; backoff sesuai jadwal (fake clock); rollback tx → tidak ada job (0.5)
+
+**Selesai bila:** email test terkirim ke Mailpit lewat outbox; AC Email (§12) untuk retry dan non-sinkron terpenuhi.
+
+---
+
+## Fase 2 — Auth (6 hari)
+
+- [ ] Migrasi `user_tokens`, `refresh_tokens` (§4.2, §4.3) (0.1)
+- [ ] Hashing Argon2id + validasi password (8–72, ≠ email) (0.25)
+- [ ] Util token acak + hash SHA-256; service `user_tokens` (buat, pakai sekali, expiry per tipe) (0.4)
+- [ ] `POST /auth/register` (user + job verifikasi; org & subscription di-stub, §5.2) (0.5)
+- [ ] `POST /auth/verify-email`, `POST /auth/resend-verification` (0.3)
+- [ ] JWT: sign/verify, klaim `sub`/`sid`, 15 menit (§5.5) (0.3)
+- [ ] `POST /auth/login` (0.3)
+- [ ] Middleware autentikasi + guard `EMAIL_NOT_VERIFIED` (0.3)
+- [ ] Refresh token: issue, rotasi, `replaced_by`, deteksi reuse → cabut family (§5.3) (0.7)
+- [ ] `POST /auth/refresh` (cookie HttpOnly untuk web, body untuk mobile) (0.3)
+- [ ] `POST /auth/logout` (0.1)
+- [ ] `POST /auth/forgot-password` (selalu 200) + `POST /auth/reset-password` (cabut semua refresh token, kirim `password_changed`) (0.5)
+- [ ] Rate limiter + aturan per endpoint (§5.4) (0.7)
+- [ ] Test unit service auth; integration: rotasi, reuse detection, token sekali pakai, tidak ada user enumeration (0.7)
+
+**Selesai bila:** AC Auth (§12) lulus, kecuali "otomatis punya organisasi dan plan Free" (menunggu Fase 4–5).
+
+---
+
+## Fase 3 — User (3 hari)
+
+- [ ] `GET /me` (daftar org diisi setelah Fase 4) dan `PATCH /me` (0.3)
+- [ ] `POST /me/password` (password lama wajib; cabut sesi lain kecuali saat ini; email notifikasi) (0.4)
+- [ ] `POST /me/email` + `POST /me/email/confirm` + template `email_change_confirm`, `email_changed_notice` (0.6)
+- [ ] `GET /me/sessions`, `DELETE /me/sessions/{id}` (0.3)
+- [ ] `DELETE /me`: soft delete + anonimisasi email, cabut semua sesi; pengecekan owner lewat interface ke modul org (stub dulu) (0.4)
+- [ ] Test unit + integration modul user (0.4)
+
+**Selesai bila:** AC User (§12) lulus, kecuali penolakan hapus akun owner yang menunggu Fase 4.
+
+---
+
+## Fase 4 — Organisasi, Tim & Role (8 hari)
+
+- [x] Keputusan #3: pakai RLS sebagai lapisan kedua (sekalian belajar)
+- [ ] Migrasi `organizations`, `memberships`, `invitations` + constraint unik (§4.4–4.6) (0.3)
+- [ ] **Spike belajar RLS:** tabel dummy, policy, `SET LOCAL`, role DB non-owner, `EXPLAIN ANALYZE` dengan/tanpa RLS (1 juta baris) (1)
+- [ ] Pembuatan org di registrasi: user + org + membership `owner` dalam 1 transaksi (§5.2) (0.3)
+- [ ] CRUD org: `GET/POST /orgs`, `GET/PATCH/DELETE /orgs/{orgId}` (slug unik) (0.6)
+- [ ] Tenant context middleware (404 jika bukan anggota; orgId & role ke context) (§7.3) (0.4)
+- [ ] Authorization helper berdasarkan matriks izin (§7.2) (0.4)
+- [ ] RLS: role DB aplikasi non-owner, `SET LOCAL app.current_org` di `WithTx`, policy dengan `(SELECT current_setting(...))`, index berawalan `organization_id` (0.8)
+- [ ] Test RLS: query tanpa filter org tidak bocor; lupa `SET LOCAL` → hasil kosong; worker/migrasi punya jalur bypass (0.3)
+- [ ] Anggota: `GET members`, `PATCH role`, `DELETE member`, `POST leave` (0.6)
+- [ ] Transfer kepemilikan atomik + konfirmasi password (§7.5) (0.4)
+- [ ] Undangan: buat/list/batalkan/resend; perbarui undangan aktif yang sama (§7.4) (0.6)
+- [ ] Undangan: `GET /invitations/{token}`, accept (cek email sama), decline, kedaluwarsa 7 hari (0.6)
+- [ ] Registrasi dengan email yang punya undangan → auto-accept, tanpa org baru (0.3)
+- [ ] Template `invitation`; guard `EMAIL_NOT_VERIFIED` untuk undang (0.3)
+- [ ] Hubungkan penolakan hapus akun owner (modul user) ke modul org (0.3)
+- [ ] **Daftar akun sandbox Midtrans** (0.1) ⚠️ lakukan di fase ini, persetujuan bisa lama
+- [ ] Test: matriks izin lengkap, isolasi tenant A vs B, transfer atomik, siklus undangan (0.7)
+
+**Selesai bila:** AC Multi-tenancy & Tim (§12) lulus; AC User hapus akun lulus.
+
+---
+
+## Fase 5 — Entitlement (3 hari)
+
+- [ ] Migrasi `plans` + seed `free/pro/business` (§4.7, §9.3) (0.3)
+- [ ] Migrasi `subscriptions` (§4.8) (0.15)
+- [ ] Registrasi membuat subscription `free` dalam transaksi yang sama (0.15)
+- [ ] Plan efektif: status → akses fitur (§8.2, §9.2) (0.3)
+- [ ] Interface `Entitlements`: `HasFeature`, `CheckLimit`, `Usage` (hitung dari data aktual) (0.6)
+- [ ] Limit `members` = anggota + undangan aktif; pasang di alur undangan (§7.4) (0.3)
+- [ ] Middleware `RequireFeature(...)` + error `PLAN_LIMIT_REACHED` / `PLAN_FEATURE_UNAVAILABLE` berisi detail upgrade (0.3)
+- [ ] `GET /plans`, `GET /orgs/{orgId}/subscription` (status + usage vs limit) (0.3)
+- [ ] Perintah seed dev: plan default + akun demo (0.3)
+- [ ] Test: limit terlampaui, org `expired` kembali ke limit Free (0.3)
+
+**Selesai bila:** AC Entitlement + "daftar otomatis punya org & plan Free" lulus.
+
+---
+
+## Fase 6 — Billing (10 hari)
+
+**Bagian A: pondasi & checkout**
+- [ ] Spike Midtrans sandbox: buat payment, terima webhook, cek signature (0.5)
+- [ ] Migrasi `invoices`, `payment_events` (§4.9, §4.10) (0.3)
+- [ ] Interface `PaymentProvider` + implementasi Midtrans + fake provider untuk test (§8.1) (1)
+- [ ] Generator nomor invoice global `INV-YYYY-NNNNNN` (sequence) (0.15)
+- [ ] `POST …/subscription/checkout` (butuh role owner + email terverifikasi) → invoice + payment link (0.6)
+- [ ] `GET …/invoices`, `GET …/invoices/{id}` (0.3)
+- [ ] Template `invoice_created`, `payment_succeeded` (0.3)
+- [ ] Test checkout end-to-end dengan fake provider (0.3)
+
+**Bagian B: webhook & state machine**
+- [ ] `POST /webhooks/{provider}`: verifikasi signature → 401 jika salah (§8.5) (0.4)
+- [ ] Idempotensi `payment_events` `(provider, event_id)` (0.3)
+- [ ] Proses webhook transaksional: invoice → subscription → job email; `processed_at`/`error`, 500 jika gagal (0.8)
+- [ ] State machine subscription (`trialing/active/past_due/expired/canceled`) sebagai fungsi murni + tabel transisi (§8.2) (0.6)
+- [ ] `change-plan` (upgrade via invoice; downgrade via `pending_plan_id`), `cancel`, `resume` (§8.4) (0.7)
+- [ ] Test: webhook ganda diproses sekali, signature salah ditolak, semua transisi dengan fake clock (0.7)
+
+**Bagian C: cron & notifikasi**
+- [ ] Scheduler di worker + advisory lock (0.3)
+- [ ] `billing.renewals` (invoice H-3) (0.3)
+- [ ] `billing.expire` (active→past_due→expired, trial→expired, `grace_until` 3 hari) (0.5)
+- [ ] `billing.apply_scheduled` (pending plan & cancel_at_period_end) (0.3)
+- [ ] `billing.reminders` (H-3, H-1) + `billing.reconcile` (cek status `open` ke gateway) (0.8)
+- [ ] Template: `payment_reminder`, `subscription_past_due`, `subscription_expired`, `trial_ending` (0.4)
+- [ ] Test cron idempoten & aman bersamaan (jalan 2×, 2 worker) (0.5)
+- [ ] Test reconcile memperbaiki invoice dengan webhook hilang (0.2)
+
+**Selesai bila:** AC Billing (§12) lulus di sandbox Midtrans.
+*Jika terasa terlalu besar: geser `reminders` dan `trial_ending` ke Fase 7.*
+
+---
+
+## Fase 7 — Hardening & Acceptance (4 hari)
+
+- [ ] Telusuri seluruh checklist §12 ↔ test otomatis; tutup celah (0.6)
+- [ ] Review keamanan: header, CORS, validasi input, secret di env, query parametrized, rate limit (0.6)
+- [ ] Observability: `user_id` & `org_id` di log, log job gagal (0.3)
+- [ ] Uji beban ringan endpoint auth & webhook (0.3)
+- [ ] Putuskan provider email produksi (Resend/Brevo/SES) + implementasi `Mailer` + setup SPF/DKIM domain (0.5)
+- [ ] Dokumentasi: README (setup, env, jalankan API + worker), daftar endpoint/OpenAPI (0.6)
+- [ ] Panduan "cara menambah modul domain baru" (tenant context + CheckLimit) (0.3)
+- [ ] Demo end-to-end skenario penuh (daftar → undang → upgrade → expired) (0.3)
+- [ ] Update spec ke v1.0 + catat backlog Tier 2 (0.2)
+
+**Selesai bila:** semua checklist §12 tercentang, Tier 1 selesai.
+
+---
+
+## Buffer (5 hari)
+
+Dipakai untuk bug, review, atau fase yang molor. Fase yang paling rawan molor: Fase 6 (gateway eksternal) dan Fase 4 (RLS, karena sekalian belajar).
+
+## Backlog (di luar Tier 1, §13 spec)
+
+Panel super admin · audit log · notifikasi in-app · 2FA · OAuth · upload file · proration · kupon · pajak · multi-currency · API publik
