@@ -33,8 +33,6 @@ type UserService interface {
 	// (authenticating requests, refreshing tokens). Reads inside a transaction
 	// use GetByID instead.
 	GetSummary(ctx context.Context, q db.DBTX, id uuid.UUID) (user.Summary, error)
-	// InvalidateCache drops cached summaries; call it after a commit that changed a user.
-	InvalidateCache(ctx context.Context, ids ...uuid.UUID) error
 	MarkEmailVerified(ctx context.Context, q db.DBTX, id uuid.UUID) error
 	SetPasswordHash(ctx context.Context, q db.DBTX, id uuid.UUID, hash string) error
 }
@@ -181,30 +179,15 @@ func (s *Service) link(path, token string) string {
 // validation error on "token". Verifying twice is harmless: the second token
 // is simply rejected.
 func (s *Service) VerifyEmail(ctx context.Context, rawToken string) error {
-	var userID uuid.UUID
-	err := s.Tx.WithTx(ctx, func(tx pgx.Tx) error {
+	return s.Tx.WithTx(ctx, func(tx pgx.Tx) error {
 		tok, err := s.Tokens.Consume(ctx, tx, rawToken, TokenEmailVerification)
 		if err != nil {
 			return err
 		}
-		userID = tok.UserID
+		// MarkEmailVerified clears the user's cached summary once this
+		// transaction commits; no cache handling is needed here.
 		return s.Users.MarkEmailVerified(ctx, tx, tok.UserID)
 	})
-	if err != nil {
-		return err
-	}
-	s.invalidateUser(ctx, userID)
-	return nil
-}
-
-// invalidateUser drops the user's cached summary after a committed change. The
-// change already happened, so a failure is logged (the stale entry expires
-// within the cache TTL) rather than returned to the client.
-func (s *Service) invalidateUser(ctx context.Context, id uuid.UUID) {
-	if err := s.Users.InvalidateCache(ctx, id); err != nil {
-		zl := s.Log.FromContext(ctx)
-		zl.Error().Err(err).Str("user_id", id.String()).Msg("user cache invalidation failed; entry stays stale until its TTL")
-	}
 }
 
 // ResendVerification issues a fresh verification token (invalidating older

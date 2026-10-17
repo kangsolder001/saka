@@ -134,6 +134,24 @@ func (s *Service) InvalidateCache(ctx context.Context, ids ...uuid.UUID) error {
 	return nil
 }
 
+// invalidateAfterCommit drops the user's cached summary once the write on q is
+// durable (see db.AfterCommit). EVERY method of Service that changes or deletes
+// a user must end with it, so no caller (an update or delete endpoint) can
+// forget to clear the cache. A failure is logged, not returned: the data change
+// already happened, and the stale entry expires within the cache TTL.
+func (s *Service) invalidateAfterCommit(ctx context.Context, q db.DBTX, id uuid.UUID) {
+	if s.cache == nil {
+		return
+	}
+	// The request may be finished by the time the transaction commits.
+	ctx = context.WithoutCancel(ctx)
+	db.AfterCommit(q, func() {
+		if err := s.InvalidateCache(ctx, id); err != nil {
+			s.warn(ctx, err, "user cache invalidation failed; entry stays stale until its TTL")
+		}
+	})
+}
+
 func (s *Service) warn(ctx context.Context, err error, msg string) {
 	if s.log == nil {
 		return

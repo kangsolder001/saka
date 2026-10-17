@@ -149,3 +149,66 @@ func TestWithTx_NoOrgInContextLeavesSettingEmpty(t *testing.T) {
 		assert.Empty(t, *inside)
 	}
 }
+
+func TestAfterCommit_RunsOnlyAfterTheTransactionCommitted(t *testing.T) {
+	d := connect(t)
+	ctx := context.Background()
+	var visibleInHook int
+
+	err := d.WithTx(ctx, func(tx pgx.Tx) error {
+		if _, err := tx.Exec(ctx, "INSERT INTO items VALUES (1)"); err != nil {
+			return err
+		}
+		db.AfterCommit(tx, func() {
+			// The hook sees the committed row through a different connection.
+			_ = d.Pool().QueryRow(ctx, "SELECT count(*) FROM items").Scan(&visibleInHook)
+		})
+		assert.Zero(t, visibleInHook, "the hook must not run while the transaction is still open")
+		return nil
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, 1, visibleInHook, "after commit the data is durable and visible")
+}
+
+func TestAfterCommit_NeverRunsWhenTheTransactionRollsBackOrPanics(t *testing.T) {
+	d := connect(t)
+	ctx := context.Background()
+	var ran int
+
+	_ = d.WithTx(ctx, func(tx pgx.Tx) error {
+		db.AfterCommit(tx, func() { ran++ })
+		return errors.New("fails")
+	})
+	assert.PanicsWithValue(t, "boom", func() {
+		_ = d.WithTx(ctx, func(tx pgx.Tx) error {
+			db.AfterCommit(tx, func() { ran++ })
+			panic("boom")
+		})
+	})
+
+	assert.Zero(t, ran)
+}
+
+func TestAfterCommit_RunsHooksInRegistrationOrder(t *testing.T) {
+	d := connect(t)
+	var order []int
+
+	require.NoError(t, d.WithTx(context.Background(), func(tx pgx.Tx) error {
+		for i := 1; i <= 3; i++ {
+			db.AfterCommit(tx, func() { order = append(order, i) })
+		}
+		return nil
+	}))
+
+	assert.Equal(t, []int{1, 2, 3}, order)
+}
+
+func TestAfterCommit_RunsImmediatelyOutsideATransaction(t *testing.T) {
+	d := connect(t)
+	ran := false
+
+	db.AfterCommit(d.Pool(), func() { ran = true })
+
+	assert.True(t, ran, "on the pool each statement is already committed")
+}

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -55,9 +56,9 @@ func (e *cacheEnv) create(t *testing.T, email string) user.User {
 	return u
 }
 
-func (e *cacheEnv) cachedRaw(t *testing.T, id uuid.UUID) ([]byte, bool) {
+func (e *cacheEnv) cachedRaw(ctx context.Context, t *testing.T, id uuid.UUID) ([]byte, bool) {
 	t.Helper()
-	raw, found, err := e.redis.Namespace("user").Get(context.Background(), "summary:v1:"+id.String())
+	raw, found, err := e.redis.Namespace("user").Get(ctx, "summary:v1:"+id.String())
 	require.NoError(t, err)
 	return raw, found
 }
@@ -74,12 +75,12 @@ func TestGetSummary_FirstReadFillsTheCacheSecondReadComesFromIt(t *testing.T) {
 	e := newCacheEnv(t)
 	u := e.create(t, "ann@example.com")
 	ctx := context.Background()
-	_, cached := e.cachedRaw(t, u.ID)
+	_, cached := e.cachedRaw(context.Background(), t, u.ID)
 	require.False(t, cached, "nothing is cached before the first read")
 
 	first, err := e.svc.GetSummary(ctx, e.db.Pool(), u.ID)
 	require.NoError(t, err)
-	_, cached = e.cachedRaw(t, u.ID)
+	_, cached = e.cachedRaw(context.Background(), t, u.ID)
 	assert.True(t, cached, "a miss fills the cache")
 
 	// Change the row without invalidating: a cache hit must still return the old value.
@@ -119,8 +120,8 @@ func TestInvalidateCache_HandlesSeveralUsersAndNoneAndUnknown(t *testing.T) {
 	require.NoError(t, e.svc.InvalidateCache(ctx, a.ID, b.ID, uuid.New()))
 	require.NoError(t, e.svc.InvalidateCache(ctx), "no ids is a no-op")
 
-	_, aCached := e.cachedRaw(t, a.ID)
-	_, bCached := e.cachedRaw(t, b.ID)
+	_, aCached := e.cachedRaw(context.Background(), t, a.ID)
+	_, bCached := e.cachedRaw(context.Background(), t, b.ID)
 	assert.False(t, aCached)
 	assert.False(t, bCached)
 }
@@ -146,7 +147,7 @@ func TestCache_NeverContainsThePasswordHash(t *testing.T) {
 	_, err := e.svc.GetSummary(context.Background(), e.db.Pool(), u.ID)
 	require.NoError(t, err)
 
-	raw, found := e.cachedRaw(t, u.ID)
+	raw, found := e.cachedRaw(context.Background(), t, u.ID)
 
 	require.True(t, found)
 	assert.NotContains(t, string(raw), "secret-hash")
@@ -196,7 +197,7 @@ func TestGetSummary_UnknownUserIsNotFoundAndNotCached(t *testing.T) {
 	_, err := e.svc.GetSummary(context.Background(), e.db.Pool(), id)
 
 	assert.True(t, apperr.IsCode(err, apperr.CodeNotFound))
-	_, cached := e.cachedRaw(t, id)
+	_, cached := e.cachedRaw(context.Background(), t, id)
 	assert.False(t, cached, "negative results are never cached")
 }
 
@@ -244,7 +245,7 @@ func TestGetSummary_CorruptCacheEntryIsReplaced(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "Ann", got.Name)
-	raw, _ := e.cachedRaw(t, u.ID)
+	raw, _ := e.cachedRaw(context.Background(), t, u.ID)
 	assert.JSONEq(t, `{"id":"`+u.ID.String()+`","email":"ann@example.com","name":"Ann","status":"active"}`, string(raw), "repaired from the database")
 }
 
@@ -272,4 +273,101 @@ func TestGetSummary_WorksWithoutAnyCache(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, u.ID, got.ID)
 	assert.NoError(t, e.svc.InvalidateCache(context.Background(), u.ID), "invalidating without a cache is a no-op")
+}
+
+func TestWriteInsideATransaction_InvalidatesOnlyAfterCommit(t *testing.T) {
+	e := newCacheEnv(t)
+	u := e.create(t, "ann@example.com")
+	ctx := context.Background()
+	_, err := e.svc.GetSummary(ctx, e.db.Pool(), u.ID)
+	require.NoError(t, err)
+
+	err = e.db.WithTx(ctx, func(tx pgx.Tx) error {
+		if err := e.svc.MarkEmailVerified(ctx, tx, u.ID); err != nil {
+			return err
+		}
+		_, stillCached := e.cachedRaw(ctx, t, u.ID)
+		assert.True(t, stillCached, "nothing is dropped before the commit")
+		return nil
+	})
+
+	require.NoError(t, err)
+	_, cached := e.cachedRaw(context.Background(), t, u.ID)
+	assert.False(t, cached, "dropped right after the commit, with no extra call from the caller")
+}
+
+func TestWriteInsideATransaction_ARolledBackWriteLeavesTheCacheAlone(t *testing.T) {
+	e := newCacheEnv(t)
+	u := e.create(t, "ann@example.com")
+	ctx := context.Background()
+	_, err := e.svc.GetSummary(ctx, e.db.Pool(), u.ID)
+	require.NoError(t, err)
+
+	err = e.db.WithTx(ctx, func(tx pgx.Tx) error {
+		if err := e.svc.MarkEmailVerified(ctx, tx, u.ID); err != nil {
+			return err
+		}
+		return assert.AnError
+	})
+
+	require.Error(t, err)
+	_, cached := e.cachedRaw(context.Background(), t, u.ID)
+	assert.True(t, cached, "the row did not change, so the entry is still correct")
+	got, err := e.svc.GetSummary(ctx, e.db.Pool(), u.ID)
+	require.NoError(t, err)
+	assert.False(t, got.EmailVerified())
+}
+
+// This is the race that invalidating BEFORE the commit would lose: a reader
+// re-caches the old row while the writer's transaction is still open.
+func TestWriteInsideATransaction_AReaderCannotLeaveAStaleEntryBehind(t *testing.T) {
+	e := newCacheEnv(t)
+	u := e.create(t, "ann@example.com")
+	ctx := context.Background()
+
+	err := e.db.WithTx(ctx, func(tx pgx.Tx) error {
+		if err := e.svc.MarkEmailVerified(ctx, tx, u.ID); err != nil {
+			return err
+		}
+		// A concurrent request misses the cache and reads the not-yet-committed
+		// row from the database, caching the OLD (unverified) state.
+		stale, err := e.svc.GetSummary(ctx, e.db.Pool(), u.ID)
+		require.NoError(t, err)
+		require.False(t, stale.EmailVerified())
+		_, cached := e.cachedRaw(ctx, t, u.ID)
+		require.True(t, cached, "the stale entry exists while the writer is still open")
+		return nil
+	})
+	require.NoError(t, err)
+
+	got, err := e.svc.GetSummary(ctx, e.db.Pool(), u.ID)
+
+	require.NoError(t, err)
+	assert.True(t, got.EmailVerified(), "the post-commit invalidation wiped the stale entry")
+}
+
+func TestWriteOutsideATransaction_InvalidatesImmediately(t *testing.T) {
+	e := newCacheEnv(t)
+	u := e.create(t, "ann@example.com")
+	ctx := context.Background()
+	_, err := e.svc.GetSummary(ctx, e.db.Pool(), u.ID)
+	require.NoError(t, err)
+
+	require.NoError(t, e.svc.MarkEmailVerified(ctx, e.db.Pool(), u.ID))
+
+	_, cached := e.cachedRaw(context.Background(), t, u.ID)
+	assert.False(t, cached)
+}
+
+func TestSetPasswordHash_LeavesTheSummaryCacheAlone(t *testing.T) {
+	e := newCacheEnv(t)
+	u := e.create(t, "ann@example.com")
+	ctx := context.Background()
+	_, err := e.svc.GetSummary(ctx, e.db.Pool(), u.ID)
+	require.NoError(t, err)
+
+	require.NoError(t, e.svc.SetPasswordHash(ctx, e.db.Pool(), u.ID, "new-hash"))
+
+	_, cached := e.cachedRaw(context.Background(), t, u.ID)
+	assert.True(t, cached, "the summary has no password data, so nothing is stale")
 }

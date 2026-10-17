@@ -115,15 +115,12 @@ func (s *Service) MarkEmailVerified(ctx context.Context, q db.DBTX, id uuid.UUID
 	if _, err := userdb.New(q).MarkEmailVerified(ctx, userdb.MarkEmailVerifiedParams{ID: id, Now: s.clk.Now()}); err != nil {
 		return fmt.Errorf("user: mark email verified: %w", err)
 	}
-	// Best effort now; when q is a transaction the caller must invalidate again
-	// after commit (a reader could re-cache the old row before it commits).
-	if err := s.InvalidateCache(ctx, id); err != nil {
-		s.warn(ctx, err, "could not invalidate user cache")
-	}
+	s.invalidateAfterCommit(ctx, q, id)
 	return nil
 }
 
-// SetPasswordHash replaces the stored password hash.
+// SetPasswordHash replaces the stored password hash. The cached summary never
+// contains the hash, so there is nothing to invalidate.
 func (s *Service) SetPasswordHash(ctx context.Context, q db.DBTX, id uuid.UUID, hash string) error {
 	n, err := userdb.New(q).UpdatePasswordHash(ctx, userdb.UpdatePasswordHashParams{ID: id, PasswordHash: hash, Now: s.clk.Now()})
 	if err != nil {

@@ -94,12 +94,50 @@ func (d *DB) WithTx(ctx context.Context, fn func(tx pgx.Tx) error) (err error) {
 		}
 	}
 
-	if err := fn(tx); err != nil {
+	hooked := &hookTx{Tx: tx}
+	if err := fn(hooked); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit transaction: %w", err)
 	}
 	committed = true
+	hooked.runAfterCommit()
 	return nil
+}
+
+// CommitHooker is implemented by the transaction WithTx hands to its function.
+type CommitHooker interface {
+	// AfterCommit registers fn to run once the transaction has committed. It
+	// never runs if the transaction rolls back.
+	AfterCommit(fn func())
+}
+
+// AfterCommit runs fn after the transaction behind q commits. When q is not a
+// transaction (for example the connection pool, where each statement commits
+// on its own) the write has already happened, so fn runs immediately.
+//
+// Use it for side effects that must only follow durable data, such as dropping
+// a cache entry: doing that before the commit lets a concurrent reader
+// re-cache the old row.
+func AfterCommit(q DBTX, fn func()) {
+	if h, ok := q.(CommitHooker); ok {
+		h.AfterCommit(fn)
+		return
+	}
+	fn()
+}
+
+// hookTx is the pgx.Tx given to WithTx callbacks, extended with commit hooks.
+type hookTx struct {
+	pgx.Tx
+	hooks []func()
+}
+
+func (t *hookTx) AfterCommit(fn func()) { t.hooks = append(t.hooks, fn) }
+
+func (t *hookTx) runAfterCommit() {
+	for _, fn := range t.hooks {
+		fn()
+	}
 }
