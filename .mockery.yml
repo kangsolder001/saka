@@ -20,3 +20,8 @@ packages:
     interfaces:
       Mailer:
       Sender:
+  github.com/kangsolder001/saka/internal/auth:
+    interfaces:
+      Transactor:
+      UserService:
+      TokenService:

@@ -12,10 +12,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/kangsolder001/saka/internal/app"
 	"github.com/kangsolder001/saka/internal/platform/clock"
 	"github.com/kangsolder001/saka/internal/platform/config"
 	"github.com/kangsolder001/saka/internal/platform/db"
-	"github.com/kangsolder001/saka/internal/platform/httpx"
 	"github.com/kangsolder001/saka/internal/platform/logger"
 	"github.com/kangsolder001/saka/internal/platform/safego"
 )
@@ -53,7 +53,7 @@ func run() error {
 	defer database.Close()
 
 	runner := safego.NewRunner(log)
-	router, err := httpx.NewRouter(cfg, log, clock.Real{}, database)
+	router, err := app.NewRouter(cfg, log, clock.Real{}, database, app.Options{})
 	if err != nil {
 		return err
 	}

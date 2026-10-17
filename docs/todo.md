@@ -77,7 +77,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Migrasi `user_tokens`, `refresh_tokens` (§4.2, §4.3) (0.1)
 - [x] Hashing Argon2id + validasi password (8–72, ≠ email) (0.25)
 - [x] Util token acak + hash SHA-256; service `user_tokens` (buat, pakai sekali, expiry per tipe) (0.4)
-- [ ] `POST /auth/register` (user + job verifikasi; org & subscription di-stub, §5.2) (0.5)
+- [x] `POST /auth/register` (user + job verifikasi; org & subscription di-stub, §5.2) (0.5)
 - [ ] `POST /auth/verify-email`, `POST /auth/resend-verification` (0.3)
 - [ ] JWT: sign/verify, klaim `sub`/`sid`, 15 menit (§5.5) (0.3)
 - [ ] `POST /auth/login` (0.3)
