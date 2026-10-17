@@ -9,6 +9,11 @@ tool (
 )
 
 require (
+	github.com/caarlos0/env/v11 v11.4.1
+	github.com/stretchr/testify v1.12.1
+)
+
+require (
 	cel.dev/expr v0.25.2 // indirect
 	filippo.io/edwards25519 v1.2.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.3 // indirect
