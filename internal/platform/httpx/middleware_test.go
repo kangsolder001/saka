@@ -2,6 +2,7 @@ package httpx_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -44,7 +45,7 @@ func newEngine(t *testing.T, production bool, origins ...string) (*gin.Engine, *
 }
 
 func do(r http.Handler, method, target string, headers map[string]string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(method, target, nil)
+	req := httptest.NewRequestWithContext(context.Background(), method, target, nil)
 	for k, v := range headers {
 		req.Header.Set(k, v)
 	}

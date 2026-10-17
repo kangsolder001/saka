@@ -1,6 +1,7 @@
 package httpx_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -31,7 +32,7 @@ func bindEngine() *gin.Engine {
 }
 
 func post(r http.Handler, body string) *httptest.ResponseRecorder {
-	req := httptest.NewRequest(http.MethodPost, "/login", strings.NewReader(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/login", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 	r.ServeHTTP(rec, req)
@@ -85,7 +86,7 @@ func TestBindJSON_HandlerDoesNotRunOnFailure(t *testing.T) {
 		ran = true
 	})
 
-	req := httptest.NewRequest(http.MethodPost, "/x", strings.NewReader(`{}`))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/x", strings.NewReader(`{}`))
 	r.ServeHTTP(httptest.NewRecorder(), req)
 
 	assert.False(t, ran)

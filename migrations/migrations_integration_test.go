@@ -91,7 +91,7 @@ func TestMigrations_AreReversible(t *testing.T) {
 	_, dsn := newConn(t)
 	sqlDB, err := sql.Open("pgx", dsn)
 	require.NoError(t, err)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 	provider, err := goose.NewProvider(goose.DialectPostgres, sqlDB, migrations.FS)
 	require.NoError(t, err)
 	ctx := context.Background()

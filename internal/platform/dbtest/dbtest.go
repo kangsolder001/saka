@@ -65,7 +65,7 @@ func NewDatabase(t testing.TB) string {
 	if err != nil {
 		t.Fatalf("connect admin: %v", err)
 	}
-	defer admin.Close(ctx)
+	defer func() { _ = admin.Close(ctx) }()
 
 	if _, err := admin.Exec(ctx, fmt.Sprintf("CREATE DATABASE %s", name)); err != nil {
 		t.Fatalf("create database: %v", err)
@@ -75,7 +75,7 @@ func NewDatabase(t testing.TB) string {
 		if err != nil {
 			return
 		}
-		defer conn.Close(context.Background())
+		defer func() { _ = conn.Close(context.Background()) }()
 		_, _ = conn.Exec(context.Background(), fmt.Sprintf("DROP DATABASE IF EXISTS %s WITH (FORCE)", name))
 	})
 
@@ -105,7 +105,7 @@ func Migrate(t testing.TB, dsn string) {
 	if err != nil {
 		t.Fatalf("open database/sql: %v", err)
 	}
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	provider, err := goose.NewProvider(goose.DialectPostgres, sqlDB, migrations.FS)
 	if err != nil {
