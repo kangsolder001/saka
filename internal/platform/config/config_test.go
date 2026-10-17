@@ -32,6 +32,7 @@ func TestLoadFrom_Overrides(t *testing.T) {
 		"SHUTDOWN_TIMEOUT":     "30s",
 		"LOG_LEVEL":            "debug",
 		"CORS_ALLOWED_ORIGINS": "https://a.example,https://b.example",
+		"TRUSTED_PROXIES":      "10.0.0.0/8,172.16.0.1",
 		"DATABASE_URL":         validDBURL,
 		"DB_MAX_CONNS":         "25",
 		"DB_MIN_CONNS":         "2",
@@ -42,6 +43,7 @@ func TestLoadFrom_Overrides(t *testing.T) {
 	assert.Equal(t, ":9000", cfg.HTTPAddr)
 	assert.Equal(t, 30*time.Second, cfg.ShutdownTimeout)
 	assert.Equal(t, []string{"https://a.example", "https://b.example"}, cfg.CORSOrigins)
+	assert.Equal(t, []string{"10.0.0.0/8", "172.16.0.1"}, cfg.TrustedProxies)
 	assert.Equal(t, int32(25), cfg.DBMaxConns)
 	assert.Equal(t, int32(2), cfg.DBMinConns)
 }

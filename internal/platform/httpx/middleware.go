@@ -74,7 +74,7 @@ func AccessLog(log *logger.Logger, clk clock.Clock) gin.HandlerFunc {
 			Int("bytes", c.Writer.Size()).
 			Str("client_ip", c.ClientIP())
 		if len(c.Errors) > 0 {
-			event = event.Str("error", c.Errors.String())
+			event = event.Err(c.Errors.Last().Err)
 		}
 		event.Msg("request completed")
 	}

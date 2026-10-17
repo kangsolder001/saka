@@ -24,6 +24,9 @@ type Config struct {
 	ShutdownTimeout time.Duration `env:"SHUTDOWN_TIMEOUT" envDefault:"15s"`
 	LogLevel        string        `env:"LOG_LEVEL" envDefault:"info"`
 	CORSOrigins     []string      `env:"CORS_ALLOWED_ORIGINS" envSeparator:","`
+	// TrustedProxies are the proxy IPs/CIDRs whose X-Forwarded-For is believed.
+	// Empty means the direct peer address is always used as the client IP.
+	TrustedProxies []string `env:"TRUSTED_PROXIES" envSeparator:","`
 
 	DatabaseURL string `env:"DATABASE_URL"`
 	DBMaxConns  int32  `env:"DB_MAX_CONNS" envDefault:"10"`

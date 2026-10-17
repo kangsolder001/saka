@@ -8,4 +8,7 @@ pkgname: mocks
 filename: "mock_{{.InterfaceName | snakecase}}.go"
 structname: "Mock{{.InterfaceName}}"
 log-level: warn
-packages: {}
+packages:
+  github.com/kangsolder001/saka/internal/platform/httpx:
+    interfaces:
+      Pinger:
