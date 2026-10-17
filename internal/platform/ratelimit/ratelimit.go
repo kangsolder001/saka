@@ -1,5 +1,6 @@
-// Package ratelimit is a sliding-window rate limiter stored in PostgreSQL, so
-// every API instance shares the same counters without extra infrastructure.
+// Package ratelimit is a sliding-window rate limiter stored in Redis, so every
+// API instance shares the same counters and decisions are fast. Each key is a
+// sorted set of event timestamps; Lua scripts make every decision atomic.
 package ratelimit
 
 import (
@@ -10,12 +11,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/jackc/pgx/v5"
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/kangsolder001/saka/internal/platform/clock"
-	"github.com/kangsolder001/saka/internal/platform/db"
-	"github.com/kangsolder001/saka/internal/platform/ratelimit/ratelimitdb"
+	"github.com/kangsolder001/saka/internal/platform/redisx"
 )
+
+// Module is the Redis namespace of this package: <key_prefix>:ratelimit:.
+const Module = "ratelimit"
 
 // Rule is "at most Limit events per Window".
 type Rule struct {
@@ -41,81 +45,89 @@ func Key(name string, parts ...string) string {
 	return name + ":" + hex.EncodeToString(sum[:])
 }
 
-// Transactor runs a function in a transaction; *db.DB implements it.
-type Transactor interface {
-	WithTx(ctx context.Context, fn func(tx pgx.Tx) error) error
-}
+// take drops expired events, then counts one more if the limit allows it.
+// KEYS[1] key; ARGV: now_ms, since_ms (events at or before it have expired),
+// window_ms, limit, member. Returns {allowed, count, oldest_ms}.
+var takeScript = redis.NewScript(`
+redis.call('ZREMRANGEBYSCORE', KEYS[1], '-inf', ARGV[2])
+local count = redis.call('ZCARD', KEYS[1])
+if count >= tonumber(ARGV[4]) then
+  local oldest = redis.call('ZRANGE', KEYS[1], 0, 0, 'WITHSCORES')
+  return {0, count, oldest[2]}
+end
+redis.call('ZADD', KEYS[1], ARGV[1], ARGV[5])
+redis.call('PEXPIRE', KEYS[1], ARGV[3])
+return {1, count + 1, ARGV[1]}
+`)
 
-var _ Transactor = (*db.DB)(nil)
+// check counts the events inside the window without adding one.
+// KEYS[1] key; ARGV: since_ms. Returns {count, oldest_ms}.
+var checkScript = redis.NewScript(`
+local count = redis.call('ZCOUNT', KEYS[1], '(' .. ARGV[1], '+inf')
+local oldest = ARGV[1]
+if count > 0 then
+  local first = redis.call('ZRANGEBYSCORE', KEYS[1], '(' .. ARGV[1], '+inf', 'WITHSCORES', 'LIMIT', 0, 1)
+  oldest = first[2]
+end
+return {count, oldest}
+`)
 
-// Limiter applies Rules using the database.
+// Limiter applies Rules using Redis.
 type Limiter struct {
-	tx   Transactor
-	pool db.DBTX
-	clk  clock.Clock
+	ns  *redisx.Namespace
+	rdb *redis.Client
+	clk clock.Clock
 }
 
-// New creates a Limiter. pool is used for read-only checks and writes that
-// need no locking; tx for the atomic Take.
-func New(tx Transactor, pool db.DBTX, clk clock.Clock) *Limiter {
-	return &Limiter{tx: tx, pool: pool, clk: clk}
+// New creates a Limiter on the shared Redis connection.
+func New(client *redisx.Client, clk clock.Clock) *Limiter {
+	return &Limiter{ns: client.Namespace(Module), rdb: client.Raw(), clk: clk}
 }
 
 // Take atomically counts one event and reports whether it is allowed. Of any
 // number of concurrent callers on the same key, no more than Rule.Limit are
 // allowed per window. Denied attempts are not counted, so a client that keeps
-// hammering does not extend its own lockout.
+// hammering does not extend its own lockout. If Redis is unreachable the call
+// fails (the caller must not skip the limit).
 func (l *Limiter) Take(ctx context.Context, key string, rule Rule) (Decision, error) {
-	var decision Decision
-	err := l.tx.WithTx(ctx, func(tx pgx.Tx) error {
-		q := ratelimitdb.New(tx)
-		if err := q.LockKey(ctx, key); err != nil {
-			return fmt.Errorf("lock key: %w", err)
-		}
-		now := l.clk.Now()
-		since := now.Add(-rule.Window)
-		if err := q.DeleteExpiredHits(ctx, ratelimitdb.DeleteExpiredHitsParams{Key: key, Since: since}); err != nil {
-			return fmt.Errorf("drop expired hits: %w", err)
-		}
-		count, err := q.CountHits(ctx, ratelimitdb.CountHitsParams{Key: key, Since: since})
-		if err != nil {
-			return fmt.Errorf("count hits: %w", err)
-		}
-		decision = decide(rule, int(count.Hits), count.Oldest, now)
-		if !decision.Allowed {
-			return nil
-		}
-		if err := q.InsertHit(ctx, ratelimitdb.InsertHitParams{Key: key, Now: now}); err != nil {
-			return fmt.Errorf("record hit: %w", err)
-		}
-		decision.Remaining--
-		return nil
-	})
+	now := l.clk.Now()
+	res, err := takeScript.Run(ctx, l.rdb, []string{l.ns.Key(key)},
+		ms(now), ms(now.Add(-rule.Window)), rule.Window.Milliseconds(), rule.Limit, uuid.NewString()).Int64Slice()
 	if err != nil {
 		return Decision{}, fmt.Errorf("ratelimit: take %q: %w", rule.Name, err)
 	}
-	return decision, nil
+	if res[0] == 1 {
+		return Decision{Allowed: true, Remaining: rule.Limit - int(res[1])}, nil
+	}
+	return denied(rule, time.UnixMilli(res[2]), now), nil
 }
 
 // Check reports whether another event would be allowed, without counting one.
 // Pair it with Record to count only some events, such as failed logins.
 func (l *Limiter) Check(ctx context.Context, key string, rule Rule) (Decision, error) {
 	now := l.clk.Now()
-	count, err := ratelimitdb.New(l.pool).CountHits(ctx, ratelimitdb.CountHitsParams{Key: key, Since: now.Add(-rule.Window)})
+	res, err := checkScript.Run(ctx, l.rdb, []string{l.ns.Key(key)}, ms(now.Add(-rule.Window))).Int64Slice()
 	if err != nil {
 		return Decision{}, fmt.Errorf("ratelimit: check %q: %w", rule.Name, err)
 	}
-	return decide(rule, int(count.Hits), count.Oldest, now), nil
+	hits := int(res[0])
+	if hits < rule.Limit {
+		return Decision{Allowed: true, Remaining: rule.Limit - hits}, nil
+	}
+	return denied(rule, time.UnixMilli(res[1]), now), nil
 }
 
 // Record counts one event without checking the limit.
 func (l *Limiter) Record(ctx context.Context, key string, rule Rule) error {
-	q := ratelimitdb.New(l.pool)
 	now := l.clk.Now()
-	if err := q.DeleteExpiredHits(ctx, ratelimitdb.DeleteExpiredHitsParams{Key: key, Since: now.Add(-rule.Window)}); err != nil {
-		return fmt.Errorf("ratelimit: drop expired hits: %w", err)
-	}
-	if err := q.InsertHit(ctx, ratelimitdb.InsertHitParams{Key: key, Now: now}); err != nil {
+	fullKey := l.ns.Key(key)
+	_, err := l.rdb.TxPipelined(ctx, func(p redis.Pipeliner) error {
+		p.ZRemRangeByScore(ctx, fullKey, "-inf", ms(now.Add(-rule.Window)))
+		p.ZAdd(ctx, fullKey, redis.Z{Score: float64(now.UnixMilli()), Member: uuid.NewString()})
+		p.PExpire(ctx, fullKey, rule.Window)
+		return nil
+	})
+	if err != nil {
 		return fmt.Errorf("ratelimit: record %q: %w", rule.Name, err)
 	}
 	return nil
@@ -123,18 +135,17 @@ func (l *Limiter) Record(ctx context.Context, key string, rule Rule) error {
 
 // Reset forgets all events of a key (for example after a successful login).
 func (l *Limiter) Reset(ctx context.Context, key string) error {
-	if err := ratelimitdb.New(l.pool).DeleteHits(ctx, key); err != nil {
+	if err := l.ns.Delete(ctx, key); err != nil {
 		return fmt.Errorf("ratelimit: reset: %w", err)
 	}
 	return nil
 }
 
-// decide turns the current count into a Decision. oldest is the time of the
-// oldest event inside the window.
-func decide(rule Rule, hits int, oldest, now time.Time) Decision {
-	if hits < rule.Limit {
-		return Decision{Allowed: true, Remaining: rule.Limit - hits}
-	}
+func ms(t time.Time) string { return fmt.Sprint(t.UnixMilli()) }
+
+// denied builds the Decision for a blocked event. oldest is the time of the
+// oldest event inside the window; once it leaves the window a slot frees up.
+func denied(rule Rule, oldest, now time.Time) Decision {
 	retry := oldest.Add(rule.Window).Sub(now)
 	if retry < time.Second {
 		retry = time.Second

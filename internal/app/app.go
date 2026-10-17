@@ -68,7 +68,7 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 		JWT:      jwt,
 		Mail:     mailer,
 		Hasher:   hasher,
-		Limiter:  ratelimit.New(database, database.Pool(), clk),
+		Limiter:  ratelimit.New(redis, clk),
 		Clock:    clk,
 		Log:      log,
 	}, auth.Config{FrontendURL: cfg.App.FrontendURL})

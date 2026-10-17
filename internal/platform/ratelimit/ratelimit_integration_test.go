@@ -13,39 +13,33 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kangsolder001/saka/internal/platform/clock"
-	"github.com/kangsolder001/saka/internal/platform/config"
-	"github.com/kangsolder001/saka/internal/platform/db"
-	"github.com/kangsolder001/saka/internal/platform/dbtest"
 	"github.com/kangsolder001/saka/internal/platform/ratelimit"
+	"github.com/kangsolder001/saka/internal/platform/redistest"
+	"github.com/kangsolder001/saka/internal/platform/redisx"
 )
 
 var epoch = time.Date(2026, 7, 1, 12, 0, 0, 0, time.UTC)
 
 type env struct {
-	db      *db.DB
+	redis   *redisx.Client
 	clock   *clock.Fake
 	limiter *ratelimit.Limiter
 }
 
 func newEnv(t *testing.T) *env {
 	t.Helper()
-	dsn := dbtest.NewDatabase(t)
-	dbtest.Migrate(t, dsn)
-	cfg := config.Default()
-	cfg.Database.URL = dsn
-	d, err := db.Connect(context.Background(), cfg)
-	require.NoError(t, err)
-	t.Cleanup(d.Close)
+	client := redistest.NewClient(t)
 	clk := clock.NewFake(epoch)
-	return &env{db: d, clock: clk, limiter: ratelimit.New(d, d.Pool(), clk)}
+	return &env{redis: client, clock: clk, limiter: ratelimit.New(client, clk)}
 }
 
 var threePerHour = ratelimit.Rule{Name: "test", Limit: 3, Window: time.Hour}
 
-func (e *env) rows(t *testing.T) int {
+// events is how many events Redis holds for a key.
+func (e *env) events(t *testing.T, key string) int64 {
 	t.Helper()
-	var n int
-	require.NoError(t, e.db.Pool().QueryRow(context.Background(), "SELECT count(*) FROM rate_limit_hits").Scan(&n))
+	n, err := e.redis.Raw().ZCard(context.Background(), e.redis.Namespace(ratelimit.Module).Key(key)).Result()
+	require.NoError(t, err)
 	return n
 }
 
@@ -81,7 +75,7 @@ func TestTake_DeniedAttemptsAreNotCounted(t *testing.T) {
 		require.False(t, d.Allowed)
 	}
 
-	assert.Equal(t, 3, e.rows(t), "hammering a locked key must not extend the lockout")
+	assert.EqualValues(t, 3, e.events(t, "k"), "hammering a locked key must not extend the lockout")
 }
 
 func TestTake_WindowSlides(t *testing.T) {
@@ -128,7 +122,7 @@ func TestTake_ConcurrentCallersNeverExceedTheLimit(t *testing.T) {
 	e := newEnv(t)
 	var allowed atomic.Int32
 	var wg sync.WaitGroup
-	for range 25 {
+	for range 40 {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -140,11 +134,24 @@ func TestTake_ConcurrentCallersNeverExceedTheLimit(t *testing.T) {
 	}
 	wg.Wait()
 
-	assert.EqualValues(t, 3, allowed.Load(), "check-then-insert must be atomic per key")
-	assert.Equal(t, 3, e.rows(t))
+	assert.EqualValues(t, 3, allowed.Load(), "the Lua script makes check-and-add atomic")
+	assert.EqualValues(t, 3, e.events(t, "hot-key"))
 }
 
-func TestTake_DropsExpiredHitsOfTheSameKey(t *testing.T) {
+func TestTake_SameInstantEventsAreAllCounted(t *testing.T) {
+	e := newEnv(t) // the fake clock does not move: three events share one timestamp
+	ctx := context.Background()
+
+	for range 3 {
+		d, err := e.limiter.Take(ctx, "k", threePerHour)
+		require.NoError(t, err)
+		require.True(t, d.Allowed)
+	}
+
+	assert.EqualValues(t, 3, e.events(t, "k"), "events with equal timestamps must not overwrite each other")
+}
+
+func TestTake_DropsExpiredEventsOfTheSameKey(t *testing.T) {
 	e := newEnv(t)
 	ctx := context.Background()
 	_, err := e.limiter.Take(ctx, "k", threePerHour)
@@ -156,7 +163,33 @@ func TestTake_DropsExpiredHitsOfTheSameKey(t *testing.T) {
 	_, err = e.limiter.Take(ctx, "k", threePerHour)
 	require.NoError(t, err)
 
-	assert.Equal(t, 2, e.rows(t), "k's old hit was removed and replaced; the untouched key keeps its row")
+	assert.EqualValues(t, 1, e.events(t, "k"), "the old event was removed and replaced")
+	assert.EqualValues(t, 1, e.events(t, "other"), "an untouched key keeps its event")
+}
+
+func TestTake_KeysExpireOnTheirOwnSoRedisDoesNotFillUp(t *testing.T) {
+	e := newEnv(t)
+	_, err := e.limiter.Take(context.Background(), "k", threePerHour)
+	require.NoError(t, err)
+
+	ttl, err := e.redis.Raw().PTTL(context.Background(), e.redis.Namespace(ratelimit.Module).Key("k")).Result()
+
+	require.NoError(t, err)
+	assert.Positive(t, ttl)
+	assert.LessOrEqual(t, ttl, time.Hour, "no limiter key may live longer than its window")
+}
+
+func TestKeysLiveInTheRateLimitNamespace(t *testing.T) {
+	e := newEnv(t)
+	key := ratelimit.Key("login", "ann@example.com", "203.0.113.9")
+	_, err := e.limiter.Take(context.Background(), key, threePerHour)
+	require.NoError(t, err)
+
+	exists, err := e.redis.Raw().Exists(context.Background(), e.redis.Namespace("ratelimit").Key(key)).Result()
+	require.NoError(t, err)
+
+	assert.EqualValues(t, 1, exists, "stored as <key_prefix>:ratelimit:login:<hash>")
+	assert.EqualValues(t, 0, e.events(t, "login"), "and nothing sits under the bare name")
 }
 
 func TestCheck_DoesNotCountAndRecordDoes(t *testing.T) {
@@ -169,7 +202,7 @@ func TestCheck_DoesNotCountAndRecordDoes(t *testing.T) {
 		require.True(t, d.Allowed)
 		require.Equal(t, 3, d.Remaining)
 	}
-	assert.Zero(t, e.rows(t), "checking is read-only")
+	assert.Zero(t, e.events(t, "k"), "checking is read-only")
 
 	for range 3 {
 		require.NoError(t, e.limiter.Record(ctx, "k", threePerHour))
@@ -183,6 +216,16 @@ func TestCheck_DoesNotCountAndRecordDoes(t *testing.T) {
 	d, err = e.limiter.Check(ctx, "k", threePerHour)
 	require.NoError(t, err)
 	assert.True(t, d.Allowed, "the lockout ends when the window passes")
+}
+
+func TestRecord_SetsAnExpiry(t *testing.T) {
+	e := newEnv(t)
+	require.NoError(t, e.limiter.Record(context.Background(), "k", threePerHour))
+
+	ttl, err := e.redis.Raw().PTTL(context.Background(), e.redis.Namespace(ratelimit.Module).Key("k")).Result()
+
+	require.NoError(t, err)
+	assert.Positive(t, ttl)
 }
 
 func TestReset_ForgetsOnlyThatKey(t *testing.T) {
@@ -216,4 +259,15 @@ func TestRetryAfterIsAtLeastOneSecond(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, d.Allowed)
 	assert.Equal(t, time.Second, d.RetryAfter, "never advertise Retry-After: 0")
+}
+
+func TestLimiterFailsClosedWhenRedisIsDown(t *testing.T) {
+	e := newEnv(t)
+	require.NoError(t, e.redis.Close())
+
+	_, takeErr := e.limiter.Take(context.Background(), "k", threePerHour)
+	_, checkErr := e.limiter.Check(context.Background(), "k", threePerHour)
+
+	assert.Error(t, takeErr, "an outage must never silently disable rate limiting")
+	assert.Error(t, checkErr)
 }
