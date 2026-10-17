@@ -44,7 +44,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Test `safego`: panic tertangkap, error merambat, batas konkurensi, context batal, tidak ada goroutine tersisa (`goleak`) (0.15)
 - [x] Middleware `gin`: request id + trace id (baca `traceparent`, set header `X-Request-ID`/`X-Trace-ID`), recover, logging, CORS, security headers (0.3)
 - [x] Util: cursor pagination (`platform/pagination`) (0.1)
-- [ ] Util: validasi input + `BindJSON` (0.15). UUID v7 tidak butuh kode Go: dibuat oleh default kolom `uuidv7()` PostgreSQL 18, dipakai di migrasi
+- [x] Util: validasi input + `BindJSON` (0.15). UUID v7 tidak butuh kode Go: dibuat oleh default kolom `uuidv7()` PostgreSQL 18, dipakai di migrasi
 - [ ] Endpoint `/healthz` dan `/readyz` (0.1)
 - [ ] Migrasi pertama: ekstensi `citext`, tabel `users` (§4.1) (0.1)
 - [ ] Setup CI (lint, unit test, integration test via `testcontainers-go`) (0.25)
