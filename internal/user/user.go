@@ -133,13 +133,18 @@ func (s *Service) SetPasswordHash(ctx context.Context, q db.DBTX, id uuid.UUID, 
 }
 
 func one(row userdb.User, err error, op string) (User, error) {
-	if errors.Is(err, pgx.ErrNoRows) {
-		return User{}, apperr.NotFound()
-	}
 	if err != nil {
-		return User{}, fmt.Errorf("user: %s: %w", op, err)
+		return User{}, notFoundOr(err, op)
 	}
 	return fromRow(row), nil
+}
+
+// notFoundOr maps "no row" to apperr NOT_FOUND and wraps anything else.
+func notFoundOr(err error, op string) error {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return apperr.NotFound()
+	}
+	return fmt.Errorf("user: %s: %w", op, err)
 }
 
 func fromRow(r userdb.User) User {

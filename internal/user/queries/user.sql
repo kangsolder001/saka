@@ -19,3 +19,13 @@ WHERE id = @id AND deleted_at IS NULL AND email_verified_at IS NULL;
 UPDATE users
 SET password_hash = @password_hash, updated_at = @now::timestamptz
 WHERE id = @id AND deleted_at IS NULL;
+
+-- PATCH semantics: a NULL name keeps the current one; the avatar is only
+-- touched when set_avatar is true, so it can be cleared by passing NULL.
+-- name: UpdateProfile :one
+UPDATE users
+SET name       = COALESCE(sqlc.narg(name), name),
+    avatar_url = CASE WHEN @set_avatar::boolean THEN sqlc.narg(avatar_url) ELSE avatar_url END,
+    updated_at = @now::timestamptz
+WHERE id = @id AND deleted_at IS NULL
+RETURNING *;

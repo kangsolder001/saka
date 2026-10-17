@@ -26,3 +26,6 @@ packages:
       UserService:
       TokenService:
       RefreshStore:
+  github.com/kangsolder001/saka/internal/user:
+    interfaces:
+      ProfileService:

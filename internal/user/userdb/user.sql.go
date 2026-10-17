@@ -131,3 +131,46 @@ func (q *Queries) UpdatePasswordHash(ctx context.Context, arg UpdatePasswordHash
 	}
 	return result.RowsAffected(), nil
 }
+
+const updateProfile = `-- name: UpdateProfile :one
+UPDATE users
+SET name       = COALESCE($1, name),
+    avatar_url = CASE WHEN $2::boolean THEN $3 ELSE avatar_url END,
+    updated_at = $4::timestamptz
+WHERE id = $5 AND deleted_at IS NULL
+RETURNING id, email, password_hash, name, avatar_url, email_verified_at, status, created_at, updated_at, deleted_at
+`
+
+type UpdateProfileParams struct {
+	Name      *string
+	SetAvatar bool
+	AvatarUrl *string
+	Now       time.Time
+	ID        uuid.UUID
+}
+
+// PATCH semantics: a NULL name keeps the current one; the avatar is only
+// touched when set_avatar is true, so it can be cleared by passing NULL.
+func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (User, error) {
+	row := q.db.QueryRow(ctx, updateProfile,
+		arg.Name,
+		arg.SetAvatar,
+		arg.AvatarUrl,
+		arg.Now,
+		arg.ID,
+	)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.PasswordHash,
+		&i.Name,
+		&i.AvatarUrl,
+		&i.EmailVerifiedAt,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}

@@ -103,7 +103,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 
 ## Fase 3 — User (3 hari)
 
-- [ ] `GET /me` (daftar org diisi setelah Fase 4) dan `PATCH /me` (0.3)
+- [x] `GET /me` (daftar org diisi setelah Fase 4) dan `PATCH /me` (0.3). `organizations` sementara `[]`; endpoint dibaca dari `GetSummary` (cache), `PATCH` hanya menerima `name` dan `avatar_url` (null = hapus avatar)
 - [ ] `POST /me/password` (password lama wajib; cabut sesi lain kecuali saat ini; email notifikasi) (0.4)
 - [ ] `POST /me/email` + `POST /me/email/confirm` + template `email_change_confirm`, `email_changed_notice` (0.6)
 - [ ] `GET /me/sessions`, `DELETE /me/sessions/{id}` (0.3)

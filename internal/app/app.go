@@ -59,10 +59,11 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 		return nil, fmt.Errorf("access token signer: %w", err)
 	}
 
+	users := user.NewService(clk, user.WithCache(redis.Namespace("user"), cfg.Redis.UserCacheTTL.Std(), log))
 	authService := auth.NewService(auth.Dependencies{
 		Tx:       database,
 		Pool:     database.Pool(),
-		Users:    user.NewService(clk, user.WithCache(redis.Namespace("user"), cfg.Redis.UserCacheTTL.Std(), log)),
+		Users:    users,
 		Tokens:   auth.NewUserTokens(clk),
 		Sessions: auth.NewRefreshTokens(clk, cfg.Auth.RefreshTokenTTL.Std()),
 		JWT:      jwt,
@@ -77,5 +78,6 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 
 	v1 := router.Group("/api/v1")
 	auth.NewHandler(authService, authMiddleware, auth.HandlerConfig{SecureCookie: cfg.IsProduction()}).Routes(v1)
+	user.NewHandler(users, database.Pool()).Routes(v1, authMiddleware.Authenticate())
 	return router, nil
 }
