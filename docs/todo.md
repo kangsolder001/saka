@@ -48,7 +48,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Endpoint `/healthz` dan `/readyz` (0.1)
 - [x] Migrasi pertama: ekstensi `citext`, tabel `users` (§4.1) (0.1)
 - [ ] Setup CI (lint, unit test, integration test via `testcontainers-go`) (0.25)
-- [ ] Makefile / task runner: migrate, run, test, seed, sqlc, mocks (0.1)
+- [x] Makefile / task runner: up/down, run, build, migrate*, sqlc, mocks, test, test-integration, lint (0.1). Target `seed` ditambahkan saat perintah seed dibuat (Fase 7), bukan sekarang
 
 **Selesai bila:** API jalan, health check hijau, CI hijau.
 
