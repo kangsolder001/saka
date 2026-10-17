@@ -77,6 +77,20 @@ func (r *Runner) Shutdown(ctx context.Context) error {
 	}
 }
 
+// Do runs fn synchronously and converts a panic into a *PanicError (also
+// logged with the stack and trace ID). Use it when the caller must keep going
+// after a failure, for example to record a failed job.
+func (r *Runner) Do(ctx context.Context, name string, fn func(ctx context.Context) error) (err error) {
+	defer func() {
+		if rec := recover(); rec != nil {
+			stack := debug.Stack()
+			r.logPanic(ctx, name, rec, stack)
+			err = &PanicError{Name: name, Value: rec, Stack: stack}
+		}
+	}()
+	return fn(ctx)
+}
+
 func (r *Runner) recoverAndLog(ctx context.Context, name string) {
 	if rec := recover(); rec != nil {
 		r.logPanic(ctx, name, rec, debug.Stack())
@@ -115,15 +129,8 @@ func (r *Runner) NewGroup(ctx context.Context, limit int) *Group {
 // returned from Wait as a *PanicError. When the limit is reached Go blocks
 // until a slot frees up.
 func (g *Group) Go(name string, fn func(ctx context.Context) error) {
-	g.eg.Go(func() (err error) {
-		defer func() {
-			if rec := recover(); rec != nil {
-				stack := debug.Stack()
-				g.runner.logPanic(g.ctx, name, rec, stack)
-				err = &PanicError{Name: name, Value: rec, Stack: stack}
-			}
-		}()
-		return fn(g.ctx)
+	g.eg.Go(func() error {
+		return g.runner.Do(g.ctx, name, fn)
 	})
 }
 

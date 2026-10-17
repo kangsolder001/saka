@@ -192,3 +192,31 @@ func TestGroup_ParentCancelStopsMembers(t *testing.T) {
 
 	assert.ErrorIs(t, g.Wait(), context.Canceled)
 }
+
+func TestRunnerDo_ReturnsFunctionError(t *testing.T) {
+	r, _ := newRunner(t)
+	want := errors.New("plain failure")
+
+	err := r.Do(context.Background(), "job", func(context.Context) error { return want })
+
+	assert.ErrorIs(t, err, want)
+}
+
+func TestRunnerDo_ConvertsPanicToErrorAndKeepsCallerAlive(t *testing.T) {
+	r, logs := newRunner(t)
+	ctx := reqctx.WithTraceID(context.Background(), "trace-do")
+
+	err := r.Do(ctx, "explosive", func(context.Context) error { panic("kaboom") })
+
+	var pe *safego.PanicError
+	require.ErrorAs(t, err, &pe)
+	assert.Equal(t, "explosive", pe.Name)
+	assert.Contains(t, logs.String(), `"trace_id":"trace-do"`)
+	assert.Contains(t, logs.String(), `"panic":"kaboom"`)
+}
+
+func TestRunnerDo_NilOnSuccess(t *testing.T) {
+	r, _ := newRunner(t)
+
+	assert.NoError(t, r.Do(context.Background(), "ok", func(context.Context) error { return nil }))
+}
