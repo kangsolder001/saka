@@ -16,3 +16,6 @@ packages:
     interfaces:
       Queue:
       Enqueuer:
+  github.com/kangsolder001/saka/internal/mail:
+    interfaces:
+      Mailer:
