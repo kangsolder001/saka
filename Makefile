@@ -38,20 +38,21 @@ run-worker: ## Run the background worker (outbox / email)
 build: ## Build binaries into ./bin
 	go build -o bin/api ./cmd/api
 	go build -o bin/worker ./cmd/worker
+	go build -o bin/migrate ./cmd/migrate
 
 ##@ Database
 
 .PHONY: migrate
 migrate: ## Apply all pending migrations
-	$(GOOSE) -dir $(MIGRATIONS_DIR) up
+	go run ./cmd/migrate up
 
 .PHONY: migrate-down
 migrate-down: ## Roll back the last migration
-	$(GOOSE) -dir $(MIGRATIONS_DIR) down
+	go run ./cmd/migrate down
 
 .PHONY: migrate-status
 migrate-status: ## Show migration status
-	$(GOOSE) -dir $(MIGRATIONS_DIR) status
+	go run ./cmd/migrate status
 
 .PHONY: migrate-new
 migrate-new: ## Create a migration: make migrate-new name=create_orgs
