@@ -1,8 +1,8 @@
 // Command migrate applies the embedded goose migrations.
 //
-//	migrate up       apply all pending migrations
-//	migrate down     roll back the last migration
-//	migrate status   show applied and pending migrations
+//	migrate [-config path] up       apply all pending migrations
+//	migrate [-config path] down     roll back the last migration
+//	migrate [-config path] status   show applied and pending migrations
 //
 // It uses the same configuration as the API and reads the migrations embedded
 // in the binary, so deployments need neither the goose CLI nor the SQL files.
@@ -11,6 +11,8 @@ package main
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -31,12 +33,17 @@ func main() {
 }
 
 func run(args []string) error {
-	if len(args) != 1 {
-		return fmt.Errorf("usage: migrate <up|down|status>")
+	fs := flag.NewFlagSet("migrate", flag.ContinueOnError)
+	configPath := fs.String("config", config.DefaultPath, "path to the JSON config file")
+	if err := fs.Parse(args); err != nil {
+		return err
 	}
-	command := args[0]
+	if fs.NArg() != 1 {
+		return errors.New("usage: migrate [-config path] <up|down|status>")
+	}
+	command := fs.Arg(0)
 
-	cfg, err := config.Load()
+	cfg, err := config.Load(*configPath)
 	if err != nil {
 		return err
 	}
@@ -44,7 +51,7 @@ func run(args []string) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	sqlDB, err := sql.Open("pgx", cfg.DatabaseURL)
+	sqlDB, err := sql.Open("pgx", cfg.Database.URL)
 	if err != nil {
 		return fmt.Errorf("open database: %w", err)
 	}

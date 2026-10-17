@@ -1,13 +1,9 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
-# Load .env (if present) so run/migrate targets see DATABASE_URL, GOOSE_*, etc.
--include .env
-export
-
 GOLANGCI_LINT_VERSION := v2.15.0
 GOLANGCI_LINT := bin/golangci-lint
-GOOSE := go tool goose
+GOOSE := go tool goose # only used to scaffold new migration files
 MIGRATIONS_DIR := migrations
 
 .PHONY: help
@@ -15,6 +11,10 @@ help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-18s %s\n", $$1, $$2}'
 
 ##@ Local services
+
+.PHONY: config
+config: ## Create config.json from config.example.json (only if missing)
+	@test -f config.json && echo "config.json already exists" || (cp config.example.json config.json && echo "created config.json")
 
 .PHONY: up
 up: ## Start PostgreSQL and Mailpit (docker compose)

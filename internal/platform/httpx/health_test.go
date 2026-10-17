@@ -19,8 +19,8 @@ import (
 
 func newRouter(t *testing.T, pinger httpx.Pinger) http.Handler {
 	t.Helper()
-	cfg, err := config.LoadFrom(map[string]string{"DATABASE_URL": "postgres://u:p@localhost/db"})
-	require.NoError(t, err)
+	cfg := config.Default()
+	cfg.Database.URL = "postgres://u:p@localhost/db"
 
 	r, err := httpx.NewRouter(cfg, logger.Nop(), clock.NewFake(time.Now()), pinger)
 	require.NoError(t, err)
@@ -84,13 +84,10 @@ func TestRouter_UnknownRouteUsesStandardNotFound(t *testing.T) {
 }
 
 func TestNewRouter_RejectsInvalidTrustedProxies(t *testing.T) {
-	cfg, err := config.LoadFrom(map[string]string{
-		"DATABASE_URL":    "postgres://u:p@localhost/db",
-		"TRUSTED_PROXIES": "not-an-ip",
-	})
-	require.NoError(t, err)
+	cfg := config.Default()
+	cfg.App.TrustedProxies = []string{"not-an-ip"}
 
-	_, err = httpx.NewRouter(cfg, logger.Nop(), clock.NewFake(time.Now()), mocks.NewMockPinger(t))
+	_, err := httpx.NewRouter(cfg, logger.Nop(), clock.NewFake(time.Now()), mocks.NewMockPinger(t))
 
 	assert.Error(t, err)
 }

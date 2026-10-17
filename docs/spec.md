@@ -564,7 +564,7 @@ service (dalam transaksi) ──insert──▶ outbox_jobs ──▶ worker ─
 
 ## 11. Kebutuhan Non-Fungsional
 
-- **Keamanan:** HTTPS wajib, header keamanan standar, CORS terbatas, semua input divalidasi, query parametrized, secret dari environment variable.
+- **Keamanan:** HTTPS wajib, header keamanan standar, CORS terbatas, semua input divalidasi, query parametrized, secret (password DB, SMTP, kunci gateway) hanya di `config.json` yang tidak masuk git (`.gitignore`); repo hanya berisi `config.example.json` tanpa secret nyata.
 - **Observability:** structured logging (JSON) dengan `trace_id`, `request_id`, `user_id`, `org_id` (lihat §11.1); endpoint `/healthz` dan `/readyz`.
 - **Konsistensi:** semua operasi multi-tabel dalam satu transaksi.
 - **Testing:** unit test untuk service layer; integration test dengan PostgreSQL asli (testcontainers) untuk repository, webhook, dan isolasi tenant.

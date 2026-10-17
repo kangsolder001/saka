@@ -2,10 +2,8 @@
 /bin/
 /tmp/
 
-# Env files (use .env.example as the template)
-.env
-.env.*
-!.env.example
+# Local config with real credentials (copy config.example.json to config.json)
+/config.json
 
 # Test & coverage output
 *.out

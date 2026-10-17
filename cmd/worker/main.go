@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"os/signal"
@@ -27,11 +28,14 @@ func main() {
 
 // run is the composition root of the worker process.
 func run() error {
-	cfg, err := config.Load()
+	configPath := flag.String("config", config.DefaultPath, "path to the JSON config file")
+	flag.Parse()
+
+	cfg, err := config.Load(*configPath)
 	if err != nil {
 		return err
 	}
-	log, err := logger.New(os.Stdout, cfg.LogLevel)
+	log, err := logger.New(os.Stdout, cfg.App.LogLevel)
 	if err != nil {
 		return err
 	}
@@ -49,7 +53,7 @@ func run() error {
 	clk := clock.Real{}
 	runner := safego.NewRunner(log)
 
-	renderer, err := mail.NewRenderer(emailtemplates.FS, mail.AppInfo{Name: cfg.AppName})
+	renderer, err := mail.NewRenderer(emailtemplates.FS, mail.AppInfo{Name: cfg.App.Name})
 	if err != nil {
 		return err
 	}
@@ -60,22 +64,22 @@ func run() error {
 	emailHandler := mail.NewJobHandler(renderer, mailer, log)
 
 	worker, err := outbox.NewWorker(outbox.NewStore(database.Pool(), clk), clk, log, runner, outbox.WorkerConfig{
-		Concurrency:  cfg.WorkerConcurrency,
-		PollInterval: cfg.WorkerPollInterval,
-		JobTimeout:   cfg.WorkerJobTimeout,
-		Lease:        cfg.WorkerLease,
+		Concurrency:  cfg.Worker.Concurrency,
+		PollInterval: cfg.Worker.PollInterval.Std(),
+		JobTimeout:   cfg.Worker.JobTimeout.Std(),
+		Lease:        cfg.Worker.Lease.Std(),
 	})
 	if err != nil {
 		return err
 	}
 	worker.Register(mail.JobTypeSendEmail, emailHandler.Handle)
 
-	base.Info().Str("env", cfg.AppEnv).Str("mail_driver", cfg.MailDriver).Msg("worker starting")
+	base.Info().Str("env", cfg.App.Env).Str("mail_driver", cfg.Mail.Driver).Msg("worker starting")
 	if err := worker.Run(ctx); err != nil { // returns after in-flight jobs finish
 		return err
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.App.ShutdownTimeout.Std())
 	defer cancel()
 	if err := runner.Shutdown(shutdownCtx); err != nil {
 		return err
@@ -85,18 +89,18 @@ func run() error {
 }
 
 func newMailer(cfg config.Config, log *logger.Logger, clk clock.Clock) (mail.Mailer, error) {
-	switch cfg.MailDriver {
+	switch cfg.Mail.Driver {
 	case "smtp":
 		return mail.NewSMTPMailer(mail.SMTPConfig{
-			Host:     cfg.SMTPHost,
-			Port:     cfg.SMTPPort,
-			Username: cfg.SMTPUsername,
-			Password: cfg.SMTPPassword,
-			From:     cfg.MailFrom,
+			Host:     cfg.Mail.SMTP.Host,
+			Port:     cfg.Mail.SMTP.Port,
+			Username: cfg.Mail.SMTP.Username,
+			Password: cfg.Mail.SMTP.Password,
+			From:     cfg.Mail.From,
 		}, clk)
 	case "log":
 		return mail.NewLogMailer(log), nil
 	default:
-		return nil, fmt.Errorf("unsupported mail driver %q", cfg.MailDriver)
+		return nil, fmt.Errorf("unsupported mail driver %q", cfg.Mail.Driver)
 	}
 }

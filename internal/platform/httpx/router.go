@@ -18,7 +18,7 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, db Pinger
 	gin.SetMode(gin.ReleaseMode)
 
 	r := gin.New()
-	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+	if err := r.SetTrustedProxies(cfg.App.TrustedProxies); err != nil {
 		return nil, fmt.Errorf("set trusted proxies: %w", err)
 	}
 
@@ -27,7 +27,7 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, db Pinger
 		AccessLog(log, clk),
 		Recover(log),
 		SecurityHeaders(cfg.IsProduction()),
-		CORS(cfg.CORSOrigins),
+		CORS(cfg.App.CORSAllowedOrigins),
 	)
 	r.NoRoute(NotFound)
 

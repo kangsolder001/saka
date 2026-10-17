@@ -1,0 +1,32 @@
+{
+  "app": {
+    "name": "Saka",
+    "env": "development",
+    "http_addr": ":8080",
+    "shutdown_timeout": "15s",
+    "log_level": "info",
+    "cors_allowed_origins": ["http://localhost:3000"],
+    "trusted_proxies": []
+  },
+  "database": {
+    "url": "postgres://saka:saka@localhost:5433/saka?sslmode=disable",
+    "max_conns": 10,
+    "min_conns": 0
+  },
+  "mail": {
+    "driver": "smtp",
+    "from": "Saka <noreply@saka.local>",
+    "smtp": {
+      "host": "localhost",
+      "port": 1025,
+      "username": "",
+      "password": ""
+    }
+  },
+  "worker": {
+    "concurrency": 4,
+    "poll_interval": "5s",
+    "job_timeout": "1m",
+    "lease": "5m"
+  }
+}

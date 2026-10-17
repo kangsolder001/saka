@@ -33,8 +33,8 @@ func newEnv(t *testing.T) *env {
 	t.Helper()
 	dsn := dbtest.NewDatabase(t)
 	dbtest.Migrate(t, dsn)
-	cfg, err := config.LoadFrom(map[string]string{"DATABASE_URL": dsn})
-	require.NoError(t, err)
+	cfg := config.Default()
+	cfg.Database.URL = dsn
 	d, err := db.Connect(context.Background(), cfg)
 	require.NoError(t, err)
 	t.Cleanup(d.Close)

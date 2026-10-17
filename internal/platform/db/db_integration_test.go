@@ -21,8 +21,8 @@ import (
 func connect(t *testing.T) *db.DB {
 	t.Helper()
 	dsn := dbtest.NewDatabase(t)
-	cfg, err := config.LoadFrom(map[string]string{"DATABASE_URL": dsn})
-	require.NoError(t, err)
+	cfg := config.Default()
+	cfg.Database.URL = dsn
 
 	d, err := db.Connect(context.Background(), cfg)
 	require.NoError(t, err)
@@ -47,10 +47,10 @@ func TestConnect_PingsDatabase(t *testing.T) {
 }
 
 func TestConnect_FailsWhenUnreachable(t *testing.T) {
-	cfg, err := config.LoadFrom(map[string]string{"DATABASE_URL": "postgres://x:x@127.0.0.1:1/none?sslmode=disable&connect_timeout=1"})
-	require.NoError(t, err)
+	cfg := config.Default()
+	cfg.Database.URL = "postgres://x:x@127.0.0.1:1/none?sslmode=disable&connect_timeout=1"
 
-	_, err = db.Connect(context.Background(), cfg)
+	_, err := db.Connect(context.Background(), cfg)
 
 	assert.Error(t, err)
 }

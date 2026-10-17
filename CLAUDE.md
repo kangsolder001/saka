@@ -25,6 +25,7 @@ Boilerplate SaaS multi-tenant (Go + PostgreSQL) yang bisa dipakai ulang: auth, u
 - Registrasi masuk plan **Free**; trial dipicu saat memilih plan berbayar.
 - **RLS PostgreSQL dipakai** sebagai lapisan isolasi tenant kedua.
 - Nomor invoice **global**. Frontend belum ditentukan (API agnostik).
+- Konfigurasi **hanya dari `config.json`** (path lewat flag `-config`, default `./config.json`), bukan env var. `config.json` ada di `.gitignore`; `config.example.json` di-commit dan harus selalu valid (ada test-nya). Setiap setting baru ditambahkan ke struct `platform/config`, ke `Default()`, dan ke `config.example.json`.
 - Provider email produksi **ditunda ke Fase 7**; dev memakai Mailpit lewat interface `Mailer`.
 
 ## Arsitektur (butuh membaca beberapa bagian spec untuk paham)

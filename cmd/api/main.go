@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -29,11 +30,14 @@ func main() {
 // run is the composition root: it builds every dependency once and injects
 // it through constructors.
 func run() error {
-	cfg, err := config.Load()
+	configPath := flag.String("config", config.DefaultPath, "path to the JSON config file")
+	flag.Parse()
+
+	cfg, err := config.Load(*configPath)
 	if err != nil {
 		return err
 	}
-	log, err := logger.New(os.Stdout, cfg.LogLevel)
+	log, err := logger.New(os.Stdout, cfg.App.LogLevel)
 	if err != nil {
 		return err
 	}
@@ -55,7 +59,7 @@ func run() error {
 	}
 
 	srv := &http.Server{
-		Addr:              cfg.HTTPAddr,
+		Addr:              cfg.App.HTTPAddr,
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
@@ -65,7 +69,7 @@ func run() error {
 
 	serveErr := make(chan error, 1)
 	runner.Go(ctx, "http-server", func(context.Context) {
-		base.Info().Str("addr", cfg.HTTPAddr).Str("env", cfg.AppEnv).Msg("api listening")
+		base.Info().Str("addr", cfg.App.HTTPAddr).Str("env", cfg.App.Env).Msg("api listening")
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serveErr <- err
 		}
@@ -78,7 +82,7 @@ func run() error {
 		base.Info().Msg("shutdown signal received")
 	}
 
-	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), cfg.App.ShutdownTimeout.Std())
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		return fmt.Errorf("shutdown server: %w", err)

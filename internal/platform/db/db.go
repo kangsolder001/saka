@@ -34,12 +34,12 @@ type DB struct {
 
 // Connect opens the pool described by cfg and verifies it with a ping.
 func Connect(ctx context.Context, cfg config.Config) (*DB, error) {
-	poolCfg, err := pgxpool.ParseConfig(cfg.DatabaseURL)
+	poolCfg, err := pgxpool.ParseConfig(cfg.Database.URL)
 	if err != nil {
 		return nil, fmt.Errorf("parse database url: %w", err)
 	}
-	poolCfg.MaxConns = cfg.DBMaxConns
-	poolCfg.MinConns = cfg.DBMinConns
+	poolCfg.MaxConns = cfg.Database.MaxConns
+	poolCfg.MinConns = cfg.Database.MinConns
 
 	pool, err := pgxpool.NewWithConfig(ctx, poolCfg)
 	if err != nil {
