@@ -63,7 +63,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Interface `Mailer` + implementasi SMTP (Mailpit) + implementasi log (0.3)
 - [x] Renderer template (`html/template` untuk HTML, `text/template` untuk plain text) + layout dasar (0.3)
 - [x] Template awal: `verify_email`, `password_reset`, `password_changed` (0.3)
-- [ ] `cmd/worker` entrypoint + graceful shutdown; worker memulihkan `trace_id` job ke context sebelum proses (0.25)
+- [x] `cmd/worker` entrypoint + graceful shutdown; worker memulihkan `trace_id` job ke context sebelum proses (0.25)
 - [x] Test: job diproses sekali saat 2 worker jalan; backoff sesuai jadwal (fake clock); rollback tx → tidak ada job; `trace_id` request sampai ke job dan log worker (0.6)
 
 **Selesai bila:** email test terkirim ke Mailpit lewat outbox; AC Email (§12) untuk retry dan non-sinkron terpenuhi.

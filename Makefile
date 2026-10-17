@@ -30,9 +30,14 @@ down: ## Stop local services
 run: ## Run the API
 	go run ./cmd/api
 
+.PHONY: run-worker
+run-worker: ## Run the background worker (outbox / email)
+	go run ./cmd/worker
+
 .PHONY: build
 build: ## Build binaries into ./bin
 	go build -o bin/api ./cmd/api
+	go build -o bin/worker ./cmd/worker
 
 ##@ Database
 
