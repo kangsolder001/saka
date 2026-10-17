@@ -21,10 +21,12 @@ import (
 
 func init() { gin.SetMode(gin.TestMode) }
 
-// asUser stands in for auth's middleware: it puts a user ID on the request context.
-func asUser(id uuid.UUID) gin.HandlerFunc {
+// asUser stands in for auth's middleware: it puts the user and session IDs on
+// the request context.
+func asUser(id, session uuid.UUID) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.Request = c.Request.WithContext(reqctx.WithUserID(c.Request.Context(), id))
+		ctx := reqctx.WithUserID(c.Request.Context(), id)
+		c.Request = c.Request.WithContext(reqctx.WithSessionID(ctx, session))
 		c.Next()
 	}
 }
@@ -32,14 +34,22 @@ func asUser(id uuid.UUID) gin.HandlerFunc {
 type handlerFixture struct {
 	router   *gin.Engine
 	profiles *usermocks.MockProfileService
+	security *usermocks.MockAccountSecurity
 	userID   uuid.UUID
+	session  uuid.UUID
 }
 
 func newHandlerFixture(t *testing.T) *handlerFixture {
 	t.Helper()
-	f := &handlerFixture{profiles: usermocks.NewMockProfileService(t), userID: uuid.New()}
+	f := &handlerFixture{
+		profiles: usermocks.NewMockProfileService(t),
+		security: usermocks.NewMockAccountSecurity(t),
+		userID:   uuid.New(),
+		session:  uuid.New(),
+	}
 	f.router = gin.New()
-	user.NewHandler(f.profiles, stubDB{}).Routes(f.router.Group("/api/v1"), asUser(f.userID))
+	user.NewHandler(user.Dependencies{Profiles: f.profiles, Security: f.security, Pool: stubDB{}}).
+		Routes(f.router.Group("/api/v1"), asUser(f.userID, f.session))
 	return f
 }
 
@@ -148,13 +158,61 @@ func TestPatchMe_ServiceValidationErrorsReachTheClient(t *testing.T) {
 func TestMe_RequiresAnAuthenticatedUser(t *testing.T) {
 	// Mounted with a middleware that authenticates nobody: a wiring bug must fail closed.
 	r := gin.New()
-	user.NewHandler(usermocks.NewMockProfileService(t), stubDB{}).Routes(r.Group("/api/v1"), func(c *gin.Context) { c.Next() })
+	user.NewHandler(user.Dependencies{
+		Profiles: usermocks.NewMockProfileService(t), Security: usermocks.NewMockAccountSecurity(t), Pool: stubDB{},
+	}).Routes(r.Group("/api/v1"), func(c *gin.Context) { c.Next() })
 
-	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/api/v1/me", http.NoBody)
-	rec := httptest.NewRecorder()
-	r.ServeHTTP(rec, req)
+	for _, c := range []struct{ method, path, body string }{
+		{http.MethodGet, "/api/v1/me", ""},
+		{http.MethodPatch, "/api/v1/me", `{"name":"X"}`},
+		{http.MethodPost, "/api/v1/me/password", `{"current_password":"a","new_password":"b"}`},
+	} {
+		req := httptest.NewRequestWithContext(context.Background(), c.method, c.path, strings.NewReader(c.body))
+		rec := httptest.NewRecorder()
+		r.ServeHTTP(rec, req)
 
-	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+		assert.Equal(t, http.StatusUnauthorized, rec.Code, c.method+" "+c.path)
+	}
+}
+
+func TestChangePassword_PassesTheCallerAndTheirCurrentSession(t *testing.T) {
+	f := newHandlerFixture(t)
+	f.security.EXPECT().ChangePassword(mock.Anything, f.userID, f.session, "old-password", "new-password-1").Return(nil).Once()
+
+	rec := f.do(http.MethodPost, "/api/v1/me/password", `{"current_password":"old-password","new_password":"new-password-1"}`)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.NotContains(t, rec.Body.String(), "password-1", "the response never echoes passwords")
+}
+
+func TestChangePassword_RejectsBadBodiesWithoutCallingTheService(t *testing.T) {
+	tests := map[string]string{
+		"missing current":  `{"new_password":"new-password-1"}`,
+		"missing new":      `{"current_password":"old-password"}`,
+		"unknown field":    `{"current_password":"a","new_password":"b","user_id":"x"}`,
+		"huge new":         `{"current_password":"a","new_password":"` + strings.Repeat("a", 1025) + `"}`,
+		"wrong field name": `{"password":"a","new_password":"b"}`,
+	}
+	for name, body := range tests {
+		t.Run(name, func(t *testing.T) {
+			f := newHandlerFixture(t)
+
+			rec := f.do(http.MethodPost, "/api/v1/me/password", body)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+		})
+	}
+}
+
+func TestChangePassword_ServiceErrorsReachTheClient(t *testing.T) {
+	f := newHandlerFixture(t)
+	f.security.EXPECT().ChangePassword(mock.Anything, f.userID, f.session, mock.Anything, mock.Anything).
+		Return(apperr.Validation(map[string]string{"current_password": "is incorrect"})).Once()
+
+	rec := f.do(http.MethodPost, "/api/v1/me/password", `{"current_password":"wrong","new_password":"new-password-1"}`)
+
+	require.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"current_password":"is incorrect"`)
 }
 
 func ptr[T any](v T) *T { return &v }

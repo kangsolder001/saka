@@ -157,6 +157,17 @@ func (s *RefreshTokens) RevokeAllSessions(ctx context.Context, q db.DBTX, userID
 	return nil
 }
 
+// RevokeOtherSessions revokes every session of the user except keepFamilyID
+// (password change: the caller stays logged in, every other device does not).
+func (s *RefreshTokens) RevokeOtherSessions(ctx context.Context, q db.DBTX, userID, keepFamilyID uuid.UUID) error {
+	if _, err := authdb.New(q).RevokeOtherSessionsOfUser(ctx, authdb.RevokeOtherSessionsOfUserParams{
+		UserID: userID, KeepFamilyID: keepFamilyID, Now: s.clk.Now(),
+	}); err != nil {
+		return fmt.Errorf("auth: revoke other sessions: %w", err)
+	}
+	return nil
+}
+
 // SessionActive reports whether the session still has a usable refresh token.
 func (s *RefreshTokens) SessionActive(ctx context.Context, q db.DBTX, userID, familyID uuid.UUID) (bool, error) {
 	active, err := authdb.New(q).SessionActive(ctx, authdb.SessionActiveParams{

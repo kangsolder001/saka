@@ -111,6 +111,27 @@ func (q *Queries) RevokeAllSessionsOfUser(ctx context.Context, arg RevokeAllSess
 	return result.RowsAffected(), nil
 }
 
+const revokeOtherSessionsOfUser = `-- name: RevokeOtherSessionsOfUser :execrows
+UPDATE refresh_tokens
+SET revoked_at = $1::timestamptz
+WHERE user_id = $2 AND family_id <> $3 AND revoked_at IS NULL
+`
+
+type RevokeOtherSessionsOfUserParams struct {
+	Now          time.Time
+	UserID       uuid.UUID
+	KeepFamilyID uuid.UUID
+}
+
+// Password change: every session except the one making the change.
+func (q *Queries) RevokeOtherSessionsOfUser(ctx context.Context, arg RevokeOtherSessionsOfUserParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeOtherSessionsOfUser, arg.Now, arg.UserID, arg.KeepFamilyID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const revokeSession = `-- name: RevokeSession :execrows
 UPDATE refresh_tokens
 SET revoked_at = $1::timestamptz

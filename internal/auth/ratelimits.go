@@ -16,6 +16,10 @@ var (
 	RuleForgotPassword = ratelimit.Rule{Name: "forgot_password", Limit: 3, Window: time.Hour}
 	// RuleResendVerification counts requests per user.
 	RuleResendVerification = ratelimit.Rule{Name: "resend_verification", Limit: 3, Window: time.Hour}
+	// RulePasswordConfirm counts FAILED "confirm your current password" checks per
+	// user (change password, change email, delete account). Without it a stolen
+	// access token could be used to guess the password.
+	RulePasswordConfirm = ratelimit.Rule{Name: "password_confirm", Limit: 5, Window: 15 * time.Minute}
 	// RuleRegister counts sign-up attempts per IP.
 	RuleRegister = ratelimit.Rule{Name: "register", Limit: 10, Window: time.Hour}
 )

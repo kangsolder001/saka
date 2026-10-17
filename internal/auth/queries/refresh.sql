@@ -37,3 +37,9 @@ WHERE family_id = @family_id AND revoked_at IS NULL;
 UPDATE refresh_tokens
 SET revoked_at = @now::timestamptz
 WHERE user_id = @user_id AND revoked_at IS NULL;
+
+-- Password change: every session except the one making the change.
+-- name: RevokeOtherSessionsOfUser :execrows
+UPDATE refresh_tokens
+SET revoked_at = @now::timestamptz
+WHERE user_id = @user_id AND family_id <> @keep_family_id AND revoked_at IS NULL;

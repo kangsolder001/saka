@@ -112,6 +112,75 @@ func (_c *MockRefreshStore_RevokeAllSessions_Call) RunAndReturn(run func(ctx con
 	return _c
 }
 
+// RevokeOtherSessions provides a mock function for the type MockRefreshStore
+func (_mock *MockRefreshStore) RevokeOtherSessions(ctx context.Context, q db.DBTX, userID uuid.UUID, keepFamilyID uuid.UUID) error {
+	ret := _mock.Called(ctx, q, userID, keepFamilyID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RevokeOtherSessions")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, db.DBTX, uuid.UUID, uuid.UUID) error); ok {
+		r0 = returnFunc(ctx, q, userID, keepFamilyID)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockRefreshStore_RevokeOtherSessions_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RevokeOtherSessions'
+type MockRefreshStore_RevokeOtherSessions_Call struct {
+	*mock.Call
+}
+
+// RevokeOtherSessions is a helper method to define mock.On call
+//   - ctx context.Context
+//   - q db.DBTX
+//   - userID uuid.UUID
+//   - keepFamilyID uuid.UUID
+func (_e *MockRefreshStore_Expecter) RevokeOtherSessions(ctx any, q any, userID any, keepFamilyID any) *MockRefreshStore_RevokeOtherSessions_Call {
+	return &MockRefreshStore_RevokeOtherSessions_Call{Call: _e.mock.On("RevokeOtherSessions", ctx, q, userID, keepFamilyID)}
+}
+
+func (_c *MockRefreshStore_RevokeOtherSessions_Call) Run(run func(ctx context.Context, q db.DBTX, userID uuid.UUID, keepFamilyID uuid.UUID)) *MockRefreshStore_RevokeOtherSessions_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 db.DBTX
+		if args[1] != nil {
+			arg1 = args[1].(db.DBTX)
+		}
+		var arg2 uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(uuid.UUID)
+		}
+		var arg3 uuid.UUID
+		if args[3] != nil {
+			arg3 = args[3].(uuid.UUID)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRefreshStore_RevokeOtherSessions_Call) Return(err error) *MockRefreshStore_RevokeOtherSessions_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockRefreshStore_RevokeOtherSessions_Call) RunAndReturn(run func(ctx context.Context, q db.DBTX, userID uuid.UUID, keepFamilyID uuid.UUID) error) *MockRefreshStore_RevokeOtherSessions_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // RevokeSession provides a mock function for the type MockRefreshStore
 func (_mock *MockRefreshStore) RevokeSession(ctx context.Context, q db.DBTX, familyID uuid.UUID) error {
 	ret := _mock.Called(ctx, q, familyID)

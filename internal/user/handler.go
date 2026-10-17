@@ -21,17 +21,34 @@ type ProfileService interface {
 	UpdateProfile(ctx context.Context, q db.DBTX, id uuid.UUID, in ProfileUpdate) (User, error)
 }
 
+// AccountSecurity is what the handler needs for credentials and sessions.
+// auth owns passwords, one-time tokens and sessions and already depends on
+// this package, so the user module declares the interface and auth.Service
+// implements it (the composition root connects them).
+type AccountSecurity interface {
+	// ChangePassword checks the current password, sets the new one and revokes
+	// every session except currentSession.
+	ChangePassword(ctx context.Context, userID, currentSession uuid.UUID, currentPassword, newPassword string) error
+}
+
 var _ ProfileService = (*Service)(nil)
+
+// Dependencies are the collaborators of Handler.
+type Dependencies struct {
+	Profiles ProfileService
+	Security AccountSecurity
+	// Pool serves reads and single-statement writes outside a transaction.
+	Pool db.DBTX
+}
 
 // Handler exposes the "my account" endpoints under /me (spec §6).
 type Handler struct {
-	profiles ProfileService
-	pool     db.DBTX // for reads and single-statement writes outside a transaction
+	Dependencies
 }
 
 // NewHandler creates the /me handler.
-func NewHandler(profiles ProfileService, pool db.DBTX) *Handler {
-	return &Handler{profiles: profiles, pool: pool}
+func NewHandler(deps Dependencies) *Handler {
+	return &Handler{Dependencies: deps}
 }
 
 // Routes registers the /me endpoints under rg (expected to be /api/v1).
@@ -42,6 +59,7 @@ func (h *Handler) Routes(rg *gin.RouterGroup, authenticate gin.HandlerFunc) {
 	me := rg.Group("/me", authenticate)
 	me.GET("", h.get)
 	me.PATCH("", h.patch)
+	me.POST("/password", h.changePassword)
 }
 
 // currentUser returns the authenticated user's ID from the request context.
@@ -72,7 +90,7 @@ func (h *Handler) get(c *gin.Context) {
 	if !ok {
 		return
 	}
-	sum, err := h.profiles.GetSummary(c.Request.Context(), h.pool, id)
+	sum, err := h.Profiles.GetSummary(c.Request.Context(), h.Pool, id)
 	if err != nil {
 		httpx.Error(c, err)
 		return
@@ -110,7 +128,7 @@ func (h *Handler) patch(c *gin.Context) {
 	if !httpx.BindJSON(c, &req) {
 		return
 	}
-	updated, err := h.profiles.UpdateProfile(c.Request.Context(), h.pool, id, ProfileUpdate{
+	updated, err := h.Profiles.UpdateProfile(c.Request.Context(), h.Pool, id, ProfileUpdate{
 		Name:      req.Name,
 		SetAvatar: req.AvatarURL.Set,
 		AvatarURL: req.AvatarURL.Value,
@@ -120,4 +138,32 @@ func (h *Handler) patch(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"user": profileFromSummary(updated.Summary())})
+}
+
+type changePasswordRequest struct {
+	CurrentPassword string `json:"current_password" validate:"required,max=1024"` // capped so a huge body cannot force a huge hash
+	NewPassword     string `json:"new_password" validate:"required,max=1024"`
+}
+
+// changePassword keeps the caller's session (taken from the access token) and
+// ends every other one.
+func (h *Handler) changePassword(c *gin.Context) {
+	id, ok := currentUser(c)
+	if !ok {
+		return
+	}
+	session, ok := reqctx.SessionID(c.Request.Context())
+	if !ok {
+		httpx.Error(c, apperr.Unauthenticated()) // wiring bug, as in currentUser
+		return
+	}
+	var req changePasswordRequest
+	if !httpx.BindJSON(c, &req) {
+		return
+	}
+	if err := h.Security.ChangePassword(c.Request.Context(), id, session, req.CurrentPassword, req.NewPassword); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Password berhasil diubah. Sesi di perangkat lain telah diakhiri."})
 }

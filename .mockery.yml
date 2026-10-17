@@ -29,3 +29,4 @@ packages:
   github.com/kangsolder001/saka/internal/user:
     interfaces:
       ProfileService:
+      AccountSecurity:

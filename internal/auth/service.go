@@ -50,6 +50,7 @@ type RefreshStore interface {
 	Rotate(ctx context.Context, q db.DBTX, raw string, client ClientInfo) (RotateResult, error)
 	RevokeSession(ctx context.Context, q db.DBTX, familyID uuid.UUID) error
 	RevokeAllSessions(ctx context.Context, q db.DBTX, userID uuid.UUID) error
+	RevokeOtherSessions(ctx context.Context, q db.DBTX, userID, keepFamilyID uuid.UUID) error
 }
 
 var (

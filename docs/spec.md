@@ -355,6 +355,15 @@ Hal-hal yang tidak ditentukan §5.1–5.5 dan sudah diputuskan di Fase 2:
 - Hapus akun **ditolak** jika user masih menjadi owner organisasi yang punya anggota lain. User harus transfer kepemilikan dulu. Jika owner satu-satunya di organisasinya, organisasi ikut dihapus (soft delete) dan subscription dibatalkan.
 - Hapus akun = soft delete + anonimisasi email (`deleted+<id>@invalid`) supaya email bisa dipakai daftar ulang.
 
+### 6.1 Keputusan implementasi
+
+Hal-hal yang tidak ditentukan §6 dan sudah diputuskan di Fase 3:
+
+- **Pembagian modul.** Modul `user` melayani semua endpoint `/me` (`user.Handler`) dan memiliki tabel `users`. Password, token sekali pakai, dan sesi dimiliki modul `auth` yang sudah bergantung pada `user`, jadi `user` tidak boleh mengimpor `auth`. Solusinya: `user` mendeklarasikan interface `AccountSecurity` (ganti password, ganti email, sesi, hapus akun) dan `auth.Service` mengimplementasikannya; `internal/app` yang menyambungkan keduanya. Handler mengambil ID user dan sesi dari `context.Context` (diisi middleware autentikasi), bukan dari input.
+- **`PATCH /me`** hanya menerima `name` (1–100 karakter) dan `avatar_url` (URL `http(s)` absolut, maks. 2048 karakter; `null` menghapus avatar). Field lain, termasuk `email`, ditolak sebagai field tak dikenal. Body kosong ditolak. Upload file tidak ada di Tier 1, jadi avatar hanya berupa URL.
+- **Konfirmasi password lama** diwajibkan untuk tindakan sensitif: ganti password (spec), dan juga ganti email serta hapus akun (tambahan, tidak ada di tabel §6). Tanpa itu, access token yang dicuri cukup untuk mengganti email lalu mengambil alih akun lewat `forgot-password`. Password lama yang salah → `400 VALIDATION_ERROR` pada field `current_password` (bukan 401, karena klien memperlakukan 401 sebagai "login ulang"). Percobaan **gagal** dibatasi 5 per 15 menit per user (`RulePasswordConfirm`, Redis); selama terkunci, password yang benar pun ditolak dengan `429`. Berhasil → hitungan direset.
+- **`POST /me/password`** menerima `current_password` dan `new_password`. Password baru mengikuti kebijakan §5.2 dan harus berbeda dari yang lama; kesalahan dilaporkan pada field `new_password`. Dalam satu transaksi: simpan hash baru, cabut semua sesi **kecuali sesi saat ini** (`sid` dari access token), dan antre email `password_changed`.
+
 ---
 
 ## 7. Modul Organisasi, Tim & Role
@@ -625,7 +634,7 @@ Tujuan: satu `trace_id` bisa dipakai untuk menelusuri request HTTP sampai job ou
 - [x] `forgot-password` tidak membocorkan apakah email terdaftar — `TestForgotPassword_DoesNotRevealWhichEmailsAreRegistered`, `TestLogin_NoUserEnumeration` (`internal/app`)
 
 ### User
-- [ ] Ganti password mencabut sesi lain
+- [x] Ganti password mencabut sesi lain — `TestChangePassword_EndToEnd_KeepsThisSessionAndEndsTheOthers` (`internal/app`), `TestRevokeOtherSessions_*` (`internal/auth`)
 - [ ] Ganti email butuh konfirmasi dari email baru
 - [ ] Hapus akun ditolak jika masih owner organisasi dengan anggota lain
 

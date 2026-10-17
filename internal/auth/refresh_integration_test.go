@@ -271,3 +271,29 @@ func TestRotate_ConcurrentUseOfOneTokenHasExactlyOneWinner(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, active, "and the session is revoked as a precaution")
 }
+
+func TestRevokeOtherSessions_KeepsOnlyTheNamedSessionAndOnlyForThatUser(t *testing.T) {
+	e := newEnv(t)
+	u, other := e.newUser(t), e.newUser(t)
+	store := auth.NewRefreshTokens(e.clock, refreshTTL)
+	ctx := context.Background()
+	keep, err := store.StartSession(ctx, e.db.Pool(), u.ID, auth.ClientInfo{})
+	require.NoError(t, err)
+	laptop, err := store.StartSession(ctx, e.db.Pool(), u.ID, auth.ClientInfo{})
+	require.NoError(t, err)
+	phone, err := store.StartSession(ctx, e.db.Pool(), u.ID, auth.ClientInfo{})
+	require.NoError(t, err)
+	strangers, err := store.StartSession(ctx, e.db.Pool(), other.ID, auth.ClientInfo{})
+	require.NoError(t, err)
+
+	require.NoError(t, store.RevokeOtherSessions(ctx, e.db.Pool(), u.ID, keep.FamilyID))
+
+	for session, want := range map[uuid.UUID]bool{keep.FamilyID: true, laptop.FamilyID: false, phone.FamilyID: false} {
+		active, err := store.SessionActive(ctx, e.db.Pool(), u.ID, session)
+		require.NoError(t, err)
+		assert.Equal(t, want, active)
+	}
+	active, err := store.SessionActive(ctx, e.db.Pool(), other.ID, strangers.FamilyID)
+	require.NoError(t, err)
+	assert.True(t, active, "another user's sessions are untouched")
+}
