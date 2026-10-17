@@ -152,3 +152,7 @@ func TestEnqueue_Validation(t *testing.T) {
 
 	assert.Empty(t, e.jobs(t))
 }
+
+func traceCtx(id string) context.Context {
+	return reqctx.WithTraceID(context.Background(), id)
+}

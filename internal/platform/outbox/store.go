@@ -90,3 +90,105 @@ func marshalPayload(p any) ([]byte, error) {
 	}
 	return json.Marshal(p)
 }
+
+// Job is a claimed job handed to a handler.
+type Job struct {
+	ID      uuid.UUID
+	Type    string
+	Payload json.RawMessage
+	// Attempts counts executions including the current one (1 on the first run).
+	Attempts int
+	// TraceID is the trace of the request that enqueued the job, if any.
+	TraceID   string
+	CreatedAt time.Time
+}
+
+// ErrLeaseLost is returned when a job could not be updated because another
+// worker reclaimed it after this worker's lease expired.
+var ErrLeaseLost = errors.New("outbox: job lease lost")
+
+const maxLastErrorLen = 1000
+
+// Claim atomically takes up to limit due jobs for the calling worker. Jobs
+// stuck in processing for longer than lease are reclaimed. Concurrent callers
+// receive disjoint jobs (FOR UPDATE SKIP LOCKED).
+func (s *Store) Claim(ctx context.Context, limit int, lease time.Duration) ([]Job, error) {
+	now := s.clk.Now()
+	rows, err := outboxdb.New(s.pool).ClaimJobs(ctx, outboxdb.ClaimJobsParams{
+		Now:                now,
+		LeaseExpiredBefore: now.Add(-lease),
+		BatchSize:          int32(limit), //nolint:gosec // limit is a small configured batch size
+	})
+	if err != nil {
+		return nil, fmt.Errorf("outbox: claim jobs: %w", err)
+	}
+
+	jobs := make([]Job, len(rows))
+	for i, r := range rows {
+		jobs[i] = Job{
+			ID:        r.ID,
+			Type:      r.Type,
+			Payload:   r.Payload,
+			Attempts:  int(r.Attempts),
+			CreatedAt: r.CreatedAt,
+		}
+		if r.TraceID != nil {
+			jobs[i].TraceID = *r.TraceID
+		}
+	}
+	return jobs, nil
+}
+
+// Complete marks a claimed job as done.
+func (s *Store) Complete(ctx context.Context, job Job) error {
+	n, err := outboxdb.New(s.pool).MarkJobDone(ctx, outboxdb.MarkJobDoneParams{
+		Now:      s.clk.Now(),
+		ID:       job.ID,
+		Attempts: int32(job.Attempts), //nolint:gosec // bounded by MaxAttempts
+	})
+	return finish("complete", n, err)
+}
+
+// Retry puts a claimed job back to pending, to run again at nextAttemptAt.
+func (s *Store) Retry(ctx context.Context, job Job, nextAttemptAt time.Time, cause error) error {
+	n, err := outboxdb.New(s.pool).ScheduleJobRetry(ctx, outboxdb.ScheduleJobRetryParams{
+		Now:           s.clk.Now(),
+		NextAttemptAt: nextAttemptAt.UTC(),
+		LastError:     truncateError(cause),
+		ID:            job.ID,
+		Attempts:      int32(job.Attempts), //nolint:gosec // bounded by MaxAttempts
+	})
+	return finish("retry", n, err)
+}
+
+// Fail marks a claimed job as permanently failed for manual review.
+func (s *Store) Fail(ctx context.Context, job Job, cause error) error {
+	n, err := outboxdb.New(s.pool).MarkJobFailed(ctx, outboxdb.MarkJobFailedParams{
+		Now:       s.clk.Now(),
+		LastError: truncateError(cause),
+		ID:        job.ID,
+		Attempts:  int32(job.Attempts), //nolint:gosec // bounded by MaxAttempts
+	})
+	return finish("fail", n, err)
+}
+
+func finish(op string, rowsAffected int64, err error) error {
+	if err != nil {
+		return fmt.Errorf("outbox: %s job: %w", op, err)
+	}
+	if rowsAffected == 0 {
+		return ErrLeaseLost
+	}
+	return nil
+}
+
+func truncateError(err error) *string {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	if len(msg) > maxLastErrorLen {
+		msg = msg[:maxLastErrorLen]
+	}
+	return &msg
+}
