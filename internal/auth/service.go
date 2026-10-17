@@ -43,6 +43,8 @@ type RefreshStore interface {
 	StartSession(ctx context.Context, q db.DBTX, userID uuid.UUID, client ClientInfo) (RefreshToken, error)
 	SessionActive(ctx context.Context, q db.DBTX, userID, familyID uuid.UUID) (bool, error)
 	Rotate(ctx context.Context, q db.DBTX, raw string, client ClientInfo) (RotateResult, error)
+	RevokeSession(ctx context.Context, q db.DBTX, familyID uuid.UUID) error
+	RevokeAllSessions(ctx context.Context, q db.DBTX, userID uuid.UUID) error
 }
 
 var (
@@ -375,4 +377,11 @@ func (s *Service) Refresh(ctx context.Context, rawToken string, client ClientInf
 		RefreshToken:     rotated.Token.Raw,
 		RefreshExpiresAt: rotated.Token.ExpiresAt,
 	}, nil
+}
+
+// Logout ends the caller's session: every refresh token of that login is
+// revoked, so neither the refresh token nor the access token (which Authenticate
+// ties to the session) works any more. Other devices stay logged in.
+func (s *Service) Logout(ctx context.Context, p Principal) error {
+	return s.Sessions.RevokeSession(ctx, s.Pool, p.SessionID)
 }

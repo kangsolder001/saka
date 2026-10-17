@@ -51,6 +51,7 @@ func (h *Handler) Routes(rg *gin.RouterGroup) {
 
 	authed := g.Group("", h.mw.Authenticate())
 	authed.POST("/resend-verification", h.resendVerification)
+	authed.POST("/logout", h.logout)
 }
 
 type userResponse struct {
@@ -229,4 +230,14 @@ func (h *Handler) clearRefreshCookie(c *gin.Context) {
 		Secure:   h.cfg.SecureCookie,
 		SameSite: http.SameSiteStrictMode,
 	})
+}
+
+func (h *Handler) logout(c *gin.Context) {
+	p, _ := PrincipalFrom(c) // Authenticate guarantees it
+	if err := h.svc.Logout(c.Request.Context(), p); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	h.clearRefreshCookie(c)
+	c.Status(http.StatusNoContent)
 }
