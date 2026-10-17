@@ -42,7 +42,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Context propagation: helper `platform` untuk simpan/ambil `trace_id`, `request_id`, `user_id`, `org_id` di `context.Context` (key bertipe privat) + unit test (0.15)
 - [x] `platform/safego`: `Go(ctx, name, fn)` dengan `recover` + log (stack, `trace_id`) + pelacakan untuk shutdown, dan `Group` berbasis `errgroup` (panic → error, `SetLimit`) (§11.2) (0.25)
 - [x] Test `safego`: panic tertangkap, error merambat, batas konkurensi, context batal, tidak ada goroutine tersisa (`goleak`) (0.15)
-- [ ] Middleware `gin`: request id + trace id (baca `traceparent`, set header `X-Request-ID`/`X-Trace-ID`), recover, logging, CORS, security headers (0.3)
+- [x] Middleware `gin`: request id + trace id (baca `traceparent`, set header `X-Request-ID`/`X-Trace-ID`), recover, logging, CORS, security headers (0.3)
 - [ ] Util: UUID v7 (pakai `uuidv7()` bawaan PostgreSQL 18), cursor pagination, validasi input (0.25)
 - [ ] Endpoint `/healthz` dan `/readyz` (0.1)
 - [ ] Migrasi pertama: ekstensi `citext`, tabel `users` (§4.1) (0.1)
