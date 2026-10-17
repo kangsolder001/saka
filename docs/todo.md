@@ -47,7 +47,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Util: validasi input + `BindJSON` (0.15). UUID v7 tidak butuh kode Go: dibuat oleh default kolom `uuidv7()` PostgreSQL 18, dipakai di migrasi
 - [x] Endpoint `/healthz` dan `/readyz` (0.1)
 - [x] Migrasi pertama: ekstensi `citext`, tabel `users` (§4.1) (0.1)
-- [x] Setup CI (lint, unit test, integration test via `testcontainers-go`) (0.25). Workflow sudah ditulis; status hijau di GitHub baru bisa dipastikan setelah push pertama
+- [x] Setup CI (lint, unit test, integration test via `testcontainers-go`) (0.25). Workflow di `.github/workflows/ci.yml`; sudah hijau di GitHub (4 job: lint, unit, integration, drift generate)
 - [x] Makefile / task runner: up/down, run, build, migrate*, sqlc, mocks, test, test-integration, lint (0.1). Target `seed` ditambahkan saat perintah seed dibuat (Fase 7), bukan sekarang
 
 **Selesai bila:** API jalan, health check hijau, CI hijau.
