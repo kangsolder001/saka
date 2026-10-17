@@ -315,6 +315,21 @@ Job dimasukkan dalam **transaksi yang sama** dengan perubahan data, supaya tidak
 
 Role dan organisasi **tidak** disimpan di JWT. Dicek dari database per request supaya perubahan role langsung berlaku.
 
+### 5.6 Keputusan implementasi
+
+Hal-hal yang tidak ditentukan §5.1–5.5 dan sudah diputuskan di Fase 2:
+
+- **Kepemilikan tabel.** Modul `user` memiliki `users`; modul `auth` memiliki `user_tokens` dan `refresh_tokens` dan memanggil `user` lewat interface. Fungsi repository menerima `db.DBTX` (pool atau transaksi) sehingga registrasi, token, dan job email bisa berada dalam satu transaksi.
+- **Register** menerima `email`, `password`, `name`, `organization_name`. `organization_name` divalidasi (wajib) tetapi baru dipakai Fase 4; sebelum itu hanya user yang dibuat. Register **tidak** mengembalikan token; klien lanjut ke `/auth/login`. Email duplikat → `409 CONFLICT`.
+- **Login** menerima `email`, `password`, dan opsional `token_delivery` (`cookie` default, atau `body`). Respons: `access_token`, `token_type` (`Bearer`), `expires_in` (detik), `user`, dan `refresh_token` hanya bila `token_delivery=body`. Dengan `cookie`, refresh token dikirim lewat cookie `refresh_token` (`HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth`, `Secure` di production). Email tidak dikenal, password salah, dan user dihapus/ditangguhkan memberi respons sama (`401 UNAUTHENTICATED`, pesan generik) dan waktu proses yang mirip (hash tiruan untuk email tak dikenal).
+- **Refresh** membaca token dari cookie, atau dari body `{ "refresh_token": "..." }`. Cara token datang menentukan cara token baru dikembalikan (cookie atau body). Token tak dikenal/kedaluwarsa → `401 UNAUTHENTICATED`; token yang sudah dicabut dipakai lagi → cabut seluruh family lalu `401`. Dua permintaan refresh bersamaan dengan token yang sama dianggap pemakaian ulang (sesuai §5.3); klien web sebaiknya menserialisasi refresh.
+- **Sesi.** Middleware autentikasi memverifikasi JWT lalu memuat user dari DB (harus `active`) dan memastikan family `sid` masih punya refresh token yang belum dicabut dan belum kedaluwarsa. Dengan begitu logout, reset password, dan deteksi pencurian berlaku langsung, tidak menunggu access token habis. `TOKEN_EXPIRED` dikembalikan untuk access token yang kedaluwarsa.
+- **Logout** mencabut seluruh family sesi saat ini dan menghapus cookie.
+- **Resend verification** untuk user yang sudah terverifikasi → `409 CONFLICT`. Mengirim ulang membuat token baru dan membatalkan token verifikasi lama yang belum dipakai.
+- **Forgot password** selalu `200` dengan pesan generik. Token reset lama yang belum dipakai dibatalkan saat token baru dibuat. Pembuatan token dan job email asinkron, jadi perbedaan waktu antara email terdaftar dan tidak sangat kecil; rate limit per email menutup sisanya.
+- **Rate limit** disimpan di PostgreSQL (tabel `rate_limit_hits`, sliding window) agar konsisten antar instance API tanpa infrastruktur tambahan. Hit lama dibersihkan saat key yang sama dipakai lagi. Melebihi batas → `429 RATE_LIMITED` dengan header `Retry-After`. Batas login dihitung dari percobaan **gagal** dan direset saat login berhasil. Batas `forgot-password` berlaku sama untuk email terdaftar maupun tidak.
+- **Konfigurasi baru:** `auth.jwt_secret` (minimal 32 karakter, wajib), `auth.access_token_ttl` (default 15m), `auth.refresh_token_ttl` (default 720h), `app.frontend_url` (dasar tautan di email: `<frontend_url>/verify-email?token=...`, `<frontend_url>/reset-password?token=...`).
+
 ---
 
 ## 6. Modul User

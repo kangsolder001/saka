@@ -72,6 +72,8 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 
 ## Fase 2 — Auth (6 hari)
 
+- [ ] Config: section `auth` (jwt_secret, TTL) dan `app.frontend_url` (0.1)
+- [ ] Modul `user` minimal: tabel `users` via sqlc (create, get by id/email, tandai terverifikasi, ganti password) (0.3)
 - [ ] Migrasi `user_tokens`, `refresh_tokens` (§4.2, §4.3) (0.1)
 - [ ] Hashing Argon2id + validasi password (8–72, ≠ email) (0.25)
 - [ ] Util token acak + hash SHA-256; service `user_tokens` (buat, pakai sekali, expiry per tipe) (0.4)
@@ -79,12 +81,12 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [ ] `POST /auth/verify-email`, `POST /auth/resend-verification` (0.3)
 - [ ] JWT: sign/verify, klaim `sub`/`sid`, 15 menit (§5.5) (0.3)
 - [ ] `POST /auth/login` (0.3)
-- [ ] Middleware autentikasi + guard `EMAIL_NOT_VERIFIED` (0.3)
+- [ ] Middleware autentikasi (JWT + user aktif + sesi/family masih valid, §5.6) + guard `EMAIL_NOT_VERIFIED` (0.3)
 - [ ] Refresh token: issue, rotasi, `replaced_by`, deteksi reuse → cabut family (§5.3) (0.7)
 - [ ] `POST /auth/refresh` (cookie HttpOnly untuk web, body untuk mobile) (0.3)
 - [ ] `POST /auth/logout` (0.1)
 - [ ] `POST /auth/forgot-password` (selalu 200) + `POST /auth/reset-password` (cabut semua refresh token, kirim `password_changed`) (0.5)
-- [ ] Rate limiter + aturan per endpoint (§5.4) (0.7)
+- [ ] Rate limiter berbasis PostgreSQL (tabel `rate_limit_hits`, §5.6) + aturan per endpoint (§5.4) (0.7)
 - [ ] Test unit service auth; integration: rotasi, reuse detection, token sekali pakai, tidak ada user enumeration (0.7)
 
 **Selesai bila:** AC Auth (§12) lulus, kecuali "otomatis punya organisasi dan plan Free" (menunggu Fase 4–5).
