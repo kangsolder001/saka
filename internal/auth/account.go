@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -102,4 +103,96 @@ func passwordFieldAs(err error, field string) error {
 		return err
 	}
 	return apperr.Validation(map[string]string{field: fields["password"]})
+}
+
+// emailChangePayload is stored with the email_change token.
+type emailChangePayload struct {
+	NewEmail string `json:"new_email"`
+}
+
+// RequestEmailChange starts changing the caller's email: after checking the
+// current password it emails a confirmation link to the NEW address. Nothing
+// changes until that link is used, so a typo or someone else's address can
+// never lock the user out. A newer request invalidates the older link.
+func (s *Service) RequestEmailChange(ctx context.Context, userID uuid.UUID, currentPassword, newEmail string) error {
+	newEmail = user.NormalizeEmail(newEmail)
+	u, err := s.Users.GetByID(ctx, s.Pool, userID)
+	if err != nil {
+		return err
+	}
+	if err := s.confirmPassword(ctx, u, currentPassword); err != nil {
+		return err
+	}
+	// Counted before the lookups below, which would otherwise let a caller
+	// probe which addresses are registered at will.
+	if err := s.take(ctx, RuleEmailChange, userID.String()); err != nil {
+		return err
+	}
+	if newEmail == u.Email {
+		return apperr.Validation(map[string]string{"new_email": "must be different from the current email"})
+	}
+	if _, err := s.Users.GetByEmail(ctx, s.Pool, newEmail); err == nil {
+		return apperr.Conflict("Email sudah terdaftar.")
+	} else if !apperr.IsCode(err, apperr.CodeNotFound) {
+		return err
+	}
+
+	return s.Tx.WithTx(ctx, func(tx pgx.Tx) error {
+		raw, err := s.Tokens.Issue(ctx, tx, u.ID, TokenEmailChange, emailChangePayload{NewEmail: newEmail})
+		if err != nil {
+			return err
+		}
+		return s.Mail.Send(ctx, tx, mail.Email{
+			Template: "email_change_confirm",
+			To:       newEmail,
+			Data: map[string]any{
+				"name": u.Name,
+				"url":  s.link("/confirm-email-change", raw),
+			},
+		})
+	})
+}
+
+// ConfirmEmailChange applies a change requested with RequestEmailChange. The
+// token is the credential (the link is opened from the new inbox, possibly on
+// another device), so no login is needed. In one transaction it consumes the
+// token, switches the address (now verified) and queues a notice to the OLD
+// address. It returns the new email. A taken address returns CONFLICT and
+// leaves the token unused.
+func (s *Service) ConfirmEmailChange(ctx context.Context, rawToken string) (string, error) {
+	var newEmail string
+	err := s.Tx.WithTx(ctx, func(tx pgx.Tx) error {
+		tok, err := s.Tokens.Consume(ctx, tx, rawToken, TokenEmailChange)
+		if err != nil {
+			return err
+		}
+		var payload emailChangePayload
+		if err := json.Unmarshal(tok.Payload, &payload); err != nil || payload.NewEmail == "" {
+			return ErrInvalidToken()
+		}
+		u, err := s.Users.GetByID(ctx, tx, tok.UserID)
+		if err != nil {
+			if apperr.IsCode(err, apperr.CodeNotFound) {
+				return ErrInvalidToken()
+			}
+			return err
+		}
+		if u.Status != user.StatusActive || u.Email == payload.NewEmail {
+			return ErrInvalidToken()
+		}
+		// ChangeEmail clears the cached summary once this transaction commits.
+		if err := s.Users.ChangeEmail(ctx, tx, u.ID, payload.NewEmail); err != nil {
+			return err
+		}
+		newEmail = payload.NewEmail
+		return s.Mail.Send(ctx, tx, mail.Email{
+			Template: "email_changed_notice",
+			To:       u.Email,
+			Data:     map[string]any{"name": u.Name, "new_email": payload.NewEmail},
+		})
+	})
+	if err != nil {
+		return "", err
+	}
+	return newEmail, nil
 }

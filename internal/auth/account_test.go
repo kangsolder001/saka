@@ -2,6 +2,7 @@ package auth_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kangsolder001/saka/internal/auth"
 	"github.com/kangsolder001/saka/internal/mail"
 	"github.com/kangsolder001/saka/internal/platform/apperr"
 	"github.com/kangsolder001/saka/internal/user"
@@ -142,4 +144,168 @@ func TestChangePassword_UnknownUserIsNotFound(t *testing.T) {
 	err := f.svc.ChangePassword(context.Background(), uuid.New(), uuid.New(), currentPassword, "brand-new-password")
 
 	assert.True(t, apperr.IsCode(err, apperr.CodeNotFound))
+}
+
+func TestRequestEmailChange_EmailsAConfirmationLinkToTheNewAddressOnly(t *testing.T) {
+	f := newFixture(t)
+	u := f.accountUser(t)
+	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+	f.users.EXPECT().GetByEmail(mock.Anything, mock.Anything, "new@example.com").Return(user.User{}, apperr.NotFound()).Once()
+	f.expectTx()
+	f.tokens.EXPECT().Issue(mock.Anything, mock.Anything, u.ID, auth.TokenEmailChange, mock.MatchedBy(func(payload any) bool {
+		b, err := json.Marshal(payload)
+		return err == nil && string(b) == `{"new_email":"new@example.com"}`
+	})).Return("raw+token", nil).Once()
+	f.mail.EXPECT().Send(mock.Anything, mock.Anything, mail.Email{
+		Template: "email_change_confirm", To: "new@example.com",
+		Data: map[string]any{"name": "Ann", "url": "https://app.example.com/confirm-email-change?token=raw%2Btoken"},
+	}).Return(nil).Once()
+
+	err := f.svc.RequestEmailChange(context.Background(), u.ID, currentPassword, "  New@Example.COM ")
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"email_change"}, f.limiter.takes)
+}
+
+func TestRequestEmailChange_WrongPasswordSendsNothing(t *testing.T) {
+	f := newFixture(t) // no lookup/tx/token/mail expectations
+	u := f.accountUser(t)
+	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+
+	err := f.svc.RequestEmailChange(context.Background(), u.ID, "wrong-password", "new@example.com")
+
+	assert.Equal(t, "is incorrect", fieldsOf(t, err)["current_password"])
+	assert.Empty(t, f.limiter.takes, "a failed password does not use up the email quota")
+}
+
+func TestRequestEmailChange_RejectsSameOrTakenAddresses(t *testing.T) {
+	f := newFixture(t)
+	u := f.accountUser(t)
+	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Twice()
+	f.users.EXPECT().GetByEmail(mock.Anything, mock.Anything, "taken@example.com").
+		Return(user.User{ID: uuid.New(), Email: "taken@example.com"}, nil).Once()
+
+	same := f.svc.RequestEmailChange(context.Background(), u.ID, currentPassword, "ANN@example.com")
+	taken := f.svc.RequestEmailChange(context.Background(), u.ID, currentPassword, "taken@example.com")
+
+	assert.Contains(t, fieldsOf(t, same)["new_email"], "different")
+	assert.True(t, apperr.IsCode(taken, apperr.CodeConflict))
+}
+
+func TestRequestEmailChange_IsRateLimited(t *testing.T) {
+	f := newFixture(t)
+	f.limiter.denyTake = true
+	u := f.accountUser(t)
+	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+
+	err := f.svc.RequestEmailChange(context.Background(), u.ID, currentPassword, "new@example.com")
+
+	assert.True(t, apperr.IsCode(err, apperr.CodeRateLimited), "and before any lookup, so the limit also covers probing for registered emails")
+}
+
+func TestRequestEmailChange_LookupFailureIsNotMistakenForAvailable(t *testing.T) {
+	f := newFixture(t)
+	u := f.accountUser(t)
+	boom := errors.New("db down")
+	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+	f.users.EXPECT().GetByEmail(mock.Anything, mock.Anything, mock.Anything).Return(user.User{}, boom).Once()
+
+	err := f.svc.RequestEmailChange(context.Background(), u.ID, currentPassword, "new@example.com")
+
+	assert.ErrorIs(t, err, boom)
+}
+
+func changeToken(userID uuid.UUID, newEmail string) auth.UserToken {
+	payload, _ := json.Marshal(map[string]string{"new_email": newEmail})
+	return auth.UserToken{UserID: userID, Type: auth.TokenEmailChange, Payload: payload}
+}
+
+func TestConfirmEmailChange_SwitchesTheAddressAndNotifiesTheOldOne(t *testing.T) {
+	f := newFixture(t)
+	u := f.accountUser(t)
+	f.expectTx()
+	f.tokens.EXPECT().Consume(mock.Anything, mock.Anything, "raw", auth.TokenEmailChange).Return(changeToken(u.ID, "new@example.com"), nil).Once()
+	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+	f.users.EXPECT().ChangeEmail(mock.Anything, mock.Anything, u.ID, "new@example.com").Return(nil).Once()
+	f.mail.EXPECT().Send(mock.Anything, mock.Anything, mail.Email{
+		Template: "email_changed_notice", To: "ann@example.com",
+		Data: map[string]any{"name": "Ann", "new_email": "new@example.com"},
+	}).Return(nil).Once()
+
+	got, err := f.svc.ConfirmEmailChange(context.Background(), "raw")
+
+	require.NoError(t, err)
+	assert.Equal(t, "new@example.com", got)
+}
+
+func TestConfirmEmailChange_InvalidTokenChangesNothing(t *testing.T) {
+	f := newFixture(t)
+	f.expectTx()
+	f.tokens.EXPECT().Consume(mock.Anything, mock.Anything, "bad", auth.TokenEmailChange).Return(auth.UserToken{}, auth.ErrInvalidToken()).Once()
+
+	_, err := f.svc.ConfirmEmailChange(context.Background(), "bad")
+
+	assert.True(t, apperr.IsCode(err, apperr.CodeValidation))
+}
+
+func TestConfirmEmailChange_UnusableTokensLookLikeInvalidOnes(t *testing.T) {
+	u := user.User{ID: uuid.New(), Email: "ann@example.com", Name: "Ann", Status: user.StatusActive}
+	tests := map[string]struct {
+		token auth.UserToken
+		user  func(f *fixture)
+	}{
+		"no payload":      {auth.UserToken{UserID: u.ID}, nil},
+		"empty new email": {changeToken(u.ID, ""), nil},
+		"user is gone": {changeToken(u.ID, "new@example.com"), func(f *fixture) {
+			f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(user.User{}, apperr.NotFound()).Once()
+		}},
+		"user is suspended": {changeToken(u.ID, "new@example.com"), func(f *fixture) {
+			f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(user.User{ID: u.ID, Status: user.StatusSuspended}, nil).Once()
+		}},
+		"already the current email": {changeToken(u.ID, "ann@example.com"), func(f *fixture) {
+			f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+		}},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t) // no ChangeEmail / mail expectation
+			f.expectTx()
+			f.tokens.EXPECT().Consume(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(tt.token, nil).Once()
+			if tt.user != nil {
+				tt.user(f)
+			}
+
+			_, err := f.svc.ConfirmEmailChange(context.Background(), "raw")
+
+			assert.True(t, apperr.IsCode(err, apperr.CodeValidation))
+		})
+	}
+}
+
+func TestConfirmEmailChange_FailureAnywhereFailsTheWholeChange(t *testing.T) {
+	boom := errors.New("step failed")
+	tests := map[string]func(f *fixture){
+		"taken in the meantime": func(f *fixture) {
+			f.users.EXPECT().ChangeEmail(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(apperr.Conflict("taken")).Once()
+		},
+		"queue notice": func(f *fixture) {
+			f.users.EXPECT().ChangeEmail(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+			f.mail.EXPECT().Send(mock.Anything, mock.Anything, mock.Anything).Return(boom).Once()
+		},
+	}
+	for name, setup := range tests {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			u := f.accountUser(t)
+			f.expectTx()
+			f.tokens.EXPECT().Consume(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(changeToken(u.ID, "new@example.com"), nil).Once()
+			f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+			setup(f)
+
+			got, err := f.svc.ConfirmEmailChange(context.Background(), "raw")
+
+			require.Error(t, err)
+			assert.Empty(t, got, "no address is reported as changed when the transaction fails")
+		})
+	}
 }

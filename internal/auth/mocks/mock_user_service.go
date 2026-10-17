@@ -49,6 +49,75 @@ func (_m *MockUserService) EXPECT() *MockUserService_Expecter {
 	return &MockUserService_Expecter{mock: &_m.Mock}
 }
 
+// ChangeEmail provides a mock function for the type MockUserService
+func (_mock *MockUserService) ChangeEmail(ctx context.Context, q db.DBTX, id uuid.UUID, newEmail string) error {
+	ret := _mock.Called(ctx, q, id, newEmail)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ChangeEmail")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, db.DBTX, uuid.UUID, string) error); ok {
+		r0 = returnFunc(ctx, q, id, newEmail)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockUserService_ChangeEmail_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ChangeEmail'
+type MockUserService_ChangeEmail_Call struct {
+	*mock.Call
+}
+
+// ChangeEmail is a helper method to define mock.On call
+//   - ctx context.Context
+//   - q db.DBTX
+//   - id uuid.UUID
+//   - newEmail string
+func (_e *MockUserService_Expecter) ChangeEmail(ctx any, q any, id any, newEmail any) *MockUserService_ChangeEmail_Call {
+	return &MockUserService_ChangeEmail_Call{Call: _e.mock.On("ChangeEmail", ctx, q, id, newEmail)}
+}
+
+func (_c *MockUserService_ChangeEmail_Call) Run(run func(ctx context.Context, q db.DBTX, id uuid.UUID, newEmail string)) *MockUserService_ChangeEmail_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 db.DBTX
+		if args[1] != nil {
+			arg1 = args[1].(db.DBTX)
+		}
+		var arg2 uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(uuid.UUID)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockUserService_ChangeEmail_Call) Return(err error) *MockUserService_ChangeEmail_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockUserService_ChangeEmail_Call) RunAndReturn(run func(ctx context.Context, q db.DBTX, id uuid.UUID, newEmail string) error) *MockUserService_ChangeEmail_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Create provides a mock function for the type MockUserService
 func (_mock *MockUserService) Create(ctx context.Context, q db.DBTX, in user.NewUser) (user.User, error) {
 	ret := _mock.Called(ctx, q, in)

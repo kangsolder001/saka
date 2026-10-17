@@ -35,6 +35,7 @@ type UserService interface {
 	GetSummary(ctx context.Context, q db.DBTX, id uuid.UUID) (user.Summary, error)
 	MarkEmailVerified(ctx context.Context, q db.DBTX, id uuid.UUID) error
 	SetPasswordHash(ctx context.Context, q db.DBTX, id uuid.UUID, hash string) error
+	ChangeEmail(ctx context.Context, q db.DBTX, id uuid.UUID, newEmail string) error
 }
 
 // TokenService issues and consumes single-use tokens; *UserTokens implements it.

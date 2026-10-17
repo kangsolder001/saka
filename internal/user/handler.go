@@ -29,6 +29,12 @@ type AccountSecurity interface {
 	// ChangePassword checks the current password, sets the new one and revokes
 	// every session except currentSession.
 	ChangePassword(ctx context.Context, userID, currentSession uuid.UUID, currentPassword, newPassword string) error
+	// RequestEmailChange checks the current password and emails a confirmation
+	// link to newEmail; nothing changes until the link is used.
+	RequestEmailChange(ctx context.Context, userID uuid.UUID, currentPassword, newEmail string) error
+	// ConfirmEmailChange applies a requested change from the token in that link
+	// and returns the new email.
+	ConfirmEmailChange(ctx context.Context, rawToken string) (newEmail string, err error)
 }
 
 var _ ProfileService = (*Service)(nil)
@@ -60,6 +66,11 @@ func (h *Handler) Routes(rg *gin.RouterGroup, authenticate gin.HandlerFunc) {
 	me.GET("", h.get)
 	me.PATCH("", h.patch)
 	me.POST("/password", h.changePassword)
+	me.POST("/email", h.requestEmailChange)
+
+	// The link in the confirmation email is opened from the new inbox, maybe on
+	// another device, so the one-time token is the credential (like verify-email).
+	rg.POST("/me/email/confirm", h.confirmEmailChange)
 }
 
 // currentUser returns the authenticated user's ID from the request context.
@@ -166,4 +177,42 @@ func (h *Handler) changePassword(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"message": "Password berhasil diubah. Sesi di perangkat lain telah diakhiri."})
+}
+
+type requestEmailChangeRequest struct {
+	NewEmail        string `json:"new_email" validate:"required,email,max=254"`
+	CurrentPassword string `json:"current_password" validate:"required,max=1024"`
+}
+
+func (h *Handler) requestEmailChange(c *gin.Context) {
+	id, ok := currentUser(c)
+	if !ok {
+		return
+	}
+	var req requestEmailChangeRequest
+	if !httpx.BindJSON(c, &req) {
+		return
+	}
+	if err := h.Security.RequestEmailChange(c.Request.Context(), id, req.CurrentPassword, req.NewEmail); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Kami telah mengirim tautan konfirmasi ke email baru Anda. Email akun belum berubah sampai tautan itu dibuka."})
+}
+
+type confirmEmailChangeRequest struct {
+	Token string `json:"token" validate:"required,max=256"`
+}
+
+func (h *Handler) confirmEmailChange(c *gin.Context) {
+	var req confirmEmailChangeRequest
+	if !httpx.BindJSON(c, &req) {
+		return
+	}
+	newEmail, err := h.Security.ConfirmEmailChange(c.Request.Context(), req.Token)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"email": newEmail, "email_verified": true})
 }

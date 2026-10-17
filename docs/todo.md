@@ -105,7 +105,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 
 - [x] `GET /me` (daftar org diisi setelah Fase 4) dan `PATCH /me` (0.3). `organizations` sementara `[]`; endpoint dibaca dari `GetSummary` (cache), `PATCH` hanya menerima `name` dan `avatar_url` (null = hapus avatar)
 - [x] `POST /me/password` (password lama wajib; cabut sesi lain kecuali saat ini; email notifikasi) (0.4). Plus batas 5 percobaan gagal / 15 menit per user (§6.1)
-- [ ] `POST /me/email` + `POST /me/email/confirm` + template `email_change_confirm`, `email_changed_notice` (0.6)
+- [x] `POST /me/email` + `POST /me/email/confirm` + template `email_change_confirm`, `email_changed_notice` (0.6). Konfirmasi password + batas 3/jam per user; `confirm` tanpa login (§6.1)
 - [ ] `GET /me/sessions`, `DELETE /me/sessions/{id}` (0.3)
 - [ ] `DELETE /me`: soft delete + anonimisasi email, cabut semua sesi; pengecekan owner lewat interface ke modul org (stub dulu) (0.4)
 - [ ] Test unit + integration modul user, termasuk: setiap method tulis baru (profil, email, hapus akun) memakai `invalidateAfterCommit` dan ada test yang membuktikan cache terhapus setelah commit dan tidak pernah basi (0.5)

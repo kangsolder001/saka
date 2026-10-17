@@ -363,6 +363,7 @@ Hal-hal yang tidak ditentukan §6 dan sudah diputuskan di Fase 3:
 - **`PATCH /me`** hanya menerima `name` (1–100 karakter) dan `avatar_url` (URL `http(s)` absolut, maks. 2048 karakter; `null` menghapus avatar). Field lain, termasuk `email`, ditolak sebagai field tak dikenal. Body kosong ditolak. Upload file tidak ada di Tier 1, jadi avatar hanya berupa URL.
 - **Konfirmasi password lama** diwajibkan untuk tindakan sensitif: ganti password (spec), dan juga ganti email serta hapus akun (tambahan, tidak ada di tabel §6). Tanpa itu, access token yang dicuri cukup untuk mengganti email lalu mengambil alih akun lewat `forgot-password`. Password lama yang salah → `400 VALIDATION_ERROR` pada field `current_password` (bukan 401, karena klien memperlakukan 401 sebagai "login ulang"). Percobaan **gagal** dibatasi 5 per 15 menit per user (`RulePasswordConfirm`, Redis); selama terkunci, password yang benar pun ditolak dengan `429`. Berhasil → hitungan direset.
 - **`POST /me/password`** menerima `current_password` dan `new_password`. Password baru mengikuti kebijakan §5.2 dan harus berbeda dari yang lama; kesalahan dilaporkan pada field `new_password`. Dalam satu transaksi: simpan hash baru, cabut semua sesi **kecuali sesi saat ini** (`sid` dari access token), dan antre email `password_changed`.
+- **Ganti email** dua langkah. `POST /me/email` (`new_email`, `current_password`) memeriksa password, lalu mengirim `email_change_confirm` ke **email baru** dengan tautan `<frontend_url>/confirm-email-change?token=...` (24 jam, payload `{"new_email": "..."}`); email akun belum berubah. Permintaan baru membatalkan tautan lama. Ditolak bila sama dengan email sekarang (`400`, field `new_email`) atau sudah dipakai akun lain (`409 CONFLICT`). Dibatasi 3 permintaan per jam per user (`RuleEmailChange`) dan dihitung **sebelum** pemeriksaan "email sudah terdaftar", agar endpoint ini tidak bisa dipakai menebak email terdaftar tanpa batas. `POST /me/email/confirm` (`token`) **tidak butuh login**: tautan dibuka dari inbox baru, mungkin di perangkat lain, jadi token sekali pakai itulah kredensialnya (sama seperti `verify-email`). Dalam satu transaksi: pakai token, ganti email (otomatis terverifikasi, karena tautan sampai ke alamat itu), antre `email_changed_notice` ke **email lama** yang menyebut alamat barunya. Alamat yang keburu dipakai orang lain → `409` dan token tidak terpakai. Sesi tidak dicabut.
 
 ---
 
@@ -635,7 +636,7 @@ Tujuan: satu `trace_id` bisa dipakai untuk menelusuri request HTTP sampai job ou
 
 ### User
 - [x] Ganti password mencabut sesi lain — `TestChangePassword_EndToEnd_KeepsThisSessionAndEndsTheOthers` (`internal/app`), `TestRevokeOtherSessions_*` (`internal/auth`)
-- [ ] Ganti email butuh konfirmasi dari email baru
+- [x] Ganti email butuh konfirmasi dari email baru — `TestChangeEmail_EndToEnd_NothingChangesUntilTheNewInboxConfirms` (`internal/app`)
 - [ ] Hapus akun ditolak jika masih owner organisasi dengan anggota lain
 
 ### Multi-tenancy & Tim

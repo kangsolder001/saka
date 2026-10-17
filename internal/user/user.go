@@ -132,6 +132,25 @@ func (s *Service) SetPasswordHash(ctx context.Context, q db.DBTX, id uuid.UUID, 
 	return nil
 }
 
+// ChangeEmail replaces the user's email with one they have just confirmed
+// (through a link sent to the new address), which also makes it verified. A
+// taken address returns apperr CONFLICT.
+func (s *Service) ChangeEmail(ctx context.Context, q db.DBTX, id uuid.UUID, newEmail string) error {
+	n, err := userdb.New(q).UpdateEmail(ctx, userdb.UpdateEmailParams{ID: id, Email: NormalizeEmail(newEmail), Now: s.clk.Now()})
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return apperr.Conflict("Email sudah terdaftar.")
+		}
+		return fmt.Errorf("user: change email: %w", err)
+	}
+	if n == 0 {
+		return apperr.NotFound()
+	}
+	s.invalidateAfterCommit(ctx, q, id)
+	return nil
+}
+
 func one(row userdb.User, err error, op string) (User, error) {
 	if err != nil {
 		return User{}, notFoundOr(err, op)

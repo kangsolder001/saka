@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -14,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kangsolder001/saka/internal/platform/apperr"
+	"github.com/kangsolder001/saka/internal/platform/httpx"
 	"github.com/kangsolder001/saka/internal/platform/reqctx"
 	"github.com/kangsolder001/saka/internal/user"
 	usermocks "github.com/kangsolder001/saka/internal/user/mocks"
@@ -166,6 +168,7 @@ func TestMe_RequiresAnAuthenticatedUser(t *testing.T) {
 		{http.MethodGet, "/api/v1/me", ""},
 		{http.MethodPatch, "/api/v1/me", `{"name":"X"}`},
 		{http.MethodPost, "/api/v1/me/password", `{"current_password":"a","new_password":"b"}`},
+		{http.MethodPost, "/api/v1/me/email", `{"new_email":"a@example.com","current_password":"b"}`},
 	} {
 		req := httptest.NewRequestWithContext(context.Background(), c.method, c.path, strings.NewReader(c.body))
 		rec := httptest.NewRecorder()
@@ -213,6 +216,81 @@ func TestChangePassword_ServiceErrorsReachTheClient(t *testing.T) {
 
 	require.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"current_password":"is incorrect"`)
+}
+
+func TestRequestEmailChange_PassesTheCallerThePasswordAndTheNewAddress(t *testing.T) {
+	f := newHandlerFixture(t)
+	f.security.EXPECT().RequestEmailChange(mock.Anything, f.userID, "my-password", "New@Example.com").Return(nil).Once()
+
+	rec := f.do(http.MethodPost, "/api/v1/me/email", `{"new_email":"New@Example.com","current_password":"my-password"}`)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.NotContains(t, rec.Body.String(), "my-password")
+}
+
+func TestRequestEmailChange_RejectsBadBodiesWithoutCallingTheService(t *testing.T) {
+	tests := map[string]string{
+		"missing password": `{"new_email":"a@example.com"}`,
+		"missing email":    `{"current_password":"x"}`,
+		"not an email":     `{"new_email":"nope","current_password":"x"}`,
+		"unknown field":    `{"new_email":"a@example.com","current_password":"x","user_id":"y"}`,
+	}
+	for name, body := range tests {
+		t.Run(name, func(t *testing.T) {
+			f := newHandlerFixture(t)
+
+			rec := f.do(http.MethodPost, "/api/v1/me/email", body)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+		})
+	}
+}
+
+func TestRequestEmailChange_ServiceErrorsReachTheClient(t *testing.T) {
+	tests := map[string]struct {
+		err    error
+		status int
+	}{
+		"taken":      {apperr.Conflict("Email sudah terdaftar."), http.StatusConflict},
+		"rate limit": {apperr.RateLimitedAfter(time.Minute), http.StatusTooManyRequests},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			f := newHandlerFixture(t)
+			f.security.EXPECT().RequestEmailChange(mock.Anything, f.userID, mock.Anything, mock.Anything).Return(tt.err).Once()
+
+			rec := f.do(http.MethodPost, "/api/v1/me/email", `{"new_email":"a@example.com","current_password":"x"}`)
+
+			assert.Equal(t, tt.status, rec.Code)
+		})
+	}
+}
+
+// The routes are mounted with a middleware that rejects everyone: confirming
+// must still work, because it does not sit behind it.
+func TestConfirmEmailChange_NeedsNoLoginBecauseTheTokenIsTheCredential(t *testing.T) {
+	security := usermocks.NewMockAccountSecurity(t)
+	security.EXPECT().ConfirmEmailChange(mock.Anything, "raw-token").Return("new@example.com", nil).Once()
+	r := gin.New()
+	user.NewHandler(user.Dependencies{Profiles: usermocks.NewMockProfileService(t), Security: security, Pool: stubDB{}}).
+		Routes(r.Group("/api/v1"), func(c *gin.Context) { httpx.Error(c, apperr.Unauthenticated()) })
+
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/me/email/confirm", strings.NewReader(`{"token":"raw-token"}`))
+	rec := httptest.NewRecorder()
+	r.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.JSONEq(t, `{"email":"new@example.com","email_verified":true}`, rec.Body.String())
+}
+
+func TestConfirmEmailChange_RejectsBadBodiesAndBadTokens(t *testing.T) {
+	f := newHandlerFixture(t)
+	f.security.EXPECT().ConfirmEmailChange(mock.Anything, "used-or-expired").Return("", apperr.Validation(map[string]string{"token": "invalid or expired"})).Once()
+
+	assert.Equal(t, http.StatusBadRequest, f.do(http.MethodPost, "/api/v1/me/email/confirm", `{}`).Code, "token is required")
+	assert.Equal(t, http.StatusBadRequest, f.do(http.MethodPost, "/api/v1/me/email/confirm", `{"token":"`+strings.Repeat("a", 257)+`"}`).Code)
+	rec := f.do(http.MethodPost, "/api/v1/me/email/confirm", `{"token":"used-or-expired"}`)
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
 }
 
 func ptr[T any](v T) *T { return &v }

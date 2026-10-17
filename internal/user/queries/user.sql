@@ -29,3 +29,9 @@ SET name       = COALESCE(sqlc.narg(name), name),
     updated_at = @now::timestamptz
 WHERE id = @id AND deleted_at IS NULL
 RETURNING *;
+
+-- The new address was confirmed through a link sent to it, so it counts as verified.
+-- name: UpdateEmail :execrows
+UPDATE users
+SET email = @email, email_verified_at = @now::timestamptz, updated_at = @now::timestamptz
+WHERE id = @id AND deleted_at IS NULL;

@@ -20,6 +20,9 @@ var (
 	// user (change password, change email, delete account). Without it a stolen
 	// access token could be used to guess the password.
 	RulePasswordConfirm = ratelimit.Rule{Name: "password_confirm", Limit: 5, Window: 15 * time.Minute}
+	// RuleEmailChange counts change-email requests per user: each one sends an
+	// email to an address the user chose, so it must not become a spam tool.
+	RuleEmailChange = ratelimit.Rule{Name: "email_change", Limit: 3, Window: time.Hour}
 	// RuleRegister counts sign-up attempts per IP.
 	RuleRegister = ratelimit.Rule{Name: "register", Limit: 10, Window: time.Hour}
 )

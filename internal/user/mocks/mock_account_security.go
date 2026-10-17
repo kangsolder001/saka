@@ -121,3 +121,138 @@ func (_c *MockAccountSecurity_ChangePassword_Call) RunAndReturn(run func(ctx con
 	_c.Call.Return(run)
 	return _c
 }
+
+// ConfirmEmailChange provides a mock function for the type MockAccountSecurity
+func (_mock *MockAccountSecurity) ConfirmEmailChange(ctx context.Context, rawToken string) (string, error) {
+	ret := _mock.Called(ctx, rawToken)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ConfirmEmailChange")
+	}
+
+	var r0 string
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (string, error)); ok {
+		return returnFunc(ctx, rawToken)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) string); ok {
+		r0 = returnFunc(ctx, rawToken)
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, rawToken)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockAccountSecurity_ConfirmEmailChange_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ConfirmEmailChange'
+type MockAccountSecurity_ConfirmEmailChange_Call struct {
+	*mock.Call
+}
+
+// ConfirmEmailChange is a helper method to define mock.On call
+//   - ctx context.Context
+//   - rawToken string
+func (_e *MockAccountSecurity_Expecter) ConfirmEmailChange(ctx any, rawToken any) *MockAccountSecurity_ConfirmEmailChange_Call {
+	return &MockAccountSecurity_ConfirmEmailChange_Call{Call: _e.mock.On("ConfirmEmailChange", ctx, rawToken)}
+}
+
+func (_c *MockAccountSecurity_ConfirmEmailChange_Call) Run(run func(ctx context.Context, rawToken string)) *MockAccountSecurity_ConfirmEmailChange_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockAccountSecurity_ConfirmEmailChange_Call) Return(newEmail string, err error) *MockAccountSecurity_ConfirmEmailChange_Call {
+	_c.Call.Return(newEmail, err)
+	return _c
+}
+
+func (_c *MockAccountSecurity_ConfirmEmailChange_Call) RunAndReturn(run func(ctx context.Context, rawToken string) (string, error)) *MockAccountSecurity_ConfirmEmailChange_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RequestEmailChange provides a mock function for the type MockAccountSecurity
+func (_mock *MockAccountSecurity) RequestEmailChange(ctx context.Context, userID uuid.UUID, currentPassword string, newEmail string) error {
+	ret := _mock.Called(ctx, userID, currentPassword, newEmail)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RequestEmailChange")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, string, string) error); ok {
+		r0 = returnFunc(ctx, userID, currentPassword, newEmail)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockAccountSecurity_RequestEmailChange_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RequestEmailChange'
+type MockAccountSecurity_RequestEmailChange_Call struct {
+	*mock.Call
+}
+
+// RequestEmailChange is a helper method to define mock.On call
+//   - ctx context.Context
+//   - userID uuid.UUID
+//   - currentPassword string
+//   - newEmail string
+func (_e *MockAccountSecurity_Expecter) RequestEmailChange(ctx any, userID any, currentPassword any, newEmail any) *MockAccountSecurity_RequestEmailChange_Call {
+	return &MockAccountSecurity_RequestEmailChange_Call{Call: _e.mock.On("RequestEmailChange", ctx, userID, currentPassword, newEmail)}
+}
+
+func (_c *MockAccountSecurity_RequestEmailChange_Call) Run(run func(ctx context.Context, userID uuid.UUID, currentPassword string, newEmail string)) *MockAccountSecurity_RequestEmailChange_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uuid.UUID
+		if args[1] != nil {
+			arg1 = args[1].(uuid.UUID)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 string
+		if args[3] != nil {
+			arg3 = args[3].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockAccountSecurity_RequestEmailChange_Call) Return(err error) *MockAccountSecurity_RequestEmailChange_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockAccountSecurity_RequestEmailChange_Call) RunAndReturn(run func(ctx context.Context, userID uuid.UUID, currentPassword string, newEmail string) error) *MockAccountSecurity_RequestEmailChange_Call {
+	_c.Call.Return(run)
+	return _c
+}

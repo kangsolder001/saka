@@ -112,6 +112,27 @@ func (q *Queries) MarkEmailVerified(ctx context.Context, arg MarkEmailVerifiedPa
 	return result.RowsAffected(), nil
 }
 
+const updateEmail = `-- name: UpdateEmail :execrows
+UPDATE users
+SET email = $1, email_verified_at = $2::timestamptz, updated_at = $2::timestamptz
+WHERE id = $3 AND deleted_at IS NULL
+`
+
+type UpdateEmailParams struct {
+	Email string
+	Now   time.Time
+	ID    uuid.UUID
+}
+
+// The new address was confirmed through a link sent to it, so it counts as verified.
+func (q *Queries) UpdateEmail(ctx context.Context, arg UpdateEmailParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateEmail, arg.Email, arg.Now, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updatePasswordHash = `-- name: UpdatePasswordHash :execrows
 UPDATE users
 SET password_hash = $1, updated_at = $2::timestamptz
