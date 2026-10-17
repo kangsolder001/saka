@@ -35,3 +35,13 @@ RETURNING *;
 UPDATE users
 SET email = @email, email_verified_at = @now::timestamptz, updated_at = @now::timestamptz
 WHERE id = @id AND deleted_at IS NULL;
+
+-- Soft delete (spec §6): the row stays, the email is replaced by a unique
+-- placeholder so the real address can sign up again.
+-- name: SoftDeleteUser :execrows
+UPDATE users
+SET status     = 'deleted',
+    email      = 'deleted+' || id::text || '@invalid',
+    deleted_at = @now::timestamptz,
+    updated_at = @now::timestamptz
+WHERE id = @id AND deleted_at IS NULL;

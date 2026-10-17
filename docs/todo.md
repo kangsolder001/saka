@@ -107,7 +107,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] `POST /me/password` (password lama wajib; cabut sesi lain kecuali saat ini; email notifikasi) (0.4). Plus batas 5 percobaan gagal / 15 menit per user (§6.1)
 - [x] `POST /me/email` + `POST /me/email/confirm` + template `email_change_confirm`, `email_changed_notice` (0.6). Konfirmasi password + batas 3/jam per user; `confirm` tanpa login (§6.1)
 - [x] `GET /me/sessions`, `DELETE /me/sessions/{id}` (0.3). ID sesi = `family_id` (= `sid`); sesi orang lain → 404 (§6.1)
-- [ ] `DELETE /me`: soft delete + anonimisasi email, cabut semua sesi; pengecekan owner lewat interface ke modul org (stub dulu) (0.4)
+- [x] `DELETE /me`: soft delete + anonimisasi email, cabut semua sesi; pengecekan owner lewat interface ke modul org (stub dulu) (0.4). Interface `auth.OrganizationGuard` (stub `auth.NoOrganizations`), butuh konfirmasi password (§6.1)
 - [ ] Test unit + integration modul user, termasuk: setiap method tulis baru (profil, email, hapus akun) memakai `invalidateAfterCommit` dan ada test yang membuktikan cache terhapus setelah commit dan tidak pernah basi (0.5)
 
 **Selesai bila:** AC User (§12) lulus, kecuali penolakan hapus akun owner yang menunggu Fase 4.
@@ -131,7 +131,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [ ] Undangan: `GET /invitations/{token}`, accept (cek email sama), decline, kedaluwarsa 7 hari (0.6)
 - [ ] Registrasi dengan email yang punya undangan → auto-accept, tanpa org baru (0.3)
 - [ ] Template `invitation`; guard `EMAIL_NOT_VERIFIED` untuk undang (0.3)
-- [ ] Hubungkan penolakan hapus akun owner (modul user) ke modul org (0.3)
+- [ ] Hubungkan penolakan hapus akun owner ke modul org: implementasikan `auth.OrganizationGuard` (menolak bila owner org berisi anggota lain; hapus org yang hanya berisi dia + batalkan subscription) dan ganti `auth.NoOrganizations` di `internal/app` (0.3)
 - [ ] **Daftar akun sandbox Midtrans** (0.1) ⚠️ lakukan di fase ini, persetujuan bisa lama
 - [ ] Test: matriks izin lengkap, isolasi tenant A vs B, transfer atomik, siklus undangan (0.7)
 

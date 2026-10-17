@@ -233,3 +233,28 @@ func (s *Service) RevokeSession(ctx context.Context, userID, sessionID uuid.UUID
 	}
 	return nil
 }
+
+// DeleteAccount deletes the caller's account after checking their password.
+// In one transaction it lets the organization module refuse (the user still
+// owns an organization with other members: CONFLICT) or clean up, soft-deletes
+// the user (the email is anonymized) and revokes every session. The user's
+// cached summary is dropped once the transaction commits, so the account stops
+// working immediately.
+func (s *Service) DeleteAccount(ctx context.Context, userID uuid.UUID, currentPassword string) error {
+	u, err := s.Users.GetByID(ctx, s.Pool, userID)
+	if err != nil {
+		return err
+	}
+	if err := s.confirmPassword(ctx, u, currentPassword); err != nil {
+		return err
+	}
+	return s.Tx.WithTx(ctx, func(tx pgx.Tx) error {
+		if err := s.Orgs.BeforeUserDeleted(ctx, tx, u.ID); err != nil {
+			return err
+		}
+		if err := s.Users.Delete(ctx, tx, u.ID); err != nil {
+			return err
+		}
+		return s.Sessions.RevokeAllSessions(ctx, tx, u.ID)
+	})
+}

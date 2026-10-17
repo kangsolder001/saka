@@ -47,7 +47,8 @@ type stack struct {
 	users *user.Service
 }
 
-func newStack(t *testing.T) *stack {
+// newStack builds the API; tweak adjusts the wiring (see app.Options) when a test needs to.
+func newStack(t *testing.T, tweak ...func(*app.Options)) *stack {
 	t.Helper()
 	dsn := dbtest.NewDatabase(t)
 	dbtest.Migrate(t, dsn)
@@ -67,7 +68,11 @@ func newStack(t *testing.T) *stack {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = rdb.Close() })
 
-	router, err := app.NewRouter(cfg, logger.Nop(), clk, d, rdb, app.Options{PasswordParams: &light})
+	opts := app.Options{PasswordParams: &light}
+	for _, f := range tweak {
+		f(&opts)
+	}
+	router, err := app.NewRouter(cfg, logger.Nop(), clk, d, rdb, opts)
 	require.NoError(t, err)
 	users := user.NewService(clk, user.WithCache(rdb.Namespace("user"), cfg.Redis.UserCacheTTL.Std(), logger.Nop()))
 	return &stack{t: t, router: router, db: d, redis: rdb, clock: clk, users: users}

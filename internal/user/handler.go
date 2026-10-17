@@ -40,6 +40,9 @@ type AccountSecurity interface {
 	ListSessions(ctx context.Context, userID, currentSession uuid.UUID) ([]Session, error)
 	// RevokeSession ends one of the user's sessions; NOT_FOUND when it is not theirs.
 	RevokeSession(ctx context.Context, userID, sessionID uuid.UUID) error
+	// DeleteAccount checks the password, deletes the account and ends every
+	// session; CONFLICT while the user owns an organization with other members.
+	DeleteAccount(ctx context.Context, userID uuid.UUID, currentPassword string) error
 }
 
 // Session is one live login of a user (a refresh token family).
@@ -82,6 +85,7 @@ func (h *Handler) Routes(rg *gin.RouterGroup, authenticate gin.HandlerFunc) {
 	me := rg.Group("/me", authenticate)
 	me.GET("", h.get)
 	me.PATCH("", h.patch)
+	me.DELETE("", h.deleteAccount)
 	me.POST("/password", h.changePassword)
 	me.POST("/email", h.requestEmailChange)
 	me.GET("/sessions", h.listSessions)
@@ -278,6 +282,28 @@ func (h *Handler) revokeSession(c *gin.Context) {
 		return
 	}
 	if err := h.Security.RevokeSession(c.Request.Context(), id, sessionID); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+type deleteAccountRequest struct {
+	CurrentPassword string `json:"current_password" validate:"required,max=1024"`
+}
+
+// deleteAccount takes the password in the request body: deleting is
+// irreversible, so it is confirmed like the other sensitive actions.
+func (h *Handler) deleteAccount(c *gin.Context) {
+	id, ok := currentUser(c)
+	if !ok {
+		return
+	}
+	var req deleteAccountRequest
+	if !httpx.BindJSON(c, &req) {
+		return
+	}
+	if err := h.Security.DeleteAccount(c.Request.Context(), id, req.CurrentPassword); err != nil {
 		httpx.Error(c, err)
 		return
 	}

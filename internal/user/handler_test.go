@@ -169,6 +169,7 @@ func TestMe_RequiresAnAuthenticatedUser(t *testing.T) {
 		{http.MethodPatch, "/api/v1/me", `{"name":"X"}`},
 		{http.MethodPost, "/api/v1/me/password", `{"current_password":"a","new_password":"b"}`},
 		{http.MethodPost, "/api/v1/me/email", `{"new_email":"a@example.com","current_password":"b"}`},
+		{http.MethodDelete, "/api/v1/me", `{"current_password":"a"}`},
 		{http.MethodGet, "/api/v1/me/sessions", ""},
 		{http.MethodDelete, "/api/v1/me/sessions/" + uuid.NewString(), ""},
 	} {
@@ -342,6 +343,45 @@ func TestRevokeSession_UnknownAndMalformedIDsAreBothNotFound(t *testing.T) {
 	assert.Equal(t, http.StatusNotFound, unknown.Code)
 	assert.Equal(t, http.StatusNotFound, malformed.Code)
 	assert.JSONEq(t, unknown.Body.String(), malformed.Body.String(), "indistinguishable")
+}
+
+func TestDeleteMe_PassesTheCallerAndThePassword(t *testing.T) {
+	f := newHandlerFixture(t)
+	f.security.EXPECT().DeleteAccount(mock.Anything, f.userID, "my-password").Return(nil).Once()
+
+	rec := f.do(http.MethodDelete, "/api/v1/me", `{"current_password":"my-password"}`)
+
+	assert.Equal(t, http.StatusNoContent, rec.Code, rec.Body.String())
+	assert.Empty(t, rec.Body.String())
+}
+
+func TestDeleteMe_RejectsBadBodiesWithoutCallingTheService(t *testing.T) {
+	tests := map[string]string{
+		"no body":       ``,
+		"empty object":  `{}`,
+		"unknown field": `{"current_password":"x","user_id":"someone-else"}`,
+		"wrong field":   `{"password":"x"}`,
+	}
+	for name, body := range tests {
+		t.Run(name, func(t *testing.T) {
+			f := newHandlerFixture(t)
+
+			rec := f.do(http.MethodDelete, "/api/v1/me", body)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code, rec.Body.String())
+		})
+	}
+}
+
+func TestDeleteMe_OwnerOfASharedOrganizationGetsAConflict(t *testing.T) {
+	f := newHandlerFixture(t)
+	f.security.EXPECT().DeleteAccount(mock.Anything, f.userID, mock.Anything).
+		Return(apperr.Conflict("transfer first").WithDetails(map[string]any{"reason": "owns_shared_organization"})).Once()
+
+	rec := f.do(http.MethodDelete, "/api/v1/me", `{"current_password":"x"}`)
+
+	require.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), "owns_shared_organization")
 }
 
 func ptr[T any](v T) *T { return &v }

@@ -151,6 +151,23 @@ func (s *Service) ChangeEmail(ctx context.Context, q db.DBTX, id uuid.UUID, newE
 	return nil
 }
 
+// Delete soft-deletes the account: status becomes deleted, deleted_at is set
+// and the email is replaced by deleted+<id>@invalid so the real address can be
+// used to sign up again (spec §6). It does not end sessions or touch
+// organizations; the caller (auth) does that in the same transaction. An
+// unknown or already deleted user returns apperr NOT_FOUND.
+func (s *Service) Delete(ctx context.Context, q db.DBTX, id uuid.UUID) error {
+	n, err := userdb.New(q).SoftDeleteUser(ctx, userdb.SoftDeleteUserParams{ID: id, Now: s.clk.Now()})
+	if err != nil {
+		return fmt.Errorf("user: delete: %w", err)
+	}
+	if n == 0 {
+		return apperr.NotFound()
+	}
+	s.invalidateAfterCommit(ctx, q, id)
+	return nil
+}
+
 func one(row userdb.User, err error, op string) (User, error) {
 	if err != nil {
 		return User{}, notFoundOr(err, op)

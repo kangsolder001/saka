@@ -36,6 +36,7 @@ type UserService interface {
 	MarkEmailVerified(ctx context.Context, q db.DBTX, id uuid.UUID) error
 	SetPasswordHash(ctx context.Context, q db.DBTX, id uuid.UUID, hash string) error
 	ChangeEmail(ctx context.Context, q db.DBTX, id uuid.UUID, newEmail string) error
+	Delete(ctx context.Context, q db.DBTX, id uuid.UUID) error
 }
 
 // TokenService issues and consumes single-use tokens; *UserTokens implements it.
@@ -71,9 +72,12 @@ type Config struct {
 
 // Dependencies are the collaborators of Service, injected by the composition root.
 type Dependencies struct {
-	Tx     Transactor
-	Pool   db.DBTX // used for reads outside a transaction
-	Users  UserService
+	Tx    Transactor
+	Pool  db.DBTX // used for reads outside a transaction
+	Users UserService
+	// Orgs is the organization module's part of account deletion; use
+	// NoOrganizations until that module exists.
+	Orgs   OrganizationGuard
 	Tokens TokenService
 	// Sessions stores refresh token sessions.
 	Sessions RefreshStore

@@ -27,6 +27,10 @@ import (
 type Options struct {
 	// PasswordParams overrides the Argon2id cost. Tests lower it for speed.
 	PasswordParams *auth.Argon2Params
+	// Organizations takes part in account deletion. Nil means auth.NoOrganizations
+	// until the organization module exists (Phase 4); tests inject a guard to
+	// exercise the refusal path.
+	Organizations auth.OrganizationGuard
 }
 
 // NewRouter builds the API: global middleware, health endpoints and every
@@ -59,11 +63,16 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 		return nil, fmt.Errorf("access token signer: %w", err)
 	}
 
+	orgs := opts.Organizations
+	if orgs == nil {
+		orgs = auth.NoOrganizations{} // TODO(phase-4): wire the organization module
+	}
 	users := user.NewService(clk, user.WithCache(redis.Namespace("user"), cfg.Redis.UserCacheTTL.Std(), log))
 	authService := auth.NewService(auth.Dependencies{
 		Tx:       database,
 		Pool:     database.Pool(),
 		Users:    users,
+		Orgs:     orgs,
 		Tokens:   auth.NewUserTokens(clk),
 		Sessions: auth.NewRefreshTokens(clk, cfg.Auth.RefreshTokenTTL.Std()),
 		JWT:      jwt,

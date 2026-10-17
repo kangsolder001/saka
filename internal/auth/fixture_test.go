@@ -41,6 +41,7 @@ type fixture struct {
 	jwt     *auth.JWT
 	limiter *fakeLimiter
 	mail    *mailmocks.MockSender
+	orgs    *authmocks.MockOrganizationGuard
 }
 
 // fakeLimiter allows everything by default and records what it was asked.
@@ -94,10 +95,11 @@ func newFixture(t *testing.T) *fixture {
 		refresh: authmocks.NewMockRefreshStore(t),
 		limiter: &fakeLimiter{retryAfter: 90 * time.Second},
 		mail:    mailmocks.NewMockSender(t),
+		orgs:    authmocks.NewMockOrganizationGuard(t),
 	}
 	f.jwt = newJWT(t, f.clock)
 	f.svc = auth.NewService(auth.Dependencies{
-		Tx: f.tx, Pool: stubDB{}, Users: f.users, Tokens: f.tokens, Sessions: f.refresh,
+		Tx: f.tx, Pool: stubDB{}, Users: f.users, Orgs: f.orgs, Tokens: f.tokens, Sessions: f.refresh,
 		JWT: f.jwt, Mail: f.mail, Hasher: f.hasher, Limiter: f.limiter, Clock: f.clock, Log: logger.Nop(),
 	}, auth.Config{FrontendURL: "https://app.example.com/"})
 	return f

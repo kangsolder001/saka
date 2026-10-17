@@ -189,6 +189,69 @@ func (_c *MockAccountSecurity_ConfirmEmailChange_Call) RunAndReturn(run func(ctx
 	return _c
 }
 
+// DeleteAccount provides a mock function for the type MockAccountSecurity
+func (_mock *MockAccountSecurity) DeleteAccount(ctx context.Context, userID uuid.UUID, currentPassword string) error {
+	ret := _mock.Called(ctx, userID, currentPassword)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteAccount")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, uuid.UUID, string) error); ok {
+		r0 = returnFunc(ctx, userID, currentPassword)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockAccountSecurity_DeleteAccount_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteAccount'
+type MockAccountSecurity_DeleteAccount_Call struct {
+	*mock.Call
+}
+
+// DeleteAccount is a helper method to define mock.On call
+//   - ctx context.Context
+//   - userID uuid.UUID
+//   - currentPassword string
+func (_e *MockAccountSecurity_Expecter) DeleteAccount(ctx any, userID any, currentPassword any) *MockAccountSecurity_DeleteAccount_Call {
+	return &MockAccountSecurity_DeleteAccount_Call{Call: _e.mock.On("DeleteAccount", ctx, userID, currentPassword)}
+}
+
+func (_c *MockAccountSecurity_DeleteAccount_Call) Run(run func(ctx context.Context, userID uuid.UUID, currentPassword string)) *MockAccountSecurity_DeleteAccount_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 uuid.UUID
+		if args[1] != nil {
+			arg1 = args[1].(uuid.UUID)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockAccountSecurity_DeleteAccount_Call) Return(err error) *MockAccountSecurity_DeleteAccount_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockAccountSecurity_DeleteAccount_Call) RunAndReturn(run func(ctx context.Context, userID uuid.UUID, currentPassword string) error) *MockAccountSecurity_DeleteAccount_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListSessions provides a mock function for the type MockAccountSecurity
 func (_mock *MockAccountSecurity) ListSessions(ctx context.Context, userID uuid.UUID, currentSession uuid.UUID) ([]user.Session, error) {
 	ret := _mock.Called(ctx, userID, currentSession)

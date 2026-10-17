@@ -15,6 +15,7 @@ import (
 	"github.com/kangsolder001/saka/internal/auth"
 	"github.com/kangsolder001/saka/internal/mail"
 	"github.com/kangsolder001/saka/internal/platform/apperr"
+	"github.com/kangsolder001/saka/internal/platform/db"
 	"github.com/kangsolder001/saka/internal/user"
 )
 
@@ -373,4 +374,94 @@ func TestRevokeSession(t *testing.T) {
 			tt.check(t, f.svc.RevokeSession(context.Background(), userID, session))
 		})
 	}
+}
+
+func TestDeleteAccount_CleansUpOrganizationsDeletesTheUserAndEndsEverySessionInOrder(t *testing.T) {
+	f := newFixture(t)
+	u := f.accountUser(t)
+	var order []string
+	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+	f.expectTx()
+	f.orgs.EXPECT().BeforeUserDeleted(mock.Anything, mock.Anything, u.ID).RunAndReturn(
+		func(context.Context, db.DBTX, uuid.UUID) error { order = append(order, "orgs"); return nil }).Once()
+	f.users.EXPECT().Delete(mock.Anything, mock.Anything, u.ID).RunAndReturn(
+		func(context.Context, db.DBTX, uuid.UUID) error { order = append(order, "delete"); return nil }).Once()
+	f.refresh.EXPECT().RevokeAllSessions(mock.Anything, mock.Anything, u.ID).RunAndReturn(
+		func(context.Context, db.DBTX, uuid.UUID) error { order = append(order, "sessions"); return nil }).Once()
+
+	err := f.svc.DeleteAccount(context.Background(), u.ID, currentPassword)
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{"orgs", "delete", "sessions"}, order, "the organization module can refuse before anything is deleted")
+	assert.Equal(t, 1, f.limiter.resets)
+}
+
+func TestDeleteAccount_WrongPasswordDeletesNothing(t *testing.T) {
+	f := newFixture(t) // no tx/orgs/delete/sessions expectations
+	u := f.accountUser(t)
+	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+
+	err := f.svc.DeleteAccount(context.Background(), u.ID, "wrong-password")
+
+	assert.Equal(t, "is incorrect", fieldsOf(t, err)["current_password"])
+	assert.Equal(t, []string{"password_confirm"}, f.limiter.records)
+}
+
+func TestDeleteAccount_RefusedWhileTheUserOwnsAnOrganizationWithOtherMembers(t *testing.T) {
+	f := newFixture(t) // no Delete / RevokeAllSessions expectation: nothing may happen after the refusal
+	u := f.accountUser(t)
+	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+	f.expectTx()
+	f.orgs.EXPECT().BeforeUserDeleted(mock.Anything, mock.Anything, u.ID).Return(auth.ErrOwnsSharedOrganization()).Once()
+
+	err := f.svc.DeleteAccount(context.Background(), u.ID, currentPassword)
+
+	require.True(t, apperr.IsCode(err, apperr.CodeConflict))
+	assert.Equal(t, "owns_shared_organization", apperr.From(err).Details["reason"])
+}
+
+func TestDeleteAccount_FailureAnywhereInTheChainFailsTheWholeDeletion(t *testing.T) {
+	boom := errors.New("step failed")
+	tests := map[string]func(f *fixture){
+		"organization cleanup": func(f *fixture) {
+			f.orgs.EXPECT().BeforeUserDeleted(mock.Anything, mock.Anything, mock.Anything).Return(boom).Once()
+		},
+		"delete user": func(f *fixture) {
+			f.orgs.EXPECT().BeforeUserDeleted(mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+			f.users.EXPECT().Delete(mock.Anything, mock.Anything, mock.Anything).Return(boom).Once()
+		},
+		"revoke sessions": func(f *fixture) {
+			f.orgs.EXPECT().BeforeUserDeleted(mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+			f.users.EXPECT().Delete(mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+			f.refresh.EXPECT().RevokeAllSessions(mock.Anything, mock.Anything, mock.Anything).Return(boom).Once()
+		},
+	}
+	for name, setup := range tests {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			u := f.accountUser(t)
+			f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+			f.expectTx()
+			setup(f)
+
+			err := f.svc.DeleteAccount(context.Background(), u.ID, currentPassword)
+
+			assert.ErrorIs(t, err, boom, "the transaction rolls back, so the account is not half deleted")
+		})
+	}
+}
+
+func TestDeleteAccount_TooManyWrongGuessesAreRateLimited(t *testing.T) {
+	f := newFixture(t)
+	f.limiter.denyCheck = true
+	u := f.accountUser(t)
+	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+
+	err := f.svc.DeleteAccount(context.Background(), u.ID, currentPassword)
+
+	assert.True(t, apperr.IsCode(err, apperr.CodeRateLimited))
+}
+
+func TestNoOrganizations_NeverBlocksDeletion(t *testing.T) {
+	assert.NoError(t, auth.NoOrganizations{}.BeforeUserDeleted(context.Background(), stubDB{}, uuid.New()))
 }

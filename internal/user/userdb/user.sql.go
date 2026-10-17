@@ -112,6 +112,30 @@ func (q *Queries) MarkEmailVerified(ctx context.Context, arg MarkEmailVerifiedPa
 	return result.RowsAffected(), nil
 }
 
+const softDeleteUser = `-- name: SoftDeleteUser :execrows
+UPDATE users
+SET status     = 'deleted',
+    email      = 'deleted+' || id::text || '@invalid',
+    deleted_at = $1::timestamptz,
+    updated_at = $1::timestamptz
+WHERE id = $2 AND deleted_at IS NULL
+`
+
+type SoftDeleteUserParams struct {
+	Now time.Time
+	ID  uuid.UUID
+}
+
+// Soft delete (spec §6): the row stays, the email is replaced by a unique
+// placeholder so the real address can sign up again.
+func (q *Queries) SoftDeleteUser(ctx context.Context, arg SoftDeleteUserParams) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteUser, arg.Now, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateEmail = `-- name: UpdateEmail :execrows
 UPDATE users
 SET email = $1, email_verified_at = $2::timestamptz, updated_at = $2::timestamptz
