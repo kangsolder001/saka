@@ -615,11 +615,11 @@ Tujuan: satu `trace_id` bisa dipakai untuk menelusuri request HTTP sampai job ou
 ## 12. Kriteria Selesai (Acceptance Criteria)
 
 ### Auth
-- [ ] User bisa daftar, otomatis punya organisasi dan plan Free
-- [ ] Verifikasi email, lupa password, dan reset password berjalan end-to-end
-- [ ] Refresh token dirotasi; pemakaian ulang token lama mencabut seluruh family
-- [ ] Rate limit login aktif
-- [ ] `forgot-password` tidak membocorkan apakah email terdaftar
+- [ ] User bisa daftar, otomatis punya organisasi dan plan Free — *pendaftaran sudah teruji (`TestRegister_EndToEnd`); organisasi dan plan Free menunggu Fase 4–5*
+- [x] Verifikasi email, lupa password, dan reset password berjalan end-to-end — `TestVerifyEmail_EndToEnd`, `TestPasswordReset_EndToEnd` (`internal/app`)
+- [x] Refresh token dirotasi; pemakaian ulang token lama mencabut seluruh family — `TestRefresh_ReusingARotatedTokenKillsTheWholeSession` (`internal/app`), `TestRotate_*` (`internal/auth`)
+- [x] Rate limit login aktif — `TestLoginRateLimit_*` (`internal/app`)
+- [x] `forgot-password` tidak membocorkan apakah email terdaftar — `TestForgotPassword_DoesNotRevealWhichEmailsAreRegistered`, `TestLogin_NoUserEnumeration` (`internal/app`)
 
 ### User
 - [ ] Ganti password mencabut sesi lain
