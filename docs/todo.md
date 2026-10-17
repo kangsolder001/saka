@@ -60,7 +60,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Repo outbox: `Enqueue(tx, job)` dalam transaksi pemanggil; simpan `trace_id` dari context ke `outbox_jobs.trace_id` (0.3)
 - [x] Worker: polling dengan `SELECT … FOR UPDATE SKIP LOCKED`, status `processing/done/failed`; job diproses paralel (jumlah worker goroutine dikonfigurasi) lewat `safego` (0.5)
 - [x] Retry exponential backoff 1m, 5m, 30m, 2j, 6j; retry ke-5 gagal → `failed` (total 6 percobaan, §10.1); error permanen langsung `failed` (0.3)
-- [ ] Interface `Mailer` + implementasi SMTP (Mailpit) + implementasi log (0.3)
+- [x] Interface `Mailer` + implementasi SMTP (Mailpit) + implementasi log (0.3)
 - [ ] Renderer template (`html/template` untuk HTML, `text/template` untuk plain text) + layout dasar (0.3)
 - [ ] Template awal: `verify_email`, `password_reset`, `password_changed` (0.3)
 - [ ] `cmd/worker` entrypoint + graceful shutdown; worker memulihkan `trace_id` job ke context sebelum proses (0.25)
