@@ -31,14 +31,14 @@ jobs:
           args: --build-tags integration ./...
 
   generated:
-    name: go.mod and mocks are up to date
+    name: go.mod, mocks and sqlc code are up to date
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: make tidy mocks
+      - run: make tidy mocks sqlc
       - name: Fail on drift
         run: git diff --exit-code
 

@@ -21,4 +21,24 @@
 #             nullable: true
 #             go_type: { import: time, type: Time, pointer: true }
 version: "2"
-sql: []
+sql:
+  - engine: postgresql
+    schema: migrations
+    queries: internal/platform/outbox/queries
+    gen:
+      go:
+        package: outboxdb
+        out: internal/platform/outbox/outboxdb
+        sql_package: pgx/v5
+        emit_pointers_for_null_types: true
+        # Only emit structs the queries use, so one module's package never
+        # carries another module's table models.
+        omit_unused_structs: true
+        overrides:
+          - db_type: uuid
+            go_type: github.com/google/uuid.UUID
+          - db_type: timestamptz
+            go_type: time.Time
+          - db_type: timestamptz
+            nullable: true
+            go_type: { import: time, type: Time, pointer: true }
