@@ -13,6 +13,7 @@ import (
 	authmocks "github.com/kangsolder001/saka/internal/auth/mocks"
 	mailmocks "github.com/kangsolder001/saka/internal/mail/mocks"
 	"github.com/kangsolder001/saka/internal/platform/clock"
+	"github.com/kangsolder001/saka/internal/platform/logger"
 )
 
 // stubDB satisfies db.DBTX without a database: unit tests only pass it around
@@ -29,28 +30,32 @@ var unitEpoch = time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC)
 
 // fixture wires an auth.Service to mocks and a fake clock.
 type fixture struct {
-	svc    *auth.Service
-	clock  *clock.Fake
-	hasher *auth.PasswordHasher
-	tx     *authmocks.MockTransactor
-	users  *authmocks.MockUserService
-	tokens *authmocks.MockTokenService
-	mail   *mailmocks.MockSender
+	svc     *auth.Service
+	clock   *clock.Fake
+	hasher  *auth.PasswordHasher
+	tx      *authmocks.MockTransactor
+	users   *authmocks.MockUserService
+	tokens  *authmocks.MockTokenService
+	refresh *authmocks.MockRefreshStore
+	jwt     *auth.JWT
+	mail    *mailmocks.MockSender
 }
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
 	f := &fixture{
-		clock:  clock.NewFake(unitEpoch),
-		hasher: newHasher(t),
-		tx:     authmocks.NewMockTransactor(t),
-		users:  authmocks.NewMockUserService(t),
-		tokens: authmocks.NewMockTokenService(t),
-		mail:   mailmocks.NewMockSender(t),
+		clock:   clock.NewFake(unitEpoch),
+		hasher:  newHasher(t),
+		tx:      authmocks.NewMockTransactor(t),
+		users:   authmocks.NewMockUserService(t),
+		tokens:  authmocks.NewMockTokenService(t),
+		refresh: authmocks.NewMockRefreshStore(t),
+		mail:    mailmocks.NewMockSender(t),
 	}
+	f.jwt = newJWT(t, f.clock)
 	f.svc = auth.NewService(auth.Dependencies{
-		Tx: f.tx, Pool: stubDB{}, Users: f.users, Tokens: f.tokens,
-		Mail: f.mail, Hasher: f.hasher, Clock: f.clock,
+		Tx: f.tx, Pool: stubDB{}, Users: f.users, Tokens: f.tokens, Refresh: f.refresh,
+		JWT: f.jwt, Mail: f.mail, Hasher: f.hasher, Clock: f.clock, Log: logger.Nop(),
 	}, auth.Config{FrontendURL: "https://app.example.com/"})
 	return f
 }

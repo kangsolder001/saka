@@ -44,6 +44,7 @@ func newStack(t *testing.T) *stack {
 	cfg := config.Default()
 	cfg.Database.URL = dsn
 	cfg.App.FrontendURL = "https://app.example.com"
+	cfg.Auth.JWTSecret = "0123456789abcdef0123456789abcdef-e2e"
 	d, err := db.Connect(context.Background(), cfg)
 	require.NoError(t, err)
 	t.Cleanup(d.Close)

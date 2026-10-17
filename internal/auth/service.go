@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -13,6 +14,7 @@ import (
 	"github.com/kangsolder001/saka/internal/platform/apperr"
 	"github.com/kangsolder001/saka/internal/platform/clock"
 	"github.com/kangsolder001/saka/internal/platform/db"
+	"github.com/kangsolder001/saka/internal/platform/logger"
 	"github.com/kangsolder001/saka/internal/user"
 )
 
@@ -36,9 +38,16 @@ type TokenService interface {
 	Consume(ctx context.Context, q db.DBTX, raw string, typ TokenType) (UserToken, error)
 }
 
+// RefreshStore manages refresh token sessions; *RefreshTokens implements it.
+type RefreshStore interface {
+	StartSession(ctx context.Context, q db.DBTX, userID uuid.UUID, client ClientInfo) (RefreshToken, error)
+	SessionActive(ctx context.Context, q db.DBTX, userID, familyID uuid.UUID) (bool, error)
+}
+
 var (
 	_ UserService  = (*user.Service)(nil)
 	_ TokenService = (*UserTokens)(nil)
+	_ RefreshStore = (*RefreshTokens)(nil)
 	_ Transactor   = (*db.DB)(nil)
 )
 
@@ -54,9 +63,14 @@ type Dependencies struct {
 	Pool   db.DBTX // used for reads outside a transaction
 	Users  UserService
 	Tokens TokenService
+	// Refresh stores refresh token sessions.
+	Refresh RefreshStore
+	// JWT signs access tokens.
+	JWT    *JWT
 	Mail   mail.Sender
 	Hasher *PasswordHasher
 	Clock  clock.Clock
+	Log    *logger.Logger
 }
 
 // Service implements the auth use cases (spec §5).
@@ -173,4 +187,91 @@ func (s *Service) ResendVerification(ctx context.Context, userID uuid.UUID) erro
 	return s.Tx.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.sendVerificationEmail(ctx, tx, u)
 	})
+}
+
+// LoginInput is a login attempt.
+type LoginInput struct {
+	Email    string
+	Password string
+	Client   ClientInfo
+}
+
+// LoginResult is a successful login: the user plus both tokens.
+type LoginResult struct {
+	User             user.User
+	AccessToken      string
+	AccessExpiresAt  time.Time
+	RefreshToken     string
+	RefreshExpiresAt time.Time
+}
+
+// errInvalidCredentials is returned for every kind of failed login so the
+// response never reveals whether the email exists.
+func errInvalidCredentials() error {
+	return apperr.New(apperr.CodeUnauthenticated, "Email atau password salah.")
+}
+
+// Login verifies the credentials and starts a session. Unknown email, wrong
+// password and deleted accounts all produce the same error, and unknown
+// emails still spend a hash's worth of time, so neither the response nor its
+// latency reveals which accounts exist. A user whose email is not yet
+// verified may log in (spec §5.2).
+func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error) {
+	u, err := s.Users.GetByEmail(ctx, s.Pool, in.Email)
+	if err != nil {
+		if apperr.IsCode(err, apperr.CodeNotFound) {
+			s.Hasher.VerifyDummy(in.Password)
+			return LoginResult{}, errInvalidCredentials()
+		}
+		return LoginResult{}, err
+	}
+
+	ok, needsRehash, err := s.Hasher.Verify(in.Password, u.PasswordHash)
+	if err != nil {
+		return LoginResult{}, fmt.Errorf("auth: verify password: %w", err)
+	}
+	if !ok {
+		return LoginResult{}, errInvalidCredentials()
+	}
+	if u.Status != user.StatusActive {
+		return LoginResult{}, apperr.Forbidden().WithDetails(map[string]any{"reason": "account_" + string(u.Status)})
+	}
+	if needsRehash {
+		s.upgradePasswordHash(ctx, u.ID, in.Password)
+	}
+
+	var refresh RefreshToken
+	if err := s.Tx.WithTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		refresh, err = s.Refresh.StartSession(ctx, tx, u.ID, in.Client)
+		return err
+	}); err != nil {
+		return LoginResult{}, err
+	}
+
+	access, accessExpires, err := s.JWT.Sign(u.ID, refresh.FamilyID)
+	if err != nil {
+		return LoginResult{}, err
+	}
+	return LoginResult{
+		User:             u,
+		AccessToken:      access,
+		AccessExpiresAt:  accessExpires,
+		RefreshToken:     refresh.Raw,
+		RefreshExpiresAt: refresh.ExpiresAt,
+	}, nil
+}
+
+// upgradePasswordHash re-hashes a password with the current Argon2 cost after
+// a successful login. It is best effort: failing must not fail the login.
+func (s *Service) upgradePasswordHash(ctx context.Context, userID uuid.UUID, password string) {
+	zl := s.Log.FromContext(ctx)
+	hash, err := s.Hasher.Hash(password)
+	if err != nil {
+		zl.Warn().Err(err).Msg("password rehash failed")
+		return
+	}
+	if err := s.Users.SetPasswordHash(ctx, s.Pool, userID, hash); err != nil {
+		zl.Warn().Err(err).Msg("password rehash could not be saved")
+	}
 }

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -10,14 +11,31 @@ import (
 	"github.com/kangsolder001/saka/internal/user"
 )
 
+const (
+	// RefreshCookieName is the cookie carrying the refresh token for web clients.
+	RefreshCookieName = "refresh_token"
+	refreshCookiePath = "/api/v1/auth"
+
+	deliveryCookie = "cookie"
+	deliveryBody   = "body"
+)
+
+// HandlerConfig holds HTTP-level settings.
+type HandlerConfig struct {
+	// SecureCookie sets the Secure flag on the refresh cookie. Enable it
+	// wherever the API is served over HTTPS (always in production).
+	SecureCookie bool
+}
+
 // Handler exposes the auth use cases over HTTP (spec §5.1).
 type Handler struct {
 	svc *Service
+	cfg HandlerConfig
 }
 
 // NewHandler creates the HTTP handler.
-func NewHandler(svc *Service) *Handler {
-	return &Handler{svc: svc}
+func NewHandler(svc *Service, cfg HandlerConfig) *Handler {
+	return &Handler{svc: svc, cfg: cfg}
 }
 
 // Routes registers the auth endpoints under rg (expected to be /api/v1).
@@ -25,6 +43,7 @@ func (h *Handler) Routes(rg *gin.RouterGroup) {
 	g := rg.Group("/auth")
 	g.POST("/register", h.register)
 	g.POST("/verify-email", h.verifyEmail)
+	g.POST("/login", h.login)
 }
 
 type userResponse struct {
@@ -75,4 +94,76 @@ func (h *Handler) verifyEmail(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"email_verified": true})
+}
+
+type loginRequest struct {
+	Email    string `json:"email" validate:"required,email,max=254"`
+	Password string `json:"password" validate:"required,max=1024"` // capped so a huge body cannot force a huge hash
+	// TokenDelivery chooses how the refresh token reaches the client:
+	// "cookie" (default, for browsers) or "body" (for mobile/API clients).
+	TokenDelivery string `json:"token_delivery" validate:"omitempty,oneof=cookie body"`
+}
+
+type tokenResponse struct {
+	AccessToken  string        `json:"access_token"`
+	TokenType    string        `json:"token_type"`
+	ExpiresIn    int           `json:"expires_in"`
+	RefreshToken string        `json:"refresh_token,omitempty"`
+	User         *userResponse `json:"user,omitempty"`
+}
+
+func (h *Handler) login(c *gin.Context) {
+	var req loginRequest
+	if !httpx.BindJSON(c, &req) {
+		return
+	}
+
+	res, err := h.svc.Login(c.Request.Context(), LoginInput{
+		Email:    req.Email,
+		Password: req.Password,
+		Client:   clientInfo(c),
+	})
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+
+	u := toUserResponse(res.User)
+	h.writeTokens(c, req.TokenDelivery, res.AccessToken, res.AccessExpiresAt, res.RefreshToken, res.RefreshExpiresAt, &u)
+}
+
+// writeTokens sends the access token in the body and the refresh token either
+// as an HttpOnly cookie (default) or in the body.
+func (h *Handler) writeTokens(c *gin.Context, delivery, access string, accessExpires time.Time, refresh string, refreshExpires time.Time, u *userResponse) {
+	body := tokenResponse{
+		AccessToken: access,
+		TokenType:   "Bearer",
+		ExpiresIn:   int(accessExpires.Sub(h.svc.Clock.Now()).Seconds()),
+		User:        u,
+	}
+	if delivery == deliveryBody {
+		body.RefreshToken = refresh
+	} else {
+		h.setRefreshCookie(c, refresh, refreshExpires)
+	}
+	c.JSON(http.StatusOK, body)
+}
+
+func (h *Handler) setRefreshCookie(c *gin.Context, value string, expires time.Time) {
+	maxAge := int(expires.Sub(h.svc.Clock.Now()).Seconds())
+	//nolint:gosec // G124: Secure follows config on purpose (on in production, off for http://localhost development)
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     RefreshCookieName,
+		Value:    value,
+		Path:     refreshCookiePath,
+		Expires:  expires,
+		MaxAge:   maxAge,
+		HttpOnly: true,
+		Secure:   h.cfg.SecureCookie,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+func clientInfo(c *gin.Context) ClientInfo {
+	return ClientInfo{UserAgent: c.Request.UserAgent(), IP: c.ClientIP()}
 }

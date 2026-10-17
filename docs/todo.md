@@ -81,7 +81,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] `POST /auth/verify-email` + logika `ResendVerification` di service (0.2)
 - [ ] Route `POST /auth/resend-verification` (dipasang setelah middleware autentikasi, karena butuh user login) (0.1)
 - [x] JWT: sign/verify, klaim `sub`/`sid`, 15 menit (§5.5) (0.3)
-- [ ] `POST /auth/login` (0.3)
+- [x] `POST /auth/login` (0.3)
 - [ ] Middleware autentikasi (JWT + user aktif + sesi/family masih valid, §5.6) + guard `EMAIL_NOT_VERIFIED` (0.3)
 - [ ] Refresh token: issue, rotasi, `replaced_by`, deteksi reuse → cabut family (§5.3) (0.7)
 - [ ] `POST /auth/refresh` (cookie HttpOnly untuk web, body untuk mobile) (0.3)

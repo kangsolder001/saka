@@ -52,17 +52,25 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 		return nil, fmt.Errorf("password hasher: %w", err)
 	}
 
+	jwt, err := auth.NewJWT(cfg.Auth.JWTSecret, cfg.Auth.AccessTokenTTL.Std(), clk)
+	if err != nil {
+		return nil, fmt.Errorf("access token signer: %w", err)
+	}
+
 	authService := auth.NewService(auth.Dependencies{
-		Tx:     database,
-		Pool:   database.Pool(),
-		Users:  user.NewService(clk),
-		Tokens: auth.NewUserTokens(clk),
-		Mail:   mailer,
-		Hasher: hasher,
-		Clock:  clk,
+		Tx:      database,
+		Pool:    database.Pool(),
+		Users:   user.NewService(clk),
+		Tokens:  auth.NewUserTokens(clk),
+		Refresh: auth.NewRefreshTokens(clk, cfg.Auth.RefreshTokenTTL.Std()),
+		JWT:     jwt,
+		Mail:    mailer,
+		Hasher:  hasher,
+		Clock:   clk,
+		Log:     log,
 	}, auth.Config{FrontendURL: cfg.App.FrontendURL})
 
 	v1 := router.Group("/api/v1")
-	auth.NewHandler(authService).Routes(v1)
+	auth.NewHandler(authService, auth.HandlerConfig{SecureCookie: cfg.IsProduction()}).Routes(v1)
 	return router, nil
 }
