@@ -12,3 +12,7 @@ packages:
   github.com/kangsolder001/saka/internal/platform/httpx:
     interfaces:
       Pinger:
+  github.com/kangsolder001/saka/internal/platform/outbox:
+    interfaces:
+      Queue:
+      Enqueuer:
