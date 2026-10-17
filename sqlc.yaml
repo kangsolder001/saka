@@ -1,0 +1,6 @@
+# sqlc generates type-safe Go from SQL (`make sqlc`).
+# Schema comes from the goose migrations (sqlc ignores the Down sections).
+# Each module owns its queries and generated package; add one entry per module
+# as its tables are introduced.
+version: "2"
+sql: []

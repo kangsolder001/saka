@@ -1,0 +1,11 @@
+# Mock generation for unit tests (`make mocks`).
+# Interfaces are listed explicitly per package so only real dependency
+# boundaries (repositories, Mailer, PaymentProvider, ...) get mocks.
+# Add a new interface under its package, then run `make mocks`.
+template: testify
+dir: "{{.InterfaceDir}}/mocks"
+pkgname: mocks
+filename: "mock_{{.InterfaceName | snakecase}}.go"
+structname: "Mock{{.InterfaceName}}"
+log-level: warn
+packages: {}
