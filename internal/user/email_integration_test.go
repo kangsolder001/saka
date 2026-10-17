@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -70,32 +69,4 @@ func TestChangeEmail_InvalidatesTheCacheItself(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "new@example.com", after.Email, "never stale")
 	assert.True(t, after.EmailVerified())
-}
-
-func TestChangeEmail_InsideATransactionInvalidatesOnlyAfterCommitAndNotOnRollback(t *testing.T) {
-	e := newCacheEnv(t)
-	u := e.create(t, "ann@example.com")
-	ctx := context.Background()
-	_, err := e.svc.GetSummary(ctx, e.db.Pool(), u.ID)
-	require.NoError(t, err)
-
-	_ = e.db.WithTx(ctx, func(tx pgx.Tx) error {
-		require.NoError(t, e.svc.ChangeEmail(ctx, tx, u.ID, "rolled-back@example.com"))
-		return assert.AnError
-	})
-	got, err := e.svc.GetSummary(ctx, e.db.Pool(), u.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "ann@example.com", got.Email, "a rolled-back change leaves a correct cache")
-
-	err = e.db.WithTx(ctx, func(tx pgx.Tx) error {
-		if err := e.svc.ChangeEmail(ctx, tx, u.ID, "new@example.com"); err != nil {
-			return err
-		}
-		_, stillCached := e.cachedRaw(ctx, t, u.ID)
-		assert.True(t, stillCached, "nothing is dropped before the commit")
-		return nil
-	})
-	require.NoError(t, err)
-	_, cached := e.cachedRaw(ctx, t, u.ID)
-	assert.False(t, cached)
 }

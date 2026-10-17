@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -71,43 +70,4 @@ func TestUpdateProfile_InvalidatesTheCacheItself(t *testing.T) {
 	after, err := e.svc.GetSummary(ctx, e.db.Pool(), u.ID)
 	require.NoError(t, err)
 	assert.Equal(t, "Ann Lee", after.Name, "never stale: the write path drops the entry")
-}
-
-func TestUpdateProfile_InsideATransactionInvalidatesOnlyAfterCommit(t *testing.T) {
-	e := newCacheEnv(t)
-	u := e.create(t, "ann@example.com")
-	ctx := context.Background()
-	_, err := e.svc.GetSummary(ctx, e.db.Pool(), u.ID)
-	require.NoError(t, err)
-
-	err = e.db.WithTx(ctx, func(tx pgx.Tx) error {
-		if _, err := e.svc.UpdateProfile(ctx, tx, u.ID, user.ProfileUpdate{Name: ptr("Ann Lee")}); err != nil {
-			return err
-		}
-		_, stillCached := e.cachedRaw(ctx, t, u.ID)
-		assert.True(t, stillCached, "nothing is dropped before the commit")
-		return nil
-	})
-
-	require.NoError(t, err)
-	_, cached := e.cachedRaw(ctx, t, u.ID)
-	assert.False(t, cached)
-}
-
-func TestUpdateProfile_ARolledBackUpdateLeavesTheCacheAlone(t *testing.T) {
-	e := newCacheEnv(t)
-	u := e.create(t, "ann@example.com")
-	ctx := context.Background()
-	_, err := e.svc.GetSummary(ctx, e.db.Pool(), u.ID)
-	require.NoError(t, err)
-
-	_ = e.db.WithTx(ctx, func(tx pgx.Tx) error {
-		_, err := e.svc.UpdateProfile(ctx, tx, u.ID, user.ProfileUpdate{Name: ptr("Ann Lee")})
-		require.NoError(t, err)
-		return assert.AnError
-	})
-
-	got, err := e.svc.GetSummary(ctx, e.db.Pool(), u.ID)
-	require.NoError(t, err)
-	assert.Equal(t, "Ann", got.Name, "the rollback discarded the change, so the cached value is still right")
 }

@@ -108,7 +108,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] `POST /me/email` + `POST /me/email/confirm` + template `email_change_confirm`, `email_changed_notice` (0.6). Konfirmasi password + batas 3/jam per user; `confirm` tanpa login (§6.1)
 - [x] `GET /me/sessions`, `DELETE /me/sessions/{id}` (0.3). ID sesi = `family_id` (= `sid`); sesi orang lain → 404 (§6.1)
 - [x] `DELETE /me`: soft delete + anonimisasi email, cabut semua sesi; pengecekan owner lewat interface ke modul org (stub dulu) (0.4). Interface `auth.OrganizationGuard` (stub `auth.NoOrganizations`), butuh konfirmasi password (§6.1)
-- [ ] Test unit + integration modul user, termasuk: setiap method tulis baru (profil, email, hapus akun) memakai `invalidateAfterCommit` dan ada test yang membuktikan cache terhapus setelah commit dan tidak pernah basi (0.5)
+- [x] Test unit + integration modul user, termasuk: setiap method tulis baru (profil, email, hapus akun) memakai `invalidateAfterCommit` dan ada test yang membuktikan cache terhapus setelah commit dan tidak pernah basi (0.5). Test ditulis bersama tiap endpoint; yang tersisa: penjaga struktural `TestServiceMethods_AreAllClassified` + tabel `TestCacheWriters_*` (setelah commit, rollback, tanpa transaksi) yang gagal bila method tulis baru tidak terdaftar
 
 **Selesai bila:** AC User (§12) lulus, kecuali penolakan hapus akun owner yang menunggu Fase 4.
 

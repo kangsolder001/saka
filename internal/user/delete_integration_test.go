@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -80,32 +79,4 @@ func TestDelete_InvalidatesTheCacheSoTheAccountStopsWorkingAtOnce(t *testing.T) 
 
 	_, err = e.svc.GetSummary(ctx, e.db.Pool(), u.ID)
 	assert.True(t, apperr.IsCode(err, apperr.CodeNotFound), "never served from a stale 'active' entry; got %v", err)
-}
-
-func TestDelete_InsideATransactionInvalidatesOnlyAfterCommitAndNotOnRollback(t *testing.T) {
-	e := newCacheEnv(t)
-	u := e.create(t, "ann@example.com")
-	ctx := context.Background()
-	_, err := e.svc.GetSummary(ctx, e.db.Pool(), u.ID)
-	require.NoError(t, err)
-
-	_ = e.db.WithTx(ctx, func(tx pgx.Tx) error {
-		require.NoError(t, e.svc.Delete(ctx, tx, u.ID))
-		return assert.AnError
-	})
-	got, err := e.svc.GetSummary(ctx, e.db.Pool(), u.ID)
-	require.NoError(t, err, "a rolled-back deletion leaves the user and a correct cache")
-	assert.Equal(t, user.StatusActive, got.Status)
-
-	err = e.db.WithTx(ctx, func(tx pgx.Tx) error {
-		if err := e.svc.Delete(ctx, tx, u.ID); err != nil {
-			return err
-		}
-		_, stillCached := e.cachedRaw(ctx, t, u.ID)
-		assert.True(t, stillCached, "nothing is dropped before the commit")
-		return nil
-	})
-	require.NoError(t, err)
-	_, cached := e.cachedRaw(ctx, t, u.ID)
-	assert.False(t, cached)
 }
