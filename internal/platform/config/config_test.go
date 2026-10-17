@@ -28,6 +28,7 @@ func TestLoadFrom_Defaults(t *testing.T) {
 func TestLoadFrom_Overrides(t *testing.T) {
 	cfg, err := config.LoadFrom(map[string]string{
 		"APP_ENV":              "production",
+		"MAIL_DRIVER":          "smtp",
 		"HTTP_ADDR":            ":9000",
 		"SHUTDOWN_TIMEOUT":     "30s",
 		"LOG_LEVEL":            "debug",
@@ -48,6 +49,32 @@ func TestLoadFrom_Overrides(t *testing.T) {
 	assert.Equal(t, int32(2), cfg.DBMinConns)
 }
 
+func TestLoadFrom_MailAndWorkerDefaults(t *testing.T) {
+	cfg, err := config.LoadFrom(map[string]string{"DATABASE_URL": validDBURL})
+
+	require.NoError(t, err)
+	assert.Equal(t, "Saka", cfg.AppName)
+	assert.Equal(t, "log", cfg.MailDriver)
+	assert.Equal(t, "localhost", cfg.SMTPHost)
+	assert.Equal(t, 1025, cfg.SMTPPort)
+	assert.Equal(t, 4, cfg.WorkerConcurrency)
+	assert.Equal(t, 5*time.Second, cfg.WorkerPollInterval)
+	assert.Equal(t, time.Minute, cfg.WorkerJobTimeout)
+	assert.Equal(t, 5*time.Minute, cfg.WorkerLease)
+}
+
+func TestLoadFrom_SMTPInProduction(t *testing.T) {
+	cfg, err := config.LoadFrom(map[string]string{
+		"DATABASE_URL": validDBURL, "APP_ENV": "production", "MAIL_DRIVER": "smtp",
+		"SMTP_HOST": "smtp.example.com", "SMTP_PORT": "587", "SMTP_USERNAME": "u", "SMTP_PASSWORD": "p",
+		"MAIL_FROM": "Saka <noreply@example.com>",
+	})
+
+	require.NoError(t, err)
+	assert.Equal(t, "smtp.example.com", cfg.SMTPHost)
+	assert.Equal(t, 587, cfg.SMTPPort)
+}
+
 func TestLoadFrom_Invalid(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -60,6 +87,13 @@ func TestLoadFrom_Invalid(t *testing.T) {
 		{"unknown log level", map[string]string{"DATABASE_URL": validDBURL, "LOG_LEVEL": "trace"}, "LOG_LEVEL must be one of"},
 		{"min conns above max", map[string]string{"DATABASE_URL": validDBURL, "DB_MAX_CONNS": "2", "DB_MIN_CONNS": "5"}, "DB_MIN_CONNS"},
 		{"wildcard cors in production", map[string]string{"DATABASE_URL": validDBURL, "APP_ENV": "production", "CORS_ALLOWED_ORIGINS": "*"}, "must not contain *"},
+		{"unknown mail driver", map[string]string{"DATABASE_URL": validDBURL, "MAIL_DRIVER": "pigeon"}, "MAIL_DRIVER must be one of"},
+		{"log mailer in production", map[string]string{"DATABASE_URL": validDBURL, "APP_ENV": "production", "MAIL_DRIVER": "log"}, "not allowed in production"},
+		{"smtp without host", map[string]string{"DATABASE_URL": validDBURL, "MAIL_DRIVER": "smtp", "SMTP_HOST": " "}, "SMTP_HOST is required"},
+		{"smtp bad port", map[string]string{"DATABASE_URL": validDBURL, "MAIL_DRIVER": "smtp", "SMTP_PORT": "70000"}, "SMTP_PORT"},
+		{"smtp bad from", map[string]string{"DATABASE_URL": validDBURL, "MAIL_DRIVER": "smtp", "MAIL_FROM": "nope"}, "MAIL_FROM"},
+		{"zero worker concurrency", map[string]string{"DATABASE_URL": validDBURL, "WORKER_CONCURRENCY": "0"}, "WORKER_CONCURRENCY"},
+		{"lease not above timeout", map[string]string{"DATABASE_URL": validDBURL, "WORKER_LEASE": "30s", "WORKER_JOB_TIMEOUT": "1m"}, "WORKER_LEASE must be longer"},
 		{"bad duration", map[string]string{"DATABASE_URL": validDBURL, "SHUTDOWN_TIMEOUT": "soon"}, "invalid duration"},
 	}
 

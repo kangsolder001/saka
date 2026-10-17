@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/mail"
 	"net/url"
 	"strings"
 	"time"
@@ -27,6 +28,22 @@ type Config struct {
 	// TrustedProxies are the proxy IPs/CIDRs whose X-Forwarded-For is believed.
 	// Empty means the direct peer address is always used as the client IP.
 	TrustedProxies []string `env:"TRUSTED_PROXIES" envSeparator:","`
+
+	AppName string `env:"APP_NAME" envDefault:"Saka"`
+
+	// MailDriver picks how emails leave the system: "smtp" or "log" (development only).
+	MailDriver   string `env:"MAIL_DRIVER" envDefault:"log"`
+	MailFrom     string `env:"MAIL_FROM" envDefault:"Saka <noreply@saka.local>"`
+	SMTPHost     string `env:"SMTP_HOST" envDefault:"localhost"`
+	SMTPPort     int    `env:"SMTP_PORT" envDefault:"1025"`
+	SMTPUsername string `env:"SMTP_USERNAME"`
+	SMTPPassword string `env:"SMTP_PASSWORD"`
+
+	// Outbox worker tuning.
+	WorkerConcurrency  int           `env:"WORKER_CONCURRENCY" envDefault:"4"`
+	WorkerPollInterval time.Duration `env:"WORKER_POLL_INTERVAL" envDefault:"5s"`
+	WorkerJobTimeout   time.Duration `env:"WORKER_JOB_TIMEOUT" envDefault:"1m"`
+	WorkerLease        time.Duration `env:"WORKER_LEASE" envDefault:"5m"`
 
 	DatabaseURL string `env:"DATABASE_URL"`
 	DBMaxConns  int32  `env:"DB_MAX_CONNS" envDefault:"10"`
@@ -94,6 +111,35 @@ func (c Config) Validate() error {
 	}
 	if c.DBMinConns < 0 || c.DBMinConns > c.DBMaxConns {
 		add("DB_MIN_CONNS must be between 0 and DB_MAX_CONNS")
+	}
+
+	switch c.MailDriver {
+	case "smtp":
+		if strings.TrimSpace(c.SMTPHost) == "" {
+			add("SMTP_HOST is required when MAIL_DRIVER=smtp")
+		}
+		if c.SMTPPort < 1 || c.SMTPPort > 65535 {
+			add("SMTP_PORT must be between 1 and 65535")
+		}
+		if _, err := mail.ParseAddress(c.MailFrom); err != nil {
+			add("MAIL_FROM must be a valid address such as \"Name <user@example.com>\"")
+		}
+	case "log":
+		if c.IsProduction() {
+			add("MAIL_DRIVER=log is not allowed in production: emails would be dropped")
+		}
+	default:
+		add("MAIL_DRIVER must be one of smtp, log (got %q)", c.MailDriver)
+	}
+
+	if c.WorkerConcurrency < 1 {
+		add("WORKER_CONCURRENCY must be at least 1")
+	}
+	if c.WorkerPollInterval <= 0 || c.WorkerJobTimeout <= 0 {
+		add("WORKER_POLL_INTERVAL and WORKER_JOB_TIMEOUT must be positive")
+	}
+	if c.WorkerLease <= c.WorkerJobTimeout {
+		add("WORKER_LEASE must be longer than WORKER_JOB_TIMEOUT")
 	}
 
 	if c.IsProduction() {
