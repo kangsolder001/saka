@@ -1,0 +1,17 @@
+# Binaries
+/bin/
+/tmp/
+
+# Env files (use .env.example as the template)
+.env
+.env.*
+!.env.example
+
+# Test & coverage output
+*.out
+coverage.*
+
+# Editor / OS
+.idea/
+.vscode/
+.DS_Store
