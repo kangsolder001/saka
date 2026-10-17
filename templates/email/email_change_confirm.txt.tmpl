@@ -1,0 +1,9 @@
+{{define "subject"}}Konfirmasi email baru Anda di {{.App.Name}}{{end}}
+{{define "content"}}Halo {{.Data.name}},
+
+Seseorang meminta mengganti email akun {{.App.Name}} menjadi alamat ini. Buka tautan berikut untuk mengonfirmasi (berlaku 24 jam):
+
+{{.Data.url}}
+
+Jika Anda tidak merasa memintanya, abaikan email ini. Email akun tidak akan berubah.{{end}}
+{{template "layout" .}}

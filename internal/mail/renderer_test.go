@@ -27,8 +27,13 @@ func TestRealTemplates_AllRenderWithTheirData(t *testing.T) {
 		"verify_email":     {"name": "Ann", "url": "https://app.example/verify?token=abc123"},
 		"password_reset":   {"name": "Ann", "url": "https://app.example/reset?token=xyz789"},
 		"password_changed": {"name": "Ann"},
+
+		"email_change_confirm": {"name": "Ann", "url": "https://app.example/confirm-email-change?token=new123"},
+		"email_changed_notice": {"name": "Ann", "new_email": "ann.new@example.com"},
 	}
-	require.ElementsMatch(t, []string{"verify_email", "password_reset", "password_changed"}, r.Names(),
+	require.ElementsMatch(t, []string{
+		"verify_email", "password_reset", "password_changed", "email_change_confirm", "email_changed_notice",
+	}, r.Names(),
 		"update this test when a template is added so it is rendered here")
 
 	for name, d := range data {
@@ -43,6 +48,10 @@ func TestRealTemplates_AllRenderWithTheirData(t *testing.T) {
 			assert.Contains(t, out.Text, "Halo Ann")
 			assert.NotContains(t, out.Text, "<p>", "text version must not contain HTML")
 			assert.Contains(t, out.Text, "Saka")
+			if newEmail, ok := d["new_email"].(string); ok {
+				assert.Contains(t, out.HTML, newEmail)
+				assert.Contains(t, out.Text, newEmail)
+			}
 			if url, ok := d["url"].(string); ok {
 				assert.Contains(t, out.HTML, url)
 				assert.Contains(t, out.Text, url)
