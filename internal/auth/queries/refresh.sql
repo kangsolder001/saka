@@ -15,3 +15,25 @@ SELECT EXISTS (
       AND revoked_at IS NULL
       AND expires_at > @now::timestamptz
 ) AS active;
+
+-- Row-locks the token so concurrent refreshes with the same token serialize.
+-- name: GetRefreshTokenForUpdate :one
+SELECT id, user_id, family_id, expires_at, revoked_at
+FROM refresh_tokens
+WHERE token_hash = @token_hash
+FOR UPDATE;
+
+-- name: MarkRefreshTokenRotated :execrows
+UPDATE refresh_tokens
+SET revoked_at = @now::timestamptz, replaced_by = @replaced_by
+WHERE id = @id AND revoked_at IS NULL;
+
+-- name: RevokeSession :execrows
+UPDATE refresh_tokens
+SET revoked_at = @now::timestamptz
+WHERE family_id = @family_id AND revoked_at IS NULL;
+
+-- name: RevokeAllSessionsOfUser :execrows
+UPDATE refresh_tokens
+SET revoked_at = @now::timestamptz
+WHERE user_id = @user_id AND revoked_at IS NULL;

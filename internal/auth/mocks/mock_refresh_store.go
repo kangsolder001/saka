@@ -49,6 +49,84 @@ func (_m *MockRefreshStore) EXPECT() *MockRefreshStore_Expecter {
 	return &MockRefreshStore_Expecter{mock: &_m.Mock}
 }
 
+// Rotate provides a mock function for the type MockRefreshStore
+func (_mock *MockRefreshStore) Rotate(ctx context.Context, q db.DBTX, raw string, client auth.ClientInfo) (auth.RotateResult, error) {
+	ret := _mock.Called(ctx, q, raw, client)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Rotate")
+	}
+
+	var r0 auth.RotateResult
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, db.DBTX, string, auth.ClientInfo) (auth.RotateResult, error)); ok {
+		return returnFunc(ctx, q, raw, client)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, db.DBTX, string, auth.ClientInfo) auth.RotateResult); ok {
+		r0 = returnFunc(ctx, q, raw, client)
+	} else {
+		r0 = ret.Get(0).(auth.RotateResult)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, db.DBTX, string, auth.ClientInfo) error); ok {
+		r1 = returnFunc(ctx, q, raw, client)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockRefreshStore_Rotate_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Rotate'
+type MockRefreshStore_Rotate_Call struct {
+	*mock.Call
+}
+
+// Rotate is a helper method to define mock.On call
+//   - ctx context.Context
+//   - q db.DBTX
+//   - raw string
+//   - client auth.ClientInfo
+func (_e *MockRefreshStore_Expecter) Rotate(ctx any, q any, raw any, client any) *MockRefreshStore_Rotate_Call {
+	return &MockRefreshStore_Rotate_Call{Call: _e.mock.On("Rotate", ctx, q, raw, client)}
+}
+
+func (_c *MockRefreshStore_Rotate_Call) Run(run func(ctx context.Context, q db.DBTX, raw string, client auth.ClientInfo)) *MockRefreshStore_Rotate_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 db.DBTX
+		if args[1] != nil {
+			arg1 = args[1].(db.DBTX)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		var arg3 auth.ClientInfo
+		if args[3] != nil {
+			arg3 = args[3].(auth.ClientInfo)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRefreshStore_Rotate_Call) Return(rotateResult auth.RotateResult, err error) *MockRefreshStore_Rotate_Call {
+	_c.Call.Return(rotateResult, err)
+	return _c
+}
+
+func (_c *MockRefreshStore_Rotate_Call) RunAndReturn(run func(ctx context.Context, q db.DBTX, raw string, client auth.ClientInfo) (auth.RotateResult, error)) *MockRefreshStore_Rotate_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // SessionActive provides a mock function for the type MockRefreshStore
 func (_mock *MockRefreshStore) SessionActive(ctx context.Context, q db.DBTX, userID uuid.UUID, familyID uuid.UUID) (bool, error) {
 	ret := _mock.Called(ctx, q, userID, familyID)

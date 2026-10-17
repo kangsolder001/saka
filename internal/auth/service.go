@@ -42,6 +42,7 @@ type TokenService interface {
 type RefreshStore interface {
 	StartSession(ctx context.Context, q db.DBTX, userID uuid.UUID, client ClientInfo) (RefreshToken, error)
 	SessionActive(ctx context.Context, q db.DBTX, userID, familyID uuid.UUID) (bool, error)
+	Rotate(ctx context.Context, q db.DBTX, raw string, client ClientInfo) (RotateResult, error)
 }
 
 var (
@@ -63,8 +64,8 @@ type Dependencies struct {
 	Pool   db.DBTX // used for reads outside a transaction
 	Users  UserService
 	Tokens TokenService
-	// Refresh stores refresh token sessions.
-	Refresh RefreshStore
+	// Sessions stores refresh token sessions.
+	Sessions RefreshStore
 	// JWT signs access tokens.
 	JWT    *JWT
 	Mail   mail.Sender
@@ -243,7 +244,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 	var refresh RefreshToken
 	if err := s.Tx.WithTx(ctx, func(tx pgx.Tx) error {
 		var err error
-		refresh, err = s.Refresh.StartSession(ctx, tx, u.ID, in.Client)
+		refresh, err = s.Sessions.StartSession(ctx, tx, u.ID, in.Client)
 		return err
 	}); err != nil {
 		return LoginResult{}, err
@@ -305,7 +306,7 @@ func (s *Service) Authenticate(ctx context.Context, accessToken string) (Princip
 		return Principal{}, apperr.Unauthenticated()
 	}
 
-	active, err := s.Refresh.SessionActive(ctx, s.Pool, u.ID, claims.SessionID)
+	active, err := s.Sessions.SessionActive(ctx, s.Pool, u.ID, claims.SessionID)
 	if err != nil {
 		return Principal{}, err
 	}
@@ -313,4 +314,65 @@ func (s *Service) Authenticate(ctx context.Context, accessToken string) (Princip
 		return Principal{}, apperr.Unauthenticated()
 	}
 	return Principal{UserID: u.ID, SessionID: claims.SessionID, EmailVerified: u.EmailVerified()}, nil
+}
+
+// RefreshResult is a rotated token pair.
+type RefreshResult struct {
+	AccessToken      string
+	AccessExpiresAt  time.Time
+	RefreshToken     string
+	RefreshExpiresAt time.Time
+}
+
+// Refresh exchanges a refresh token for a new access token and a new refresh
+// token (rotation, spec §5.3). An unknown or expired token is rejected. A
+// token that was already used is treated as stolen: the whole session is
+// revoked and the request rejected. All failures look the same to the client
+// (UNAUTHENTICATED).
+func (s *Service) Refresh(ctx context.Context, rawToken string, client ClientInfo) (RefreshResult, error) {
+	var (
+		rotated RotateResult
+		u       user.User
+	)
+	err := s.Tx.WithTx(ctx, func(tx pgx.Tx) error {
+		var err error
+		rotated, err = s.Sessions.Rotate(ctx, tx, rawToken, client)
+		if err != nil || rotated.Outcome != Rotated {
+			// Nothing else to do; for Reused the family revocation is committed
+			// precisely because we return nil here.
+			return err
+		}
+		u, err = s.Users.GetByID(ctx, tx, rotated.UserID)
+		return err
+	})
+	if err != nil {
+		if apperr.IsCode(err, apperr.CodeNotFound) {
+			return RefreshResult{}, apperr.Unauthenticated()
+		}
+		return RefreshResult{}, err
+	}
+
+	switch rotated.Outcome {
+	case Rotated:
+	case Reused:
+		zl := s.Log.FromContext(ctx)
+		zl.Warn().Msg("refresh token reuse detected; session revoked")
+		return RefreshResult{}, apperr.Unauthenticated()
+	default: // Unknown, Expired
+		return RefreshResult{}, apperr.Unauthenticated()
+	}
+	if u.Status != user.StatusActive {
+		return RefreshResult{}, apperr.Unauthenticated()
+	}
+
+	access, accessExpires, err := s.JWT.Sign(u.ID, rotated.Token.FamilyID)
+	if err != nil {
+		return RefreshResult{}, err
+	}
+	return RefreshResult{
+		AccessToken:      access,
+		AccessExpiresAt:  accessExpires,
+		RefreshToken:     rotated.Token.Raw,
+		RefreshExpiresAt: rotated.Token.ExpiresAt,
+	}, nil
 }

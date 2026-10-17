@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/kangsolder001/saka/internal/platform/apperr"
 	"github.com/kangsolder001/saka/internal/platform/httpx"
 	"github.com/kangsolder001/saka/internal/user"
 )
@@ -46,6 +47,7 @@ func (h *Handler) Routes(rg *gin.RouterGroup) {
 	g.POST("/register", h.register)
 	g.POST("/verify-email", h.verifyEmail)
 	g.POST("/login", h.login)
+	g.POST("/refresh", h.refresh)
 
 	authed := g.Group("", h.mw.Authenticate())
 	authed.POST("/resend-verification", h.resendVerification)
@@ -180,4 +182,51 @@ func (h *Handler) resendVerification(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"status": "sent"})
+}
+
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token" validate:"required,max=256"`
+}
+
+// refresh rotates the refresh token. The token comes from the HttpOnly cookie
+// (web) or from the JSON body (mobile); the new one is returned the same way.
+func (h *Handler) refresh(c *gin.Context) {
+	raw, fromCookie := "", false
+	if cookie, err := c.Cookie(RefreshCookieName); err == nil && cookie != "" {
+		raw, fromCookie = cookie, true
+	} else {
+		var req refreshRequest
+		if !httpx.BindJSON(c, &req) {
+			return
+		}
+		raw = req.RefreshToken
+	}
+
+	res, err := h.svc.Refresh(c.Request.Context(), raw, clientInfo(c))
+	if err != nil {
+		if fromCookie && apperr.IsCode(err, apperr.CodeUnauthenticated) {
+			h.clearRefreshCookie(c) // the browser's cookie is dead: drop it
+		}
+		httpx.Error(c, err)
+		return
+	}
+
+	delivery := deliveryBody
+	if fromCookie {
+		delivery = deliveryCookie
+	}
+	h.writeTokens(c, delivery, res.AccessToken, res.AccessExpiresAt, res.RefreshToken, res.RefreshExpiresAt, nil)
+}
+
+func (h *Handler) clearRefreshCookie(c *gin.Context) {
+	//nolint:gosec // G124: Secure follows config on purpose (on in production, off for http://localhost development)
+	http.SetCookie(c.Writer, &http.Cookie{
+		Name:     RefreshCookieName,
+		Value:    "",
+		Path:     refreshCookiePath,
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   h.cfg.SecureCookie,
+		SameSite: http.SameSiteStrictMode,
+	})
 }

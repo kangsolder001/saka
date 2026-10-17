@@ -58,16 +58,16 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 	}
 
 	authService := auth.NewService(auth.Dependencies{
-		Tx:      database,
-		Pool:    database.Pool(),
-		Users:   user.NewService(clk),
-		Tokens:  auth.NewUserTokens(clk),
-		Refresh: auth.NewRefreshTokens(clk, cfg.Auth.RefreshTokenTTL.Std()),
-		JWT:     jwt,
-		Mail:    mailer,
-		Hasher:  hasher,
-		Clock:   clk,
-		Log:     log,
+		Tx:       database,
+		Pool:     database.Pool(),
+		Users:    user.NewService(clk),
+		Tokens:   auth.NewUserTokens(clk),
+		Sessions: auth.NewRefreshTokens(clk, cfg.Auth.RefreshTokenTTL.Std()),
+		JWT:      jwt,
+		Mail:     mailer,
+		Hasher:   hasher,
+		Clock:    clk,
+		Log:      log,
 	}, auth.Config{FrontendURL: cfg.App.FrontendURL})
 
 	authMiddleware := auth.NewMiddleware(authService)

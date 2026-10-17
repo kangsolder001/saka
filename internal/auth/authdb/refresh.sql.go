@@ -12,6 +12,35 @@ import (
 	"github.com/google/uuid"
 )
 
+const getRefreshTokenForUpdate = `-- name: GetRefreshTokenForUpdate :one
+SELECT id, user_id, family_id, expires_at, revoked_at
+FROM refresh_tokens
+WHERE token_hash = $1
+FOR UPDATE
+`
+
+type GetRefreshTokenForUpdateRow struct {
+	ID        uuid.UUID
+	UserID    uuid.UUID
+	FamilyID  uuid.UUID
+	ExpiresAt time.Time
+	RevokedAt *time.Time
+}
+
+// Row-locks the token so concurrent refreshes with the same token serialize.
+func (q *Queries) GetRefreshTokenForUpdate(ctx context.Context, tokenHash string) (GetRefreshTokenForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getRefreshTokenForUpdate, tokenHash)
+	var i GetRefreshTokenForUpdateRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.FamilyID,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const insertRefreshToken = `-- name: InsertRefreshToken :one
 INSERT INTO refresh_tokens (user_id, family_id, token_hash, user_agent, ip, expires_at, created_at)
 VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz)
@@ -41,6 +70,64 @@ func (q *Queries) InsertRefreshToken(ctx context.Context, arg InsertRefreshToken
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
+}
+
+const markRefreshTokenRotated = `-- name: MarkRefreshTokenRotated :execrows
+UPDATE refresh_tokens
+SET revoked_at = $1::timestamptz, replaced_by = $2
+WHERE id = $3 AND revoked_at IS NULL
+`
+
+type MarkRefreshTokenRotatedParams struct {
+	Now        time.Time
+	ReplacedBy *uuid.UUID
+	ID         uuid.UUID
+}
+
+func (q *Queries) MarkRefreshTokenRotated(ctx context.Context, arg MarkRefreshTokenRotatedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markRefreshTokenRotated, arg.Now, arg.ReplacedBy, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const revokeAllSessionsOfUser = `-- name: RevokeAllSessionsOfUser :execrows
+UPDATE refresh_tokens
+SET revoked_at = $1::timestamptz
+WHERE user_id = $2 AND revoked_at IS NULL
+`
+
+type RevokeAllSessionsOfUserParams struct {
+	Now    time.Time
+	UserID uuid.UUID
+}
+
+func (q *Queries) RevokeAllSessionsOfUser(ctx context.Context, arg RevokeAllSessionsOfUserParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeAllSessionsOfUser, arg.Now, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const revokeSession = `-- name: RevokeSession :execrows
+UPDATE refresh_tokens
+SET revoked_at = $1::timestamptz
+WHERE family_id = $2 AND revoked_at IS NULL
+`
+
+type RevokeSessionParams struct {
+	Now      time.Time
+	FamilyID uuid.UUID
+}
+
+func (q *Queries) RevokeSession(ctx context.Context, arg RevokeSessionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeSession, arg.Now, arg.FamilyID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const sessionActive = `-- name: SessionActive :one

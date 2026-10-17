@@ -54,7 +54,7 @@ func newFixture(t *testing.T) *fixture {
 	}
 	f.jwt = newJWT(t, f.clock)
 	f.svc = auth.NewService(auth.Dependencies{
-		Tx: f.tx, Pool: stubDB{}, Users: f.users, Tokens: f.tokens, Refresh: f.refresh,
+		Tx: f.tx, Pool: stubDB{}, Users: f.users, Tokens: f.tokens, Sessions: f.refresh,
 		JWT: f.jwt, Mail: f.mail, Hasher: f.hasher, Clock: f.clock, Log: logger.Nop(),
 	}, auth.Config{FrontendURL: "https://app.example.com/"})
 	return f

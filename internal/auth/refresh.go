@@ -2,10 +2,12 @@ package auth
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/kangsolder001/saka/internal/auth/authdb"
 	"github.com/kangsolder001/saka/internal/platform/clock"
@@ -49,13 +51,18 @@ func (s *RefreshTokens) StartSession(ctx context.Context, q db.DBTX, userID uuid
 }
 
 func (s *RefreshTokens) insert(ctx context.Context, q db.DBTX, userID, family uuid.UUID, client ClientInfo) (RefreshToken, error) {
+	tok, _, err := s.insertWithID(ctx, q, userID, family, client)
+	return tok, err
+}
+
+func (s *RefreshTokens) insertWithID(ctx context.Context, q db.DBTX, userID, family uuid.UUID, client ClientInfo) (RefreshToken, uuid.UUID, error) {
 	raw, hash, err := GenerateToken()
 	if err != nil {
-		return RefreshToken{}, err
+		return RefreshToken{}, uuid.Nil, err
 	}
 	now := s.clk.Now()
 	expires := now.Add(s.ttl)
-	if _, err := authdb.New(q).InsertRefreshToken(ctx, authdb.InsertRefreshTokenParams{
+	id, err := authdb.New(q).InsertRefreshToken(ctx, authdb.InsertRefreshTokenParams{
 		UserID:    userID,
 		FamilyID:  family,
 		TokenHash: hash,
@@ -63,10 +70,91 @@ func (s *RefreshTokens) insert(ctx context.Context, q db.DBTX, userID, family uu
 		Ip:        optional(client.IP),
 		ExpiresAt: expires,
 		Now:       now,
-	}); err != nil {
-		return RefreshToken{}, fmt.Errorf("auth: insert refresh token: %w", err)
+	})
+	if err != nil {
+		return RefreshToken{}, uuid.Nil, fmt.Errorf("auth: insert refresh token: %w", err)
 	}
-	return RefreshToken{Raw: raw, FamilyID: family, ExpiresAt: expires}, nil
+	return RefreshToken{Raw: raw, FamilyID: family, ExpiresAt: expires}, id, nil
+}
+
+// RotateOutcome says what Rotate did with the presented token.
+type RotateOutcome int
+
+const (
+	// Rotated: the token was valid; a new one in the same family replaced it.
+	Rotated RotateOutcome = iota
+	// Unknown: no such token.
+	Unknown
+	// Expired: the token's lifetime is over.
+	Expired
+	// Reused: the token had already been rotated or revoked, so it was
+	// presented by someone who should not have it. The whole session (family)
+	// has been revoked.
+	Reused
+)
+
+// RotateResult is the result of Rotate.
+type RotateResult struct {
+	Outcome RotateOutcome
+	// Token, UserID are set when Outcome is Rotated.
+	Token  RefreshToken
+	UserID uuid.UUID
+}
+
+// Rotate exchanges a refresh token for a new one in the same family and
+// retires the old one (replaced_by points at its successor), spec §5.3.
+//
+// Presenting a token that was already revoked is treated as theft: every token
+// of the family is revoked. That revocation must be committed even though the
+// caller then rejects the request, so detection is reported through
+// RotateResult.Outcome, never as an error. q must be a transaction.
+func (s *RefreshTokens) Rotate(ctx context.Context, q db.DBTX, raw string, client ClientInfo) (RotateResult, error) {
+	queries := authdb.New(q)
+	row, err := queries.GetRefreshTokenForUpdate(ctx, HashToken(raw))
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RotateResult{Outcome: Unknown}, nil
+	}
+	if err != nil {
+		return RotateResult{}, fmt.Errorf("auth: load refresh token: %w", err)
+	}
+
+	now := s.clk.Now()
+	if row.RevokedAt != nil {
+		if _, err := queries.RevokeSession(ctx, authdb.RevokeSessionParams{FamilyID: row.FamilyID, Now: now}); err != nil {
+			return RotateResult{}, fmt.Errorf("auth: revoke compromised session: %w", err)
+		}
+		return RotateResult{Outcome: Reused}, nil
+	}
+	if !row.ExpiresAt.After(now) {
+		return RotateResult{Outcome: Expired}, nil
+	}
+
+	next, nextID, err := s.insertWithID(ctx, q, row.UserID, row.FamilyID, client)
+	if err != nil {
+		return RotateResult{}, err
+	}
+	if _, err := queries.MarkRefreshTokenRotated(ctx, authdb.MarkRefreshTokenRotatedParams{
+		ID: row.ID, ReplacedBy: &nextID, Now: now,
+	}); err != nil {
+		return RotateResult{}, fmt.Errorf("auth: retire refresh token: %w", err)
+	}
+	return RotateResult{Outcome: Rotated, Token: next, UserID: row.UserID}, nil
+}
+
+// RevokeSession revokes every refresh token of one login (logout).
+func (s *RefreshTokens) RevokeSession(ctx context.Context, q db.DBTX, familyID uuid.UUID) error {
+	if _, err := authdb.New(q).RevokeSession(ctx, authdb.RevokeSessionParams{FamilyID: familyID, Now: s.clk.Now()}); err != nil {
+		return fmt.Errorf("auth: revoke session: %w", err)
+	}
+	return nil
+}
+
+// RevokeAllSessions revokes every refresh token of a user (password reset).
+func (s *RefreshTokens) RevokeAllSessions(ctx context.Context, q db.DBTX, userID uuid.UUID) error {
+	if _, err := authdb.New(q).RevokeAllSessionsOfUser(ctx, authdb.RevokeAllSessionsOfUserParams{UserID: userID, Now: s.clk.Now()}); err != nil {
+		return fmt.Errorf("auth: revoke all sessions: %w", err)
+	}
+	return nil
 }
 
 // SessionActive reports whether the session still has a usable refresh token.
