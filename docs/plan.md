@@ -51,9 +51,11 @@ Karena dikerjakan di sela waktu luang, tiap fase sengaja berakhir pada milestone
 
 **Database (diputuskan):** PostgreSQL 18 (UUID v7 lewat `uuidv7()` bawaan).
 
-**Library (diputuskan):** `gin` (HTTP), `pgx` (driver PostgreSQL), `sqlc` (query SQL type-safe, tanpa ORM), `goose` (migrasi), `zerolog` (logger), `testcontainers-go` (integration test), `mockery` (generate mock interface untuk unit test).
+**Library (diputuskan):** `gin` (HTTP), `pgx` (driver PostgreSQL), `sqlc` (query SQL type-safe, tanpa ORM), `goose` (migrasi), `zerolog` (logger), `testcontainers-go` (integration test), `mockery` (generate mock interface untuk unit test), `go-redis` (Redis).
 
 **Logging & tracing (diputuskan):** `trace_id` (selain `request_id`) ada di setiap log dan ikut ke job outbox, sehingga request → email di worker bisa ditelusuri. Dipropagasi lewat `context.Context`; logger di-inject lewat constructor (wiring manual di `cmd/*`, tanpa framework DI, tanpa logger global). Detail di spec §11.1. Pondasinya dibuat di Fase 0 (`platform/logger`, middleware); penyimpanan `trace_id` di outbox masuk Fase 1.
+
+**Redis (diputuskan):** satu instance bersama untuk state sementara (rate limit sekarang, cache nanti), dengan namespace key per modul. PostgreSQL tetap sumber kebenaran, terutama untuk uang. Redis dikerjakan di tengah Fase 2 (menggantikan rate limiter berbasis PostgreSQL yang sempat dibuat), dengan antarmuka `Limiter` yang tidak berubah.
 
 **Konkurensi (diputuskan):** pekerjaan independen dijalankan paralel dengan goroutine, tetapi hanya lewat helper `platform/safego` (recover panic + log + pelacakan untuk graceful shutdown + `Group` berbatas); `go func()` mentah dilarang. Operasi dalam satu transaksi DB tetap berurutan. Detail di spec §11.2. Helper dibuat di Fase 0 karena worker (Fase 1) dan modul sesudahnya memakainya.
 

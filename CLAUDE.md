@@ -19,13 +19,14 @@ Boilerplate SaaS multi-tenant (Go + PostgreSQL) yang bisa dipakai ulang: auth, u
 
 ## Keputusan yang sudah final (jangan diulang tanyakan)
 
-- Stack: `gin` (HTTP), `pgx` (driver), **`sqlc` untuk semua query, tanpa ORM/GORM**, `goose` (migrasi SQL), `zerolog` (logger), `testcontainers-go` (integration test), `mockery` (generate mock interface untuk unit test).
+- Stack: `gin` (HTTP), `pgx` (driver), **`sqlc` untuk semua query, tanpa ORM/GORM**, `goose` (migrasi SQL), `zerolog` (logger), `testcontainers-go` (integration test), `mockery` (generate mock interface untuk unit test), **Redis** (`go-redis`) untuk state sementara.
 - PostgreSQL **18**; UUID v7 lewat `uuidv7()` bawaan.
 - Payment gateway pertama: **Midtrans**, di balik interface `PaymentProvider`.
 - Registrasi masuk plan **Free**; trial dipicu saat memilih plan berbayar.
 - **RLS PostgreSQL dipakai** sebagai lapisan isolasi tenant kedua.
 - Nomor invoice **global**. Frontend belum ditentukan (API agnostik).
 - Konfigurasi **hanya dari `config.json`** (path lewat flag `-config`, default `./config.json`), bukan env var. `config.json` ada di `.gitignore`; `config.example.json` di-commit dan harus selalu valid (ada test-nya). Setiap setting baru ditambahkan ke struct `platform/config`, ke `Default()`, dan ke `config.example.json`.
+- **Redis satu instance, dipakai bersama oleh banyak modul** (rate limit sekarang; cache dan lainnya nanti). Pembagian peran: **PostgreSQL = sumber kebenaran** (user, org, langganan, invoice, uang, outbox); **Redis = state sementara/turunan** yang boleh hilang tanpa merusak data (rate limit, cache). Jangan menyimpan data yang harus tahan lama atau data uang hanya di Redis. Semua key diawali `<redis.key_prefix>:<modul>:` (mis. `saka:ratelimit:login:...`) lewat helper `platform/redisx`, supaya modul tidak saling menimpa dan satu Redis bisa dipakai banyak environment/service.
 - Provider email produksi **ditunda ke Fase 7**; dev memakai Mailpit lewat interface `Mailer`.
 
 ## Arsitektur (butuh membaca beberapa bagian spec untuk paham)

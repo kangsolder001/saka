@@ -33,6 +33,7 @@ Membangun fondasi SaaS yang bisa dipakai ulang untuk produk apa pun. Begitu ada 
 | Access token | JWT, masa berlaku 15 menit |
 | Refresh token | Token acak opaque, disimpan dalam bentuk hash, masa berlaku 30 hari, dirotasi |
 | Background job | Outbox table + worker (queue eksternal seperti RabbitMQ opsional) |
+| State sementara | Redis (satu instance bersama): rate limit, cache. Bukan sumber kebenaran; data penting tetap di PostgreSQL |
 | Payment gateway | Diabstraksi lewat interface; implementasi pertama Midtrans atau Xendit |
 
 ### Struktur proyek
@@ -327,7 +328,8 @@ Hal-hal yang tidak ditentukan §5.1–5.5 dan sudah diputuskan di Fase 2:
 - **Logout** mencabut seluruh family sesi saat ini dan menghapus cookie.
 - **Resend verification** untuk user yang sudah terverifikasi → `409 CONFLICT`. Mengirim ulang membuat token baru dan membatalkan token verifikasi lama yang belum dipakai.
 - **Forgot password** selalu `200` dengan pesan generik. Token reset lama yang belum dipakai dibatalkan saat token baru dibuat. Pembuatan token dan job email asinkron, jadi perbedaan waktu antara email terdaftar dan tidak sangat kecil; rate limit per email menutup sisanya.
-- **Rate limit** disimpan di PostgreSQL (tabel `rate_limit_hits`, sliding window) agar konsisten antar instance API tanpa infrastruktur tambahan. Hit lama dibersihkan saat key yang sama dipakai lagi. Melebihi batas → `429 RATE_LIMITED` dengan header `Retry-After`. Batas login dihitung dari percobaan **gagal** dan direset saat login berhasil. Batas `forgot-password` berlaku sama untuk email terdaftar maupun tidak.
+- **Rate limit** disimpan di Redis (sorted set per key, sliding window, dievaluasi atomik dengan skrip Lua) sehingga konsisten antar instance API dan cepat. Key berisi hash SHA-256 dari email/IP, bukan nilai aslinya, dan kedaluwarsa otomatis. Bila Redis tidak dapat dihubungi, endpoint yang dibatasi gagal tertutup (500) alih-alih melewati pembatasan. Melebihi batas → `429 RATE_LIMITED` dengan header `Retry-After`. Batas login dihitung dari percobaan **gagal** dan direset saat login berhasil. Batas `forgot-password` berlaku sama untuk email terdaftar maupun tidak.
+- **Redis:** satu instance dipakai bersama banyak modul; semua key diawali `<redis.key_prefix>:<modul>:`. `/readyz` ikut memeriksa Redis. Konfigurasi: section `redis` (`addr`, `password`, `db`, `key_prefix`).
 - **Konfigurasi baru:** `auth.jwt_secret` (minimal 32 karakter, wajib), `auth.access_token_ttl` (default 15m), `auth.refresh_token_ttl` (default 720h), `app.frontend_url` (dasar tautan di email: `<frontend_url>/verify-email?token=...`, `<frontend_url>/reset-password?token=...`).
 
 ---

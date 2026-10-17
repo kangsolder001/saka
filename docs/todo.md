@@ -90,6 +90,12 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Rate limiter berbasis PostgreSQL (tabel `rate_limit_hits`, §5.6) + aturan per endpoint (§5.4) (0.7)
 - [x] Test unit service auth; integration: rotasi, reuse detection, token sekali pakai, tidak ada user enumeration (0.7). Test ditulis bersama tiap unit; pemetaan AC ke test ada di spec §12
 
+### Tambahan Fase 2: Redis (infrastruktur bersama)
+
+- [ ] `docker-compose`: Redis (host port 6380) + section `redis` di config (`addr`, `password`, `db`, `key_prefix`) (0.2)
+- [ ] `platform/redisx`: klien `go-redis`, helper key ber-namespace, ping + `/readyz` memeriksa Redis (0.3)
+- [ ] Pindahkan rate limiter ke Redis (sorted set + Lua atomik); hapus implementasi PostgreSQL + migrasi drop `rate_limit_hits`; test integrasi dengan Redis asli (0.6)
+
 **Selesai bila:** AC Auth (§12) lulus, kecuali "otomatis punya organisasi dan plan Free" (menunggu Fase 4–5).
 
 ---
