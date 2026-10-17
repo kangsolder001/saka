@@ -63,6 +63,7 @@ Aturan: modul hanya boleh saling memanggil lewat interface/service publik, bukan
 - Format: JSON
 - Autentikasi: `Authorization: Bearer <access_token>`
 - Resource milik organisasi selalu di bawah `/orgs/{orgId}/...`
+- Setiap respons menyertakan header `X-Request-ID` dan `X-Trace-ID` (lihat §11.1).
 
 ### Format error
 
@@ -258,6 +259,7 @@ Constraint: `UNIQUE (provider, event_id)`.
 | attempts | int | |
 | next_attempt_at | timestamptz | |
 | last_error | text NULL | |
+| trace_id | text NULL | `trace_id` dari request asal, dipulihkan oleh worker (§11.1) |
 | created_at, updated_at | timestamptz | |
 
 Job dimasukkan dalam **transaksi yang sama** dengan perubahan data, supaya tidak ada email yang terkirim untuk data yang gagal disimpan (atau sebaliknya).
@@ -559,10 +561,35 @@ service (dalam transaksi) ──insert──▶ outbox_jobs ──▶ worker ─
 ## 11. Kebutuhan Non-Fungsional
 
 - **Keamanan:** HTTPS wajib, header keamanan standar, CORS terbatas, semua input divalidasi, query parametrized, secret dari environment variable.
-- **Observability:** structured logging (JSON) dengan `request_id`, `user_id`, `org_id`; endpoint `/healthz` dan `/readyz`.
+- **Observability:** structured logging (JSON) dengan `trace_id`, `request_id`, `user_id`, `org_id` (lihat §11.1); endpoint `/healthz` dan `/readyz`.
 - **Konsistensi:** semua operasi multi-tabel dalam satu transaksi.
 - **Testing:** unit test untuk service layer; integration test dengan PostgreSQL asli (testcontainers) untuk repository, webhook, dan isolasi tenant.
 - **Seed data:** perintah untuk membuat plan default dan akun demo di environment dev.
+
+### 11.1 Logging, trace ID & context propagation
+
+Tujuan: satu `trace_id` bisa dipakai untuk menelusuri request HTTP sampai job outbox yang dihasilkannya (mis. email verifikasi), lintas modul dan proses.
+
+- **Dua ID.** `request_id` unik per request HTTP; `trace_id` mengikuti alur kerja end-to-end (request → outbox → worker). Format `trace_id`: 32 karakter hex (kompatibel W3C Trace Context).
+- **Asal ID.** Middleware HTTP membaca header `traceparent` (W3C) bila ada dan valid; selain itu membuat `trace_id` baru. `request_id` selalu dibuat baru. Keduanya dikembalikan lewat header `X-Request-ID` dan `X-Trace-ID`.
+- **Context propagation.** `trace_id`, `request_id`, `user_id`, `org_id` disimpan di `context.Context` lewat helper `platform` (key bertipe privat, bukan string). Semua fungsi yang melakukan I/O menerima `ctx context.Context` sebagai parameter pertama dan meneruskannya ke layer di bawahnya (service → repository → `pgx`, `PaymentProvider`, `Mailer`). ID tidak pernah dioper sebagai argumen terpisah atau dibaca dari variabel global.
+- **Dependency injection.** Logger dibuat sekali di composition root (`cmd/api`, `cmd/worker`) dan **di-inject lewat constructor** ke middleware, service, repository, dan worker; tanpa logger global dan tanpa framework DI (wiring manual). Saat menulis log, komponen mengambil logger turunan dari context (`logger.FromContext(ctx)` atau setara) yang otomatis menyertakan field ID di atas, jadi pemanggil tidak perlu menulis field itu manual.
+- **Lintas proses (outbox).** `Enqueue(tx, job)` menyimpan `trace_id` dari context ke kolom `outbox_jobs.trace_id`. Worker memulihkan `trace_id` ke context sebelum memproses job (dan membuat `request_id`/`job_id` baru), sehingga log pengirim email memakai `trace_id` yang sama dengan request asalnya.
+- **Panggilan keluar.** Panggilan ke gateway pembayaran meneruskan `trace_id` lewat context (dan header `traceparent` bila didukung) agar bisa dicocokkan di log.
+- **Format log.** JSON satu baris per event; field minimal: `time`, `level`, `message`, `trace_id`, `request_id`; ditambah `user_id`/`org_id` bila sudah diketahui (setelah auth/tenant middleware). Token, password, dan header `Authorization` tidak boleh masuk log.
+- **Test.** Unit test memastikan logger dari context memuat field ID; integration test memastikan `trace_id` request sampai ke job outbox dan log worker.
+
+### 11.2 Konkurensi (goroutine)
+
+- **Pakai goroutine untuk pekerjaan yang independen dan bisa paralel** (mis. beberapa query baca yang tidak saling bergantung, panggilan ke beberapa layanan eksternal, pemrosesan job di worker). Jangan dipakai untuk urutan yang saling bergantung, dan jangan menambah konkurensi tanpa alasan.
+- **Dilarang `go func() {...}()` mentah** di kode aplikasi. Semua goroutine dibuat lewat helper `platform/safego`, supaya panic tertangkap dan goroutine tidak lepas kontrol.
+- **Helper `safego`:**
+  - `Go(ctx, name, fn)` untuk fire-and-forget: `recover()` panic, catat log level error berisi `name`, panic value, stack trace, dan `trace_id` dari context; proses tidak crash. Goroutine ikut terlacak (WaitGroup) agar graceful shutdown bisa menunggunya.
+  - `Group` (dibangun di atas `errgroup`) untuk fan-out/fan-in: `Go(name, fn func(ctx) error)`, `Wait() error`. Panic diubah menjadi error, error pertama membatalkan context anggota lain, dan ada batas konkurensi (`SetLimit`) agar tidak membuat goroutine tanpa batas.
+  - Runner menerima logger lewat constructor (sesuai §11.1) dan meneruskan `ctx` ke fungsi yang dijalankan sehingga `trace_id` ikut.
+- **Mencegah goroutine leak.** `recover` hanya mencegah crash; kebocoran dicegah dengan aturan berikut: setiap goroutine menerima `ctx` dan **wajib berhenti saat `ctx` dibatalkan**; setiap goroutine punya pemilik yang menunggunya (`Wait()` atau WaitGroup milik runner); channel tidak dibiarkan menggantung (selalu ada jalur keluar lewat `ctx.Done()`); server dan worker menunggu goroutine selesai (dengan timeout) saat shutdown.
+- **Transaksi tidak boleh dipakai paralel.** `pgx.Tx` tidak aman untuk akses bersamaan, jadi operasi di dalam satu transaksi (`WithTx`) berjalan berurutan. Paralelisme hanya untuk operasi di luar transaksi atau yang memakai koneksi/transaksi sendiri.
+- **Test.** Unit test `safego`: panic tertangkap dan dilog, error `Group` merambat, batas konkurensi dihormati, context batal menghentikan goroutine, tidak ada goroutine tersisa setelah `Wait()` (mis. dengan `goleak`).
 
 ---
 

@@ -29,21 +29,25 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 
 ## Fase 0 — Setup & Platform (3 hari)
 
-- [x] Library diputuskan: `gin`, `pgx`, `sqlc`, `goose`, `zerolog`, `testcontainers-go`
-- [ ] Init repo Go, `go.mod`, struktur folder `cmd/` `internal/` `migrations/` `templates/email/` (§2) (0.25)
+- [x] Library diputuskan: `gin`, `pgx`, `sqlc`, `goose`, `zerolog`, `testcontainers-go`, `mockery`
+- [x] Init repo Go, `go.mod`, struktur folder `cmd/` `internal/` `migrations/` `templates/email/` (§2) (0.25)
 - [ ] Konfigurasi `sqlc.yaml` dan `goose` (0.25)
+- [ ] Konfigurasi `mockery` (`.mockery.yml`, mock di-generate ke folder `mocks/` per package, target `make mocks`) (0.1)
 - [ ] `docker-compose`: PostgreSQL 18, Mailpit (0.25)
 - [ ] `platform/config`: load env var, validasi (0.25)
 - [ ] `platform/db`: koneksi pool `pgx`, helper transaksi `WithTx` (0.25)
 - [ ] `platform/clock`: interface Clock + fake untuk test (0.1)
 - [ ] `platform/errors`: tipe error + format JSON & kode error (§3) (0.25)
-- [ ] `platform/logger`: `zerolog` JSON dengan `request_id` (§11) (0.1)
-- [ ] Middleware `gin`: request id, recover, logging, CORS, security headers (0.25)
+- [ ] `platform/logger`: `zerolog` JSON; logger di-inject lewat constructor, `FromContext(ctx)` menyertakan `trace_id`, `request_id`, `user_id`, `org_id` (§11.1) (0.25)
+- [ ] Context propagation: helper `platform` untuk simpan/ambil `trace_id`, `request_id`, `user_id`, `org_id` di `context.Context` (key bertipe privat) + unit test (0.15)
+- [ ] `platform/safego`: `Go(ctx, name, fn)` dengan `recover` + log (stack, `trace_id`) + pelacakan untuk shutdown, dan `Group` berbasis `errgroup` (panic → error, `SetLimit`) (§11.2) (0.25)
+- [ ] Test `safego`: panic tertangkap, error merambat, batas konkurensi, context batal, tidak ada goroutine tersisa (`goleak`) (0.15)
+- [ ] Middleware `gin`: request id + trace id (baca `traceparent`, set header `X-Request-ID`/`X-Trace-ID`), recover, logging, CORS, security headers (0.3)
 - [ ] Util: UUID v7 (pakai `uuidv7()` bawaan PostgreSQL 18), cursor pagination, validasi input (0.25)
 - [ ] Endpoint `/healthz` dan `/readyz` (0.1)
 - [ ] Migrasi pertama: ekstensi `citext`, tabel `users` (§4.1) (0.1)
 - [ ] Setup CI (lint, unit test, integration test via `testcontainers-go`) (0.25)
-- [ ] Makefile / task runner: migrate, run, test, seed, sqlc (0.1)
+- [ ] Makefile / task runner: migrate, run, test, seed, sqlc, mocks (0.1)
 
 **Selesai bila:** API jalan, health check hijau, CI hijau.
 
@@ -51,15 +55,15 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 
 ## Fase 1 — Outbox & Mail (3 hari)
 
-- [ ] Migrasi `outbox_jobs` (§4.11) (0.1)
-- [ ] Repo outbox: `Enqueue(tx, job)` dalam transaksi pemanggil (0.25)
-- [ ] Worker: polling dengan `SELECT … FOR UPDATE SKIP LOCKED`, status `processing/done/failed` (0.5)
+- [ ] Migrasi `outbox_jobs` (§4.11, termasuk kolom `trace_id`) (0.1)
+- [ ] Repo outbox: `Enqueue(tx, job)` dalam transaksi pemanggil; simpan `trace_id` dari context ke `outbox_jobs.trace_id` (0.3)
+- [ ] Worker: polling dengan `SELECT … FOR UPDATE SKIP LOCKED`, status `processing/done/failed`; job diproses paralel (jumlah worker goroutine dikonfigurasi) lewat `safego` (0.5)
 - [ ] Retry exponential backoff 1m, 5m, 30m, 2j, 6j; gagal ke-5 → `failed` (§10.1) (0.3)
 - [ ] Interface `Mailer` + implementasi SMTP (Mailpit) + implementasi log (0.3)
 - [ ] Renderer template `html/template` (HTML + plain text) + layout dasar (0.3)
 - [ ] Template awal: `verify_email`, `password_reset`, `password_changed` (0.3)
-- [ ] `cmd/worker` entrypoint + graceful shutdown (0.15)
-- [ ] Test: job diproses sekali saat 2 worker jalan; backoff sesuai jadwal (fake clock); rollback tx → tidak ada job (0.5)
+- [ ] `cmd/worker` entrypoint + graceful shutdown; worker memulihkan `trace_id` job ke context sebelum proses (0.25)
+- [ ] Test: job diproses sekali saat 2 worker jalan; backoff sesuai jadwal (fake clock); rollback tx → tidak ada job; `trace_id` request sampai ke job dan log worker (0.6)
 
 **Selesai bila:** email test terkirim ke Mailpit lewat outbox; AC Email (§12) untuk retry dan non-sinkron terpenuhi.
 
@@ -180,7 +184,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 
 - [ ] Telusuri seluruh checklist §12 ↔ test otomatis; tutup celah (0.6)
 - [ ] Review keamanan: header, CORS, validasi input, secret di env, query parametrized, rate limit (0.6)
-- [ ] Observability: `user_id` & `org_id` di log, log job gagal (0.3)
+- [ ] Observability: audit bahwa `user_id` & `org_id` & `trace_id` muncul di log lintas modul, log job gagal, token/password tidak bocor ke log (0.3)
 - [ ] Uji beban ringan endpoint auth & webhook (0.3)
 - [ ] Putuskan provider email produksi (Resend/Brevo/SES) + implementasi `Mailer` + setup SPF/DKIM domain (0.5)
 - [ ] Dokumentasi: README (setup, env, jalankan API + worker), daftar endpoint/OpenAPI (0.6)

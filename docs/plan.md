@@ -51,7 +51,11 @@ Karena dikerjakan di sela waktu luang, tiap fase sengaja berakhir pada milestone
 
 **Database (diputuskan):** PostgreSQL 18 (UUID v7 lewat `uuidv7()` bawaan).
 
-**Library (diputuskan):** `gin` (HTTP), `pgx` (driver PostgreSQL), `sqlc` (query SQL type-safe, tanpa ORM), `goose` (migrasi), `zerolog` (logger), `testcontainers-go` (integration test).
+**Library (diputuskan):** `gin` (HTTP), `pgx` (driver PostgreSQL), `sqlc` (query SQL type-safe, tanpa ORM), `goose` (migrasi), `zerolog` (logger), `testcontainers-go` (integration test), `mockery` (generate mock interface untuk unit test).
+
+**Logging & tracing (diputuskan):** `trace_id` (selain `request_id`) ada di setiap log dan ikut ke job outbox, sehingga request → email di worker bisa ditelusuri. Dipropagasi lewat `context.Context`; logger di-inject lewat constructor (wiring manual di `cmd/*`, tanpa framework DI, tanpa logger global). Detail di spec §11.1. Pondasinya dibuat di Fase 0 (`platform/logger`, middleware); penyimpanan `trace_id` di outbox masuk Fase 1.
+
+**Konkurensi (diputuskan):** pekerjaan independen dijalankan paralel dengan goroutine, tetapi hanya lewat helper `platform/safego` (recover panic + log + pelacakan untuk graceful shutdown + `Group` berbatas); `go func()` mentah dilarang. Operasi dalam satu transaksi DB tetap berurutan. Detail di spec §11.2. Helper dibuat di Fase 0 karena worker (Fase 1) dan modul sesudahnya memakainya.
 
 **Provider email produksi:** ditunda, diputuskan di Fase 7. Dev memakai Mailpit lewat interface `Mailer`.
 
@@ -68,7 +72,7 @@ Karena dikerjakan di sela waktu luang, tiap fase sengaja berakhir pada milestone
 
 ## 5. Strategi Testing
 
-- **Unit test** service layer dengan fake repo & fake clock (ditulis bersamaan dengan tiap modul).
+- **Unit test** service layer dengan mock `mockery` untuk dependensi & fake clock buatan sendiri (ditulis bersamaan dengan tiap modul).
 - **Integration test** dengan PostgreSQL asli (testcontainers): repository, webhook, isolasi tenant, cron.
 - **Definition of Done per tugas:** kode + test lulus + migrasi terversi + endpoint terdokumentasi di spec/README.
 - CI menjalankan lint, unit test, dan integration test di setiap PR sejak Fase 0.

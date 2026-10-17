@@ -19,7 +19,7 @@ Boilerplate SaaS multi-tenant (Go + PostgreSQL) yang bisa dipakai ulang: auth, u
 
 ## Keputusan yang sudah final (jangan diulang tanyakan)
 
-- Stack: `gin` (HTTP), `pgx` (driver), **`sqlc` untuk semua query, tanpa ORM/GORM**, `goose` (migrasi SQL), `zerolog` (logger), `testcontainers-go` (integration test).
+- Stack: `gin` (HTTP), `pgx` (driver), **`sqlc` untuk semua query, tanpa ORM/GORM**, `goose` (migrasi SQL), `zerolog` (logger), `testcontainers-go` (integration test), `mockery` (generate mock interface untuk unit test).
 - PostgreSQL **18**; UUID v7 lewat `uuidv7()` bawaan.
 - Payment gateway pertama: **Midtrans**, di balik interface `PaymentProvider`.
 - Registrasi masuk plan **Free**; trial dipicu saat memilih plan berbayar.
@@ -37,6 +37,8 @@ Urutan ketergantungan (juga urutan pengerjaan fase): `platform → mail/outbox �
 
 - **Isolasi tenant berlapis.** Route `/orgs/{orgId}/...` melewati tenant middleware: bukan anggota → **404** (bukan 403). `orgId` dan `role` hanya diambil dari `context.Context`, tidak pernah dari input user; query tanpa `organization_id` dianggap bug. Lapisan kedua: RLS dengan `SET LOCAL app.current_org` per transaksi (di helper `WithTx`), aplikasi konek dengan role DB **non-owner**, worker/migrasi butuh jalur bypass. Index tabel org-scoped diawali `organization_id`.
 - **Role/org tidak ada di JWT.** JWT hanya `sub` dan `sid` (15 menit); role dicek dari DB per request agar perubahan langsung berlaku.
+- **Trace ID & context propagation.** `trace_id`, `request_id`, `user_id`, `org_id` hidup di `context.Context` (key bertipe privat); semua fungsi I/O menerima `ctx` sebagai parameter pertama dan meneruskannya. Logger di-inject lewat constructor (wiring manual di `cmd/*`, tanpa logger global/framework DI) dan diambil dari context (`FromContext`) agar field ID otomatis ikut. `trace_id` disimpan di `outbox_jobs.trace_id` dan dipulihkan worker. Detail di spec §11.1.
+- **Goroutine hanya lewat `platform/safego`.** Pekerjaan independen sebaiknya dijalankan paralel, tetapi `go func(){}()` mentah dilarang: helper `safego` menangkap panic (log + stack + `trace_id`), melacak goroutine untuk graceful shutdown, dan `Group` punya batas konkurensi. Setiap goroutine wajib berhenti saat `ctx` batal dan punya pemilik yang menunggunya. Jangan paralelkan operasi dalam satu transaksi (`pgx.Tx` tidak aman untuk akses bersamaan). Detail di spec §11.2.
 - **Outbox untuk semua email.** Job dimasukkan ke `outbox_jobs` dalam **transaksi yang sama** dengan perubahan data; tidak ada pengiriman email sinkron di request. Worker memakai `FOR UPDATE SKIP LOCKED`, retry backoff 1m/5m/30m/2j/6j.
 - **Idempoten untuk uang.** Webhook disimpan di `payment_events` dengan `UNIQUE(provider, event_id)`; verifikasi signature dulu (salah → 401); status bayar hanya dari webhook atau `GetPaymentStatus`, tidak pernah dari redirect klien. Semua job cron billing harus aman dijalankan ulang dan bersamaan.
 - **Mesin langganan buatan sendiri** (gateway lokal tidak punya subscription berulang): invoice per periode → bayar → webhook → perpanjang. State machine di spec §8.2 harus berupa fungsi murni yang bisa diuji dengan fake `Clock`; karena itu semua kode waktu memakai interface `platform/clock`, bukan `time.Now()` langsung.
@@ -46,7 +48,7 @@ Urutan ketergantungan (juga urutan pengerjaan fase): `platform → mail/outbox �
 
 ## Testing
 
-Unit test service layer dengan fake repo/clock; integration test dengan PostgreSQL asli (`testcontainers-go`) untuk repository, webhook, cron, dan **isolasi tenant** (user org A tidak boleh menyentuh data org B). Setiap acceptance criteria di spec §12 harus punya test otomatis.
+Unit test service layer dengan mock hasil generate `mockery` untuk dependensi (repo, `Mailer`, `PaymentProvider`, dll.) dan fake `Clock` buatan sendiri (butuh state waktu yang bisa digeser, bukan sekadar mock); integration test dengan PostgreSQL asli (`testcontainers-go`) untuk repository, webhook, cron, dan **isolasi tenant** (user org A tidak boleh menyentuh data org B). Setiap acceptance criteria di spec §12 harus punya test otomatis.
 
 ## Konvensi kode
 
