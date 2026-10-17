@@ -19,3 +19,4 @@ packages:
   github.com/kangsolder001/saka/internal/mail:
     interfaces:
       Mailer:
+      Sender:
