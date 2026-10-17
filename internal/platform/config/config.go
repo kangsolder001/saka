@@ -9,15 +9,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/mail"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 )
 
 // DefaultPath is the config file used when none is given.
 const DefaultPath = "config.json"
+
+var keyPrefixPattern = regexp.MustCompile(`^[a-z0-9_-]{1,32}$`)
 
 const (
 	minJWTSecretLen   = 32
@@ -60,6 +64,7 @@ type Config struct {
 	App      AppConfig      `json:"app"`
 	Database DatabaseConfig `json:"database"`
 	Auth     AuthConfig     `json:"auth"`
+	Redis    RedisConfig    `json:"redis"`
 	Mail     MailConfig     `json:"mail"`
 	Worker   WorkerConfig   `json:"worker"`
 }
@@ -85,6 +90,20 @@ type DatabaseConfig struct {
 	URL      string `json:"url"`
 	MaxConns int32  `json:"max_conns"`
 	MinConns int32  `json:"min_conns"`
+}
+
+// RedisConfig covers the shared Redis instance (rate limits, caches). Redis is
+// never the source of truth: PostgreSQL is.
+type RedisConfig struct {
+	Addr     string `json:"addr"`
+	Password string `json:"password"`
+	DB       int    `json:"db"`
+	// KeyPrefix starts every key (<prefix>:<module>:...), so modules, services
+	// and environments sharing one Redis never collide.
+	KeyPrefix string `json:"key_prefix"`
+	// UserCacheTTL bounds how long cached member data may be stale if an
+	// invalidation is ever missed.
+	UserCacheTTL Duration `json:"user_cache_ttl"`
 }
 
 // AuthConfig covers token signing and lifetimes.
@@ -136,6 +155,11 @@ func Default() Config {
 			RefreshTokenTTL: Duration(30 * 24 * time.Hour),
 		},
 		Database: DatabaseConfig{MaxConns: 10, MinConns: 0},
+		Redis: RedisConfig{
+			Addr:         "localhost:6379",
+			KeyPrefix:    "saka",
+			UserCacheTTL: Duration(5 * time.Minute),
+		},
 		Mail: MailConfig{
 			Driver: "log",
 			From:   "Saka <noreply@saka.local>",
@@ -251,6 +275,19 @@ func (c Config) Validate() error {
 	}
 	if c.Database.MinConns < 0 || c.Database.MinConns > c.Database.MaxConns {
 		add("database.min_conns must be between 0 and database.max_conns")
+	}
+
+	if host, port, err := net.SplitHostPort(c.Redis.Addr); err != nil || host == "" || port == "" {
+		add("redis.addr must be host:port such as localhost:6379")
+	}
+	if c.Redis.DB < 0 || c.Redis.DB > 15 {
+		add("redis.db must be between 0 and 15")
+	}
+	if !keyPrefixPattern.MatchString(c.Redis.KeyPrefix) {
+		add("redis.key_prefix must be 1-32 characters of a-z, 0-9, _ or -")
+	}
+	if c.Redis.UserCacheTTL <= 0 || c.Redis.UserCacheTTL > Duration(24*time.Hour) {
+		add("redis.user_cache_ttl must be between 1s and 24h")
 	}
 
 	switch c.Mail.Driver {

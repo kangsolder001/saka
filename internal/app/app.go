@@ -18,6 +18,7 @@ import (
 	"github.com/kangsolder001/saka/internal/platform/logger"
 	"github.com/kangsolder001/saka/internal/platform/outbox"
 	"github.com/kangsolder001/saka/internal/platform/ratelimit"
+	"github.com/kangsolder001/saka/internal/platform/redisx"
 	"github.com/kangsolder001/saka/internal/user"
 	emailtemplates "github.com/kangsolder001/saka/templates/email"
 )
@@ -30,8 +31,8 @@ type Options struct {
 
 // NewRouter builds the API: global middleware, health endpoints and every
 // module's routes under /api/v1.
-func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database *db.DB, opts Options) (*gin.Engine, error) {
-	router, err := httpx.NewRouter(cfg, log, clk, database)
+func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database *db.DB, redis *redisx.Client, opts Options) (*gin.Engine, error) {
+	router, err := httpx.NewRouter(cfg, log, clk, map[string]httpx.Pinger{"database": database, "redis": redis})
 	if err != nil {
 		return nil, err
 	}

@@ -17,6 +17,7 @@ import (
 	"github.com/kangsolder001/saka/internal/platform/config"
 	"github.com/kangsolder001/saka/internal/platform/db"
 	"github.com/kangsolder001/saka/internal/platform/logger"
+	"github.com/kangsolder001/saka/internal/platform/redisx"
 	"github.com/kangsolder001/saka/internal/platform/safego"
 )
 
@@ -52,8 +53,14 @@ func run() error {
 	}
 	defer database.Close()
 
+	redis, err := redisx.Connect(ctx, cfg.Redis)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = redis.Close() }()
+
 	runner := safego.NewRunner(log)
-	router, err := app.NewRouter(cfg, log, clock.Real{}, database, app.Options{})
+	router, err := app.NewRouter(cfg, log, clock.Real{}, database, redis, app.Options{})
 	if err != nil {
 		return err
 	}

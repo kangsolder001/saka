@@ -22,7 +22,7 @@ func newRouter(t *testing.T, pinger httpx.Pinger) http.Handler {
 	cfg := config.Default()
 	cfg.Database.URL = "postgres://u:p@localhost/db"
 
-	r, err := httpx.NewRouter(cfg, logger.Nop(), clock.NewFake(time.Now()), pinger)
+	r, err := httpx.NewRouter(cfg, logger.Nop(), clock.NewFake(time.Now()), map[string]httpx.Pinger{"database": pinger})
 	require.NoError(t, err)
 	return r
 }
@@ -87,7 +87,43 @@ func TestNewRouter_RejectsInvalidTrustedProxies(t *testing.T) {
 	cfg := config.Default()
 	cfg.App.TrustedProxies = []string{"not-an-ip"}
 
-	_, err := httpx.NewRouter(cfg, logger.Nop(), clock.NewFake(time.Now()), mocks.NewMockPinger(t))
+	_, err := httpx.NewRouter(cfg, logger.Nop(), clock.NewFake(time.Now()), map[string]httpx.Pinger{})
 
 	assert.Error(t, err)
+}
+
+func newRouterWithChecks(t *testing.T, checks map[string]httpx.Pinger) http.Handler {
+	t.Helper()
+	cfg := config.Default()
+	cfg.Database.URL = "postgres://u:p@localhost/db"
+	r, err := httpx.NewRouter(cfg, logger.Nop(), clock.NewFake(time.Now()), checks)
+	require.NoError(t, err)
+	return r
+}
+
+func TestReadyz_ReportsEveryCheckAndFailsIfAnyIsDown(t *testing.T) {
+	database := mocks.NewMockPinger(t)
+	database.EXPECT().Ping(mock.Anything).Return(nil).Once()
+	redis := mocks.NewMockPinger(t)
+	redis.EXPECT().Ping(mock.Anything).Return(errors.New("connection refused 10.0.0.9:6379")).Once()
+	r := newRouterWithChecks(t, map[string]httpx.Pinger{"database": database, "redis": redis})
+
+	rec := do(r, http.MethodGet, "/readyz", nil)
+
+	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
+	assert.JSONEq(t, `{"status":"unavailable","checks":{"database":"ok","redis":"down"}}`, rec.Body.String())
+	assert.NotContains(t, rec.Body.String(), "10.0.0.9")
+}
+
+func TestReadyz_AllChecksOK(t *testing.T) {
+	database := mocks.NewMockPinger(t)
+	database.EXPECT().Ping(mock.Anything).Return(nil).Once()
+	redis := mocks.NewMockPinger(t)
+	redis.EXPECT().Ping(mock.Anything).Return(nil).Once()
+	r := newRouterWithChecks(t, map[string]httpx.Pinger{"database": database, "redis": redis})
+
+	rec := do(r, http.MethodGet, "/readyz", nil)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.JSONEq(t, `{"status":"ok","checks":{"database":"ok","redis":"ok"}}`, rec.Body.String())
 }

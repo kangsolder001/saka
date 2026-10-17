@@ -19,6 +19,13 @@
     "access_token_ttl": "15m",
     "refresh_token_ttl": "720h"
   },
+  "redis": {
+    "addr": "localhost:6380",
+    "password": "",
+    "db": 0,
+    "key_prefix": "saka",
+    "user_cache_ttl": "5m"
+  },
   "mail": {
     "driver": "smtp",
     "from": "Saka <noreply@saka.local>",

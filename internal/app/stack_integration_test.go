@@ -21,6 +21,8 @@ import (
 	"github.com/kangsolder001/saka/internal/platform/db"
 	"github.com/kangsolder001/saka/internal/platform/dbtest"
 	"github.com/kangsolder001/saka/internal/platform/logger"
+	"github.com/kangsolder001/saka/internal/platform/redistest"
+	"github.com/kangsolder001/saka/internal/platform/redisx"
 )
 
 func init() { gin.SetMode(gin.TestMode) }
@@ -54,7 +56,12 @@ func newStack(t *testing.T) *stack {
 
 	clk := clock.NewFake(epoch)
 	light := auth.Argon2Params{MemoryKiB: 64, Iterations: 1, Parallelism: 1}
-	router, err := app.NewRouter(cfg, logger.Nop(), clk, d, app.Options{PasswordParams: &light})
+	cfg.Redis = redistest.Config(t)
+	rdb, err := redisx.Connect(context.Background(), cfg.Redis)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = rdb.Close() })
+
+	router, err := app.NewRouter(cfg, logger.Nop(), clk, d, rdb, app.Options{PasswordParams: &light})
 	require.NoError(t, err)
 	return &stack{t: t, router: router, db: d, clock: clk}
 }

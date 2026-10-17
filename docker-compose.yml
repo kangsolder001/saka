@@ -18,6 +18,20 @@ services:
       timeout: 3s
       retries: 10
 
+  # One Redis shared by every module (rate limits, caches). Not a source of
+  # truth, so persistence is off. Published on 6380 to leave 6379 free for a
+  # local Redis.
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   mailpit:
     image: axllent/mailpit:v1.31.6
     ports:

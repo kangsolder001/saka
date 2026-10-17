@@ -3,6 +3,7 @@ package httpx
 import (
 	"context"
 	"net/http"
+	"sort"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -12,7 +13,7 @@ import (
 
 const readinessTimeout = 2 * time.Second
 
-// Pinger is a dependency whose reachability /readyz reports (the database).
+// Pinger is a dependency whose reachability /readyz reports (database, Redis).
 type Pinger interface {
 	Ping(ctx context.Context) error
 }
@@ -22,27 +23,38 @@ func Healthz(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ok"})
 }
 
-// Readyz is the readiness probe: it returns 503 while the database is
-// unreachable, so orchestrators stop routing traffic to this instance.
-// Failure causes go to the log, never to the response.
-func Readyz(log *logger.Logger, db Pinger) gin.HandlerFunc {
+// Readyz is the readiness probe: it returns 503 while any dependency is
+// unreachable, so orchestrators stop routing traffic to this instance. The
+// response names each check but never the failure cause, which goes to the log.
+func Readyz(log *logger.Logger, checks map[string]Pinger) gin.HandlerFunc {
 	log = log.Component("health")
+	names := make([]string, 0, len(checks))
+	for name := range checks {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+
 	return func(c *gin.Context) {
 		ctx, cancel := context.WithTimeout(c.Request.Context(), readinessTimeout)
 		defer cancel()
 
-		if err := db.Ping(ctx); err != nil {
-			zl := log.FromContext(c.Request.Context())
-			zl.Error().Err(err).Msg("readiness check failed")
-			c.JSON(http.StatusServiceUnavailable, gin.H{
-				"status": "unavailable",
-				"checks": gin.H{"database": "down"},
-			})
+		results := gin.H{}
+		healthy := true
+		for _, name := range names {
+			if err := checks[name].Ping(ctx); err != nil {
+				zl := log.FromContext(c.Request.Context())
+				zl.Error().Err(err).Str("check", name).Msg("readiness check failed")
+				results[name] = "down"
+				healthy = false
+				continue
+			}
+			results[name] = "ok"
+		}
+
+		if !healthy {
+			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "unavailable", "checks": results})
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{
-			"status": "ok",
-			"checks": gin.H{"database": "ok"},
-		})
+		c.JSON(http.StatusOK, gin.H{"status": "ok", "checks": results})
 	}
 }

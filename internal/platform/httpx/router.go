@@ -13,7 +13,9 @@ import (
 // NewRouter builds the gin engine with the global middleware chain and the
 // health endpoints. Modules attach their routes to the returned engine
 // (under /api/v1) in cmd/api.
-func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, db Pinger) (*gin.Engine, error) {
+// checks are the dependencies /readyz verifies, by name (for example
+// "database" and "redis").
+func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, checks map[string]Pinger) (*gin.Engine, error) {
 	// Release mode keeps stdout JSON-only (no gin debug banner).
 	gin.SetMode(gin.ReleaseMode)
 
@@ -32,6 +34,6 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, db Pinger
 	r.NoRoute(NotFound)
 
 	r.GET("/healthz", Healthz)
-	r.GET("/readyz", Readyz(log, db))
+	r.GET("/readyz", Readyz(log, checks))
 	return r, nil
 }

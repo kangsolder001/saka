@@ -92,9 +92,10 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 
 ### Tambahan Fase 2: Redis (infrastruktur bersama)
 
-- [ ] `docker-compose`: Redis (host port 6380) + section `redis` di config (`addr`, `password`, `db`, `key_prefix`) (0.2)
-- [ ] `platform/redisx`: klien `go-redis`, helper key ber-namespace, ping + `/readyz` memeriksa Redis (0.3)
+- [x] `docker-compose`: Redis (host port 6380) + section `redis` di config (`addr`, `password`, `db`, `key_prefix`) (0.2)
+- [x] `platform/redisx`: klien `go-redis`, helper key ber-namespace, ping + `/readyz` memeriksa Redis (0.3)
 - [ ] Pindahkan rate limiter ke Redis (sorted set + Lua atomik); hapus implementasi PostgreSQL + migrasi drop `rate_limit_hits`; test integrasi dengan Redis asli (0.6)
+- [ ] Cache data member di Redis (cache-aside, tanpa password hash, TTL pendek) dipakai middleware autentikasi, refresh, dan resend; fungsi invalidasi `InvalidateCache` dipanggil setelah commit pada setiap update member (0.7)
 
 **Selesai bila:** AC Auth (§12) lulus, kecuali "otomatis punya organisasi dan plan Free" (menunggu Fase 4–5).
 
@@ -107,7 +108,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [ ] `POST /me/email` + `POST /me/email/confirm` + template `email_change_confirm`, `email_changed_notice` (0.6)
 - [ ] `GET /me/sessions`, `DELETE /me/sessions/{id}` (0.3)
 - [ ] `DELETE /me`: soft delete + anonimisasi email, cabut semua sesi; pengecekan owner lewat interface ke modul org (stub dulu) (0.4)
-- [ ] Test unit + integration modul user (0.4)
+- [ ] Test unit + integration modul user, termasuk: setiap endpoint yang mengubah member memanggil `user.Service.InvalidateCache` **setelah commit** dan cache tidak pernah basi setelah update (0.5)
 
 **Selesai bila:** AC User (§12) lulus, kecuali penolakan hapus akun owner yang menunggu Fase 4.
 
