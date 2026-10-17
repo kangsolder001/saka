@@ -86,6 +86,7 @@ Aturan: modul hanya boleh saling memanggil lewat interface/service publik, bukan
 | 404 | `NOT_FOUND` |
 | 409 | `CONFLICT` (mis. email sudah terdaftar) |
 | 429 | `RATE_LIMITED` |
+| 500 | `INTERNAL_ERROR` (pesan generik, penyebab hanya masuk log) |
 
 ### Pagination
 

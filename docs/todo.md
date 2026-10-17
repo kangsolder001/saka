@@ -37,7 +37,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] `platform/config`: load env var, validasi (0.25)
 - [ ] `platform/db`: koneksi pool `pgx`, helper transaksi `WithTx` (0.25)
 - [x] `platform/clock`: interface Clock + fake untuk test (0.1)
-- [ ] `platform/errors`: tipe error + format JSON & kode error (§3) (0.25)
+- [x] `platform/apperr` (nama package menghindari bentrok dengan `errors` bawaan): tipe error + format JSON & kode error (§3) (0.25)
 - [ ] `platform/logger`: `zerolog` JSON; logger di-inject lewat constructor, `FromContext(ctx)` menyertakan `trace_id`, `request_id`, `user_id`, `org_id` (§11.1) (0.25)
 - [ ] Context propagation: helper `platform` untuk simpan/ambil `trace_id`, `request_id`, `user_id`, `org_id` di `context.Context` (key bertipe privat) + unit test (0.15)
 - [ ] `platform/safego`: `Go(ctx, name, fn)` dengan `recover` + log (stack, `trace_id`) + pelacakan untuk shutdown, dan `Group` berbasis `errgroup` (panic → error, `SetLimit`) (§11.2) (0.25)

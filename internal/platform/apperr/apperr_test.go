@@ -1,0 +1,114 @@
+package apperr_test
+
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"net/http"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/kangsolder001/saka/internal/platform/apperr"
+)
+
+func TestHTTPStatusMapping(t *testing.T) {
+	tests := []struct {
+		err  *apperr.Error
+		want int
+	}{
+		{apperr.Validation(nil), http.StatusBadRequest},
+		{apperr.Unauthenticated(), http.StatusUnauthorized},
+		{apperr.TokenExpired(), http.StatusUnauthorized},
+		{apperr.Forbidden(), http.StatusForbidden},
+		{apperr.EmailNotVerified(), http.StatusForbidden},
+		{apperr.PlanFeatureUnavailable("audit_log"), http.StatusForbidden},
+		{apperr.PlanLimitReached("members", 3), http.StatusPaymentRequired},
+		{apperr.SubscriptionInactive(), http.StatusPaymentRequired},
+		{apperr.NotFound(), http.StatusNotFound},
+		{apperr.Conflict("email sudah terdaftar"), http.StatusConflict},
+		{apperr.RateLimited(), http.StatusTooManyRequests},
+		{apperr.Internal(errors.New("boom")), http.StatusInternalServerError},
+		{apperr.New("UNKNOWN", "x"), http.StatusInternalServerError},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.err.Code), func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.err.HTTPStatus())
+		})
+	}
+}
+
+func TestResponse_PlanLimitReachedMatchesSpecFormat(t *testing.T) {
+	status, body := apperr.PlanLimitReached("members", 3).Response()
+
+	raw, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusPaymentRequired, status)
+	assert.JSONEq(t, `{"error":{"code":"PLAN_LIMIT_REACHED","message":"Batas paket tercapai.","details":{"limit":"members","max":3}}}`, string(raw))
+}
+
+func TestResponse_DetailsIsAlwaysAnObject(t *testing.T) {
+	_, body := apperr.NotFound().Response()
+
+	raw, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	assert.Contains(t, string(raw), `"details":{}`)
+}
+
+func TestResponse_ValidationFields(t *testing.T) {
+	_, body := apperr.Validation(map[string]string{"email": "invalid format"}).Response()
+
+	assert.Equal(t, map[string]any{"fields": map[string]string{"email": "invalid format"}}, body.Error.Details)
+}
+
+func TestResponse_InternalNeverLeaksCause(t *testing.T) {
+	err := apperr.Internal(errors.New("pq: password authentication failed")).
+		WithDetails(map[string]any{"secret": "x"})
+
+	status, body := err.Response()
+	raw, _ := json.Marshal(body)
+
+	assert.Equal(t, http.StatusInternalServerError, status)
+	assert.NotContains(t, string(raw), "password")
+	assert.NotContains(t, string(raw), "secret")
+}
+
+func TestFrom(t *testing.T) {
+	t.Run("keeps application errors, even when wrapped", func(t *testing.T) {
+		wrapped := fmt.Errorf("create user: %w", apperr.Conflict("email sudah terdaftar"))
+
+		got := apperr.From(wrapped)
+
+		assert.Equal(t, apperr.CodeConflict, got.Code)
+	})
+
+	t.Run("turns unknown errors into internal errors", func(t *testing.T) {
+		cause := errors.New("disk full")
+
+		got := apperr.From(cause)
+
+		assert.Equal(t, apperr.CodeInternal, got.Code)
+		assert.ErrorIs(t, got, cause)
+	})
+}
+
+func TestIsCodeAndIs(t *testing.T) {
+	err := fmt.Errorf("lookup: %w", apperr.NotFound())
+
+	assert.True(t, apperr.IsCode(err, apperr.CodeNotFound))
+	assert.False(t, apperr.IsCode(err, apperr.CodeConflict))
+	assert.ErrorIs(t, err, apperr.NotFound())
+	assert.False(t, apperr.IsCode(errors.New("plain"), apperr.CodeNotFound))
+}
+
+func TestWithDetailsDoesNotMutateOriginal(t *testing.T) {
+	base := apperr.Forbidden()
+
+	_ = base.WithDetails(map[string]any{"a": 1})
+
+	assert.Nil(t, base.Details)
+}
