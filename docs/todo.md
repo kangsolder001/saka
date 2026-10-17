@@ -33,7 +33,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Init repo Go, `go.mod`, struktur folder `cmd/` `internal/` `migrations/` `templates/email/` (§2) (0.25)
 - [x] Konfigurasi `sqlc.yaml` dan `goose` (0.25)
 - [x] Konfigurasi `mockery` (`.mockery.yml`, mock di-generate ke folder `mocks/` per package, target `make mocks`) (0.1)
-- [ ] `docker-compose`: PostgreSQL 18, Mailpit (0.25)
+- [x] `docker-compose`: PostgreSQL 18, Mailpit (0.25)
 - [ ] `platform/config`: load env var, validasi (0.25)
 - [ ] `platform/db`: koneksi pool `pgx`, helper transaksi `WithTx` (0.25)
 - [ ] `platform/clock`: interface Clock + fake untuk test (0.1)

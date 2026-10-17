@@ -1,0 +1,28 @@
+# Local development services. PostgreSQL is published on 5433 so it does not
+# clash with a PostgreSQL already listening on 5432.
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: saka
+      POSTGRES_PASSWORD: saka
+      POSTGRES_DB: saka
+    ports:
+      - "5433:5432"
+    volumes:
+      # PostgreSQL 18 images keep data under /var/lib/postgresql (versioned subdir).
+      - saka_pgdata:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saka -d saka"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # web UI
+
+volumes:
+  saka_pgdata:
