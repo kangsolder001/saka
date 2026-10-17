@@ -48,6 +48,8 @@ func (h *Handler) Routes(rg *gin.RouterGroup) {
 	g.POST("/verify-email", h.verifyEmail)
 	g.POST("/login", h.login)
 	g.POST("/refresh", h.refresh)
+	g.POST("/forgot-password", h.forgotPassword)
+	g.POST("/reset-password", h.resetPassword)
 
 	authed := g.Group("", h.mw.Authenticate())
 	authed.POST("/resend-verification", h.resendVerification)
@@ -240,4 +242,39 @@ func (h *Handler) logout(c *gin.Context) {
 	}
 	h.clearRefreshCookie(c)
 	c.Status(http.StatusNoContent)
+}
+
+type forgotPasswordRequest struct {
+	Email string `json:"email" validate:"required,email,max=254"`
+}
+
+// forgotPassword always answers 200 with the same body, whether or not the
+// email is registered (spec §5.2).
+func (h *Handler) forgotPassword(c *gin.Context) {
+	var req forgotPasswordRequest
+	if !httpx.BindJSON(c, &req) {
+		return
+	}
+	if err := h.svc.ForgotPassword(c.Request.Context(), req.Email); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Jika email terdaftar, tautan untuk mengatur ulang password telah dikirim."})
+}
+
+type resetPasswordRequest struct {
+	Token    string `json:"token" validate:"required,max=256"`
+	Password string `json:"password" validate:"required,max=1024"`
+}
+
+func (h *Handler) resetPassword(c *gin.Context) {
+	var req resetPasswordRequest
+	if !httpx.BindJSON(c, &req) {
+		return
+	}
+	if err := h.svc.ResetPassword(c.Request.Context(), req.Token, req.Password); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"message": "Password berhasil diubah. Silakan login kembali."})
 }

@@ -86,7 +86,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Refresh token: issue, rotasi, `replaced_by`, deteksi reuse → cabut family (§5.3) (0.7)
 - [x] `POST /auth/refresh` (cookie HttpOnly untuk web, body untuk mobile) (0.3)
 - [x] `POST /auth/logout` (0.1)
-- [ ] `POST /auth/forgot-password` (selalu 200) + `POST /auth/reset-password` (cabut semua refresh token, kirim `password_changed`) (0.5)
+- [x] `POST /auth/forgot-password` (selalu 200) + `POST /auth/reset-password` (cabut semua refresh token, kirim `password_changed`) (0.5)
 - [ ] Rate limiter berbasis PostgreSQL (tabel `rate_limit_hits`, §5.6) + aturan per endpoint (§5.4) (0.7)
 - [ ] Test unit service auth; integration: rotasi, reuse detection, token sekali pakai, tidak ada user enumeration (0.7)
 

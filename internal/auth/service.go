@@ -385,3 +385,84 @@ func (s *Service) Refresh(ctx context.Context, rawToken string, client ClientInf
 func (s *Service) Logout(ctx context.Context, p Principal) error {
 	return s.Sessions.RevokeSession(ctx, s.Pool, p.SessionID)
 }
+
+// ForgotPassword emails a password reset link when the address belongs to an
+// active account. It returns nil whether or not the account exists, so the
+// caller can always answer 200 and the endpoint cannot be used to discover
+// which emails are registered. (The token insert is the only extra work for an
+// existing account and the email itself is sent asynchronously, so the timing
+// difference is negligible; the per-email rate limit covers the rest.)
+func (s *Service) ForgotPassword(ctx context.Context, email string) error {
+	u, err := s.Users.GetByEmail(ctx, s.Pool, email)
+	if err != nil {
+		if apperr.IsCode(err, apperr.CodeNotFound) {
+			return nil
+		}
+		return err
+	}
+	if u.Status != user.StatusActive {
+		return nil
+	}
+
+	return s.Tx.WithTx(ctx, func(tx pgx.Tx) error {
+		raw, err := s.Tokens.Issue(ctx, tx, u.ID, TokenPasswordReset, nil)
+		if err != nil {
+			return err
+		}
+		return s.Mail.Send(ctx, tx, mail.Email{
+			Template: "password_reset",
+			To:       u.Email,
+			Data: map[string]any{
+				"name": u.Name,
+				"url":  s.link("/reset-password", raw),
+			},
+		})
+	})
+}
+
+// ResetPassword sets a new password using a reset token. In one transaction it
+// consumes the token, stores the new hash, revokes every session of the user
+// and queues the "password changed" notice. If anything fails (for example the
+// new password equals the email) the token is not consumed and can be retried.
+func (s *Service) ResetPassword(ctx context.Context, rawToken, newPassword string) error {
+	// Cheap checks and the slow hash happen before the transaction. The
+	// "must differ from the email" rule needs the user, so it runs inside.
+	if err := ValidatePassword(newPassword, ""); err != nil {
+		return err
+	}
+	hash, err := s.Hasher.Hash(newPassword)
+	if err != nil {
+		return fmt.Errorf("auth: hash password: %w", err)
+	}
+
+	return s.Tx.WithTx(ctx, func(tx pgx.Tx) error {
+		tok, err := s.Tokens.Consume(ctx, tx, rawToken, TokenPasswordReset)
+		if err != nil {
+			return err
+		}
+		u, err := s.Users.GetByID(ctx, tx, tok.UserID)
+		if err != nil {
+			if apperr.IsCode(err, apperr.CodeNotFound) {
+				return ErrInvalidToken()
+			}
+			return err
+		}
+		if u.Status != user.StatusActive {
+			return ErrInvalidToken()
+		}
+		if err := ValidatePassword(newPassword, u.Email); err != nil {
+			return err
+		}
+		if err := s.Users.SetPasswordHash(ctx, tx, u.ID, hash); err != nil {
+			return err
+		}
+		if err := s.Sessions.RevokeAllSessions(ctx, tx, u.ID); err != nil {
+			return err
+		}
+		return s.Mail.Send(ctx, tx, mail.Email{
+			Template: "password_changed",
+			To:       u.Email,
+			Data:     map[string]any{"name": u.Name},
+		})
+	})
+}
