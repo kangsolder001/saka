@@ -144,3 +144,33 @@ func (s *Service) sendVerificationEmail(ctx context.Context, tx db.DBTX, u user.
 func (s *Service) link(path, token string) string {
 	return s.cfg.FrontendURL + path + "?token=" + url.QueryEscape(token)
 }
+
+// VerifyEmail consumes the verification token and marks the user's email as
+// verified, atomically. An unknown, expired or already used token fails with a
+// validation error on "token". Verifying twice is harmless: the second token
+// is simply rejected.
+func (s *Service) VerifyEmail(ctx context.Context, rawToken string) error {
+	return s.Tx.WithTx(ctx, func(tx pgx.Tx) error {
+		tok, err := s.Tokens.Consume(ctx, tx, rawToken, TokenEmailVerification)
+		if err != nil {
+			return err
+		}
+		return s.Users.MarkEmailVerified(ctx, tx, tok.UserID)
+	})
+}
+
+// ResendVerification issues a fresh verification token (invalidating older
+// ones) and queues a new email. A user whose email is already verified gets
+// CONFLICT.
+func (s *Service) ResendVerification(ctx context.Context, userID uuid.UUID) error {
+	u, err := s.Users.GetByID(ctx, s.Pool, userID)
+	if err != nil {
+		return err
+	}
+	if u.EmailVerified() {
+		return apperr.Conflict("Email sudah terverifikasi.")
+	}
+	return s.Tx.WithTx(ctx, func(tx pgx.Tx) error {
+		return s.sendVerificationEmail(ctx, tx, u)
+	})
+}

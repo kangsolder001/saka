@@ -24,6 +24,7 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) Routes(rg *gin.RouterGroup) {
 	g := rg.Group("/auth")
 	g.POST("/register", h.register)
+	g.POST("/verify-email", h.verifyEmail)
 }
 
 type userResponse struct {
@@ -58,4 +59,20 @@ func (h *Handler) register(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusCreated, gin.H{"user": toUserResponse(u)})
+}
+
+type verifyEmailRequest struct {
+	Token string `json:"token" validate:"required,max=256"`
+}
+
+func (h *Handler) verifyEmail(c *gin.Context) {
+	var req verifyEmailRequest
+	if !httpx.BindJSON(c, &req) {
+		return
+	}
+	if err := h.svc.VerifyEmail(c.Request.Context(), req.Token); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"email_verified": true})
 }

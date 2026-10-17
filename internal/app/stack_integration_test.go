@@ -95,3 +95,5 @@ func (s *stack) post(path, body string, headers ...map[string]string) response {
 func (s *stack) queryRow(sql string, args ...any) interface{ Scan(...any) error } {
 	return s.db.Pool().QueryRow(context.Background(), sql, args...)
 }
+
+func authHash(raw string) string { return auth.HashToken(raw) }
