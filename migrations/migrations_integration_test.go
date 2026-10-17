@@ -106,3 +106,38 @@ func TestMigrations_AreReversible(t *testing.T) {
 	_, err = provider.Up(ctx)
 	assert.NoError(t, err, "up must work again after down")
 }
+
+func TestOutboxJobs_Defaults(t *testing.T) {
+	conn, _ := newConn(t)
+
+	var (
+		status   string
+		attempts int
+		version  int
+		due      bool
+		locked   *string
+		trace    *string
+	)
+	err := conn.QueryRow(context.Background(), `
+		INSERT INTO outbox_jobs (type) VALUES ('email.send')
+		RETURNING status, attempts, uuid_extract_version(id), next_attempt_at <= now(), locked_at::text, trace_id`).
+		Scan(&status, &attempts, &version, &due, &locked, &trace)
+
+	require.NoError(t, err)
+	assert.Equal(t, "pending", status)
+	assert.Equal(t, 0, attempts)
+	assert.Equal(t, 7, version)
+	assert.True(t, due, "new jobs are due immediately")
+	assert.Nil(t, locked)
+	assert.Nil(t, trace)
+}
+
+func TestOutboxJobs_RejectsUnknownStatus(t *testing.T) {
+	conn, _ := newConn(t)
+
+	_, err := conn.Exec(context.Background(), "INSERT INTO outbox_jobs (type, status) VALUES ('x', 'stuck')")
+
+	var pgErr *pgconn.PgError
+	require.ErrorAs(t, err, &pgErr)
+	assert.Equal(t, "23514", pgErr.Code, "check_violation")
+}

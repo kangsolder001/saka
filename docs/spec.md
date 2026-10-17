@@ -259,6 +259,7 @@ Constraint: `UNIQUE (provider, event_id)`.
 | status | text | `pending`, `processing`, `done`, `failed` |
 | attempts | int | |
 | next_attempt_at | timestamptz | |
+| locked_at | timestamptz NULL | diisi saat worker mengambil job; job `processing` yang lease-nya lewat dianggap worker mati dan diambil ulang |
 | last_error | text NULL | |
 | trace_id | text NULL | `trace_id` dari request asal, dipulihkan oleh worker (§11.1) |
 | created_at, updated_at | timestamptz | |
@@ -537,8 +538,10 @@ service (dalam transaksi) ──insert──▶ outbox_jobs ──▶ worker ─
 ```
 
 - Interface `Mailer` supaya provider bisa diganti; implementasi dev menulis ke log atau Mailpit.
-- Retry dengan exponential backoff: 1m, 5m, 30m, 2j, 6j. Setelah 5 kali → `failed` dan dicatat untuk dicek manual.
-- Template HTML + plain text, ditulis dengan `html/template`.
+- Retry dengan exponential backoff: 1m, 5m, 30m, 2j, 6j. Artinya satu percobaan awal ditambah 5 retry; bila retry ke-5 juga gagal → `failed` dan dicatat untuk dicek manual (total 6 percobaan). Error yang ditandai permanen (mis. template tidak dikenal) langsung `failed` tanpa retry.
+- Pengiriman bersifat *at-least-once*: bila worker mati setelah email terkirim tetapi sebelum job ditandai `done`, job diambil ulang dan email bisa terkirim dua kali. Ini disengaja; alternatifnya (at-most-once) bisa menghilangkan email.
+- Outbox adalah mekanisme generik (`platform/outbox`): worker memilih handler berdasarkan `type` job; email hanya salah satu tipenya (`email.send`).
+- Template HTML ditulis dengan `html/template` (auto-escape); versi plain text dengan `text/template` karena `html/template` akan meng-escape teks biasa.
 
 ### 10.2 Template
 

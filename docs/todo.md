@@ -56,12 +56,12 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 
 ## Fase 1 — Outbox & Mail (3 hari)
 
-- [ ] Migrasi `outbox_jobs` (§4.11, termasuk kolom `trace_id`) (0.1)
+- [x] Migrasi `outbox_jobs` (§4.11, termasuk kolom `trace_id` dan `locked_at`) (0.1)
 - [ ] Repo outbox: `Enqueue(tx, job)` dalam transaksi pemanggil; simpan `trace_id` dari context ke `outbox_jobs.trace_id` (0.3)
 - [ ] Worker: polling dengan `SELECT … FOR UPDATE SKIP LOCKED`, status `processing/done/failed`; job diproses paralel (jumlah worker goroutine dikonfigurasi) lewat `safego` (0.5)
-- [ ] Retry exponential backoff 1m, 5m, 30m, 2j, 6j; gagal ke-5 → `failed` (§10.1) (0.3)
+- [ ] Retry exponential backoff 1m, 5m, 30m, 2j, 6j; retry ke-5 gagal → `failed` (total 6 percobaan, §10.1); error permanen langsung `failed` (0.3)
 - [ ] Interface `Mailer` + implementasi SMTP (Mailpit) + implementasi log (0.3)
-- [ ] Renderer template `html/template` (HTML + plain text) + layout dasar (0.3)
+- [ ] Renderer template (`html/template` untuk HTML, `text/template` untuk plain text) + layout dasar (0.3)
 - [ ] Template awal: `verify_email`, `password_reset`, `password_changed` (0.3)
 - [ ] `cmd/worker` entrypoint + graceful shutdown; worker memulihkan `trace_id` job ke context sebelum proses (0.25)
 - [ ] Test: job diproses sekali saat 2 worker jalan; backoff sesuai jadwal (fake clock); rollback tx → tidak ada job; `trace_id` request sampai ke job dan log worker (0.6)
