@@ -49,9 +49,9 @@ func logoutRequest(r http.Handler, authorization string) *httptest.ResponseRecor
 
 func TestLogoutEndpoint_RevokesSessionAndClearsCookie(t *testing.T) {
 	f := newFixture(t)
-	u := user.User{ID: uuid.New(), Status: user.StatusActive}
+	u := user.Summary{ID: uuid.New(), Status: user.StatusActive}
 	session := uuid.New()
-	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+	f.users.EXPECT().GetSummary(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
 	f.refresh.EXPECT().SessionActive(mock.Anything, mock.Anything, u.ID, session).Return(true, nil).Once()
 	f.refresh.EXPECT().RevokeSession(mock.Anything, mock.Anything, session).Return(nil).Once()
 

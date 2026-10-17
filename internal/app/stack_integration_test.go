@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kangsolder001/saka/internal/app"
@@ -23,6 +24,7 @@ import (
 	"github.com/kangsolder001/saka/internal/platform/logger"
 	"github.com/kangsolder001/saka/internal/platform/redistest"
 	"github.com/kangsolder001/saka/internal/platform/redisx"
+	"github.com/kangsolder001/saka/internal/user"
 )
 
 func init() { gin.SetMode(gin.TestMode) }
@@ -38,7 +40,11 @@ type stack struct {
 	t      *testing.T
 	router http.Handler
 	db     *db.DB
+	redis  *redisx.Client
 	clock  *clock.Fake
+	// users shares the API's Redis cache, so tests can invalidate it the way
+	// an admin or profile flow would after changing a user.
+	users *user.Service
 }
 
 func newStack(t *testing.T) *stack {
@@ -63,7 +69,8 @@ func newStack(t *testing.T) *stack {
 
 	router, err := app.NewRouter(cfg, logger.Nop(), clk, d, rdb, app.Options{PasswordParams: &light})
 	require.NoError(t, err)
-	return &stack{t: t, router: router, db: d, clock: clk}
+	users := user.NewService(clk, user.WithCache(rdb.Namespace("user"), cfg.Redis.UserCacheTTL.Std(), logger.Nop()))
+	return &stack{t: t, router: router, db: d, redis: rdb, clock: clk, users: users}
 }
 
 type response struct {
@@ -112,3 +119,20 @@ func (s *stack) queryRow(sql string, args ...any) interface{ Scan(...any) error 
 }
 
 func authHash(raw string) string { return auth.HashToken(raw) }
+
+// invalidateAllUsers drops every cached user summary, as the code that changes
+// a user does after committing.
+func (s *stack) invalidateAllUsers() {
+	s.t.Helper()
+	rows, err := s.db.Pool().Query(context.Background(), "SELECT id FROM users")
+	require.NoError(s.t, err)
+	defer rows.Close()
+	var ids []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		require.NoError(s.t, rows.Scan(&id))
+		ids = append(ids, id)
+	}
+	require.NoError(s.t, rows.Err())
+	require.NoError(s.t, s.users.InvalidateCache(context.Background(), ids...))
+}

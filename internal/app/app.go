@@ -62,7 +62,7 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 	authService := auth.NewService(auth.Dependencies{
 		Tx:       database,
 		Pool:     database.Pool(),
-		Users:    user.NewService(clk),
+		Users:    user.NewService(clk, user.WithCache(redis.Namespace("user"), cfg.Redis.UserCacheTTL.Std(), log)),
 		Tokens:   auth.NewUserTokens(clk),
 		Sessions: auth.NewRefreshTokens(clk, cfg.Auth.RefreshTokenTTL.Std()),
 		JWT:      jwt,

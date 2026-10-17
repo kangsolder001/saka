@@ -94,8 +94,10 @@ func TestAccessToken_StopsWorkingImmediatelyWhenTheUserIsSuspendedOrDeleted(t *t
 			s := newStack(t)
 			s.registered("ann@example.com")
 			access := s.loggedIn("ann@example.com")
+			require.Equal(t, http.StatusOK, s.post(resendPath, ``, bearer(access)).Code, "the account is cached as active")
 			_, err := s.db.Pool().Exec(context.Background(), statement)
 			require.NoError(t, err)
+			s.invalidateAllUsers() // what the suspend/delete flow does after committing
 
 			res := s.post(resendPath, ``, bearer(access))
 

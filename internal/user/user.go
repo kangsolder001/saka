@@ -16,6 +16,7 @@ import (
 	"github.com/kangsolder001/saka/internal/platform/apperr"
 	"github.com/kangsolder001/saka/internal/platform/clock"
 	"github.com/kangsolder001/saka/internal/platform/db"
+	"github.com/kangsolder001/saka/internal/platform/logger"
 	"github.com/kangsolder001/saka/internal/user/userdb"
 )
 
@@ -56,11 +57,20 @@ type NewUser struct {
 // to a larger unit of work such as registration).
 type Service struct {
 	clk clock.Clock
+
+	// Optional summary cache (see WithCache); nil means every read hits the database.
+	cache    Cache
+	cacheTTL time.Duration
+	log      *logger.Logger
 }
 
 // NewService creates a Service.
-func NewService(clk clock.Clock) *Service {
-	return &Service{clk: clk}
+func NewService(clk clock.Clock, opts ...Option) *Service {
+	s := &Service{clk: clk}
+	for _, opt := range opts {
+		opt(s)
+	}
+	return s
 }
 
 // NormalizeEmail trims surrounding spaces and lowercases the address. The
@@ -104,6 +114,11 @@ func (s *Service) GetByEmail(ctx context.Context, q db.DBTX, email string) (User
 func (s *Service) MarkEmailVerified(ctx context.Context, q db.DBTX, id uuid.UUID) error {
 	if _, err := userdb.New(q).MarkEmailVerified(ctx, userdb.MarkEmailVerifiedParams{ID: id, Now: s.clk.Now()}); err != nil {
 		return fmt.Errorf("user: mark email verified: %w", err)
+	}
+	// Best effort now; when q is a transaction the caller must invalidate again
+	// after commit (a reader could re-cache the old row before it commits).
+	if err := s.InvalidateCache(ctx, id); err != nil {
+		s.warn(ctx, err, "could not invalidate user cache")
 	}
 	return nil
 }

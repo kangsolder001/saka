@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -24,10 +25,50 @@ func TestVerifyEmail_ConsumesTokenThenMarksUserVerified(t *testing.T) {
 	f.tokens.EXPECT().Consume(mock.Anything, mock.Anything, "the-raw-token", auth.TokenEmailVerification).
 		Return(auth.UserToken{UserID: userID}, nil).Once()
 	f.users.EXPECT().MarkEmailVerified(mock.Anything, mock.Anything, userID).Return(nil).Once()
+	f.users.EXPECT().InvalidateCache(mock.Anything, onlyID(userID)).Return(nil).Once()
 
 	err := f.svc.VerifyEmail(context.Background(), "the-raw-token")
 
 	assert.NoError(t, err)
+}
+
+func TestVerifyEmail_InvalidatesTheUserCacheOnlyAfterTheTransactionCommitted(t *testing.T) {
+	f := newFixture(t)
+	userID := uuid.New()
+	var order []string
+	f.tx.EXPECT().WithTx(mock.Anything, mock.Anything).RunAndReturn(
+		func(_ context.Context, fn func(pgx.Tx) error) error {
+			err := fn(nil)
+			order = append(order, "commit")
+			return err
+		}).Once()
+	f.tokens.EXPECT().Consume(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(auth.UserToken{UserID: userID}, nil).Once()
+	f.users.EXPECT().MarkEmailVerified(mock.Anything, mock.Anything, userID).Return(nil).Once()
+	f.users.EXPECT().InvalidateCache(mock.Anything, onlyID(userID)).RunAndReturn(
+		func(context.Context, ...uuid.UUID) error {
+			order = append(order, "invalidate")
+			return nil
+		}).Once()
+
+	require.NoError(t, f.svc.VerifyEmail(context.Background(), "tok"))
+
+	assert.Equal(t, []string{"commit", "invalidate"}, order,
+		"invalidating before the commit would let a reader re-cache the old row")
+}
+
+func TestVerifyEmail_InvalidationFailureDoesNotFailTheCommittedVerification(t *testing.T) {
+	f := newFixture(t)
+	userID := uuid.New()
+	f.expectTx()
+	f.tokens.EXPECT().Consume(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
+		Return(auth.UserToken{UserID: userID}, nil).Once()
+	f.users.EXPECT().MarkEmailVerified(mock.Anything, mock.Anything, userID).Return(nil).Once()
+	f.users.EXPECT().InvalidateCache(mock.Anything, onlyID(userID)).Return(errors.New("redis down")).Once()
+
+	err := f.svc.VerifyEmail(context.Background(), "tok")
+
+	assert.NoError(t, err, "the email IS verified; the stale cache entry expires within its TTL")
 }
 
 func TestVerifyEmail_InvalidTokenDoesNotTouchTheUser(t *testing.T) {
@@ -57,8 +98,8 @@ func TestVerifyEmail_RollsBackTheTokenWhenMarkingFails(t *testing.T) {
 
 func TestResendVerification_QueuesNewEmailForUnverifiedUser(t *testing.T) {
 	f := newFixture(t)
-	u := user.User{ID: uuid.New(), Email: "ann@example.com", Name: "Ann"}
-	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+	u := user.Summary{ID: uuid.New(), Email: "ann@example.com", Name: "Ann"}
+	f.users.EXPECT().GetSummary(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
 	f.expectTx()
 	f.tokens.EXPECT().Issue(mock.Anything, mock.Anything, u.ID, auth.TokenEmailVerification, nil).Return("fresh", nil).Once()
 	f.mail.EXPECT().Send(mock.Anything, mock.Anything, mail.Email{
@@ -72,8 +113,8 @@ func TestResendVerification_QueuesNewEmailForUnverifiedUser(t *testing.T) {
 func TestResendVerification_AlreadyVerifiedIsConflict(t *testing.T) {
 	f := newFixture(t)
 	verifiedAt := unitEpoch
-	u := user.User{ID: uuid.New(), EmailVerifiedAt: &verifiedAt}
-	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+	u := user.Summary{ID: uuid.New(), EmailVerifiedAt: &verifiedAt}
+	f.users.EXPECT().GetSummary(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
 
 	err := f.svc.ResendVerification(context.Background(), u.ID)
 
@@ -82,7 +123,7 @@ func TestResendVerification_AlreadyVerifiedIsConflict(t *testing.T) {
 
 func TestResendVerification_UnknownUser(t *testing.T) {
 	f := newFixture(t)
-	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, mock.Anything).Return(user.User{}, apperr.NotFound()).Once()
+	f.users.EXPECT().GetSummary(mock.Anything, mock.Anything, mock.Anything).Return(user.Summary{}, apperr.NotFound()).Once()
 
 	err := f.svc.ResendVerification(context.Background(), uuid.New())
 
@@ -96,6 +137,7 @@ func TestVerifyEmailEndpoint(t *testing.T) {
 		f.tokens.EXPECT().Consume(mock.Anything, mock.Anything, "tok", auth.TokenEmailVerification).
 			Return(auth.UserToken{UserID: uuid.New()}, nil).Once()
 		f.users.EXPECT().MarkEmailVerified(mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+		f.users.EXPECT().InvalidateCache(mock.Anything, mock.Anything).Return(nil).Once()
 
 		rec := postJSON(newRouter(f), "/api/v1/auth/verify-email", `{"token":"tok"}`)
 
@@ -121,4 +163,9 @@ func TestVerifyEmailEndpoint(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 		assert.Contains(t, rec.Body.String(), `"token"`)
 	})
+}
+
+// onlyID matches the variadic ids argument of InvalidateCache (a single slice for the mock).
+func onlyID(id uuid.UUID) any {
+	return mock.MatchedBy(func(ids []uuid.UUID) bool { return len(ids) == 1 && ids[0] == id })
 }

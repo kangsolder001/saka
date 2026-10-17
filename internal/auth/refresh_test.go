@@ -29,14 +29,14 @@ func (f *fixture) expectRotate(raw string, result auth.RotateResult) {
 
 func TestRefresh_RotatesAndIssuesNewTokenPair(t *testing.T) {
 	f := newFixture(t)
-	u := user.User{ID: uuid.New(), Status: user.StatusActive}
+	u := user.Summary{ID: uuid.New(), Status: user.StatusActive}
 	family := uuid.New()
 	expires := unitEpoch.Add(30 * 24 * time.Hour)
 	f.expectRotate("old", auth.RotateResult{
 		Outcome: auth.Rotated, UserID: u.ID,
 		Token: auth.RefreshToken{Raw: "new", FamilyID: family, ExpiresAt: expires},
 	})
-	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+	f.users.EXPECT().GetSummary(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
 
 	res, err := f.svc.Refresh(context.Background(), "old", client)
 
@@ -84,10 +84,10 @@ func TestRefresh_InactiveOrMissingUserIsUnauthenticated(t *testing.T) {
 		lookup func(f *fixture, id uuid.UUID)
 	}{
 		"suspended": {func(f *fixture, id uuid.UUID) {
-			f.users.EXPECT().GetByID(mock.Anything, mock.Anything, id).Return(user.User{ID: id, Status: user.StatusSuspended}, nil).Once()
+			f.users.EXPECT().GetSummary(mock.Anything, mock.Anything, id).Return(user.Summary{ID: id, Status: user.StatusSuspended}, nil).Once()
 		}},
 		"gone": {func(f *fixture, id uuid.UUID) {
-			f.users.EXPECT().GetByID(mock.Anything, mock.Anything, id).Return(user.User{}, apperr.NotFound()).Once()
+			f.users.EXPECT().GetSummary(mock.Anything, mock.Anything, id).Return(user.Summary{}, apperr.NotFound()).Once()
 		}},
 	}
 	for name, tt := range tests {
@@ -118,13 +118,13 @@ func TestRefresh_StoreErrorsAreNotMaskedAsUnauthenticated(t *testing.T) {
 func refreshOK(t *testing.T) (*fixture, uuid.UUID) {
 	t.Helper()
 	f := newFixture(t)
-	u := user.User{ID: uuid.New(), Status: user.StatusActive}
+	u := user.Summary{ID: uuid.New(), Status: user.StatusActive}
 	f.expectTx()
 	f.refresh.EXPECT().Rotate(mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(auth.RotateResult{Outcome: auth.Rotated, UserID: u.ID, Token: auth.RefreshToken{
 			Raw: "rotated-token", FamilyID: uuid.New(), ExpiresAt: unitEpoch.Add(30 * 24 * time.Hour),
 		}}, nil).Once()
-	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+	f.users.EXPECT().GetSummary(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
 	return f, u.ID
 }
 

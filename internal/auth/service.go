@@ -29,6 +29,12 @@ type UserService interface {
 	Create(ctx context.Context, q db.DBTX, in user.NewUser) (user.User, error)
 	GetByID(ctx context.Context, q db.DBTX, id uuid.UUID) (user.User, error)
 	GetByEmail(ctx context.Context, q db.DBTX, email string) (user.User, error)
+	// GetSummary is the cached, password-free read used on hot paths
+	// (authenticating requests, refreshing tokens). Reads inside a transaction
+	// use GetByID instead.
+	GetSummary(ctx context.Context, q db.DBTX, id uuid.UUID) (user.Summary, error)
+	// InvalidateCache drops cached summaries; call it after a commit that changed a user.
+	InvalidateCache(ctx context.Context, ids ...uuid.UUID) error
 	MarkEmailVerified(ctx context.Context, q db.DBTX, id uuid.UUID) error
 	SetPasswordHash(ctx context.Context, q db.DBTX, id uuid.UUID, hash string) error
 }
@@ -140,7 +146,7 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) (user.User, er
 		if err != nil {
 			return err
 		}
-		return s.sendVerificationEmail(ctx, tx, created)
+		return s.sendVerificationEmail(ctx, tx, created.Summary())
 	})
 	if err != nil {
 		return user.User{}, err
@@ -150,7 +156,7 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) (user.User, er
 
 // sendVerificationEmail issues a verification token and queues the email,
 // using the caller's transaction.
-func (s *Service) sendVerificationEmail(ctx context.Context, tx db.DBTX, u user.User) error {
+func (s *Service) sendVerificationEmail(ctx context.Context, tx db.DBTX, u user.Summary) error {
 	raw, err := s.Tokens.Issue(ctx, tx, u.ID, TokenEmailVerification, nil)
 	if err != nil {
 		return err
@@ -175,13 +181,30 @@ func (s *Service) link(path, token string) string {
 // validation error on "token". Verifying twice is harmless: the second token
 // is simply rejected.
 func (s *Service) VerifyEmail(ctx context.Context, rawToken string) error {
-	return s.Tx.WithTx(ctx, func(tx pgx.Tx) error {
+	var userID uuid.UUID
+	err := s.Tx.WithTx(ctx, func(tx pgx.Tx) error {
 		tok, err := s.Tokens.Consume(ctx, tx, rawToken, TokenEmailVerification)
 		if err != nil {
 			return err
 		}
+		userID = tok.UserID
 		return s.Users.MarkEmailVerified(ctx, tx, tok.UserID)
 	})
+	if err != nil {
+		return err
+	}
+	s.invalidateUser(ctx, userID)
+	return nil
+}
+
+// invalidateUser drops the user's cached summary after a committed change. The
+// change already happened, so a failure is logged (the stale entry expires
+// within the cache TTL) rather than returned to the client.
+func (s *Service) invalidateUser(ctx context.Context, id uuid.UUID) {
+	if err := s.Users.InvalidateCache(ctx, id); err != nil {
+		zl := s.Log.FromContext(ctx)
+		zl.Error().Err(err).Str("user_id", id.String()).Msg("user cache invalidation failed; entry stays stale until its TTL")
+	}
 }
 
 // ResendVerification issues a fresh verification token (invalidating older
@@ -191,7 +214,7 @@ func (s *Service) ResendVerification(ctx context.Context, userID uuid.UUID) erro
 	if err := s.take(ctx, RuleResendVerification, userID.String()); err != nil {
 		return err
 	}
-	u, err := s.Users.GetByID(ctx, s.Pool, userID)
+	u, err := s.Users.GetSummary(ctx, s.Pool, userID)
 	if err != nil {
 		return err
 	}
@@ -325,17 +348,19 @@ type Principal struct {
 }
 
 // Authenticate turns an access token into a Principal. Beyond the JWT's
-// signature and expiry it checks the database on every call: the user must
-// still exist and be active, and the session (refresh token family) must still
-// be alive. That makes logout, password reset and account suspension take
-// effect immediately instead of when the access token expires.
+// signature and expiry it checks, on every call, that the user still exists and
+// is active (from the user summary cache, so most calls skip the database) and
+// that the session (refresh token family) is still alive (always from the
+// database). Logout and password reset take effect immediately; a suspension or
+// deletion takes effect as soon as the user cache is invalidated, and at the
+// latest when the cached entry expires (redis.user_cache_ttl).
 func (s *Service) Authenticate(ctx context.Context, accessToken string) (Principal, error) {
 	claims, err := s.JWT.Verify(accessToken)
 	if err != nil {
 		return Principal{}, err
 	}
 
-	u, err := s.Users.GetByID(ctx, s.Pool, claims.UserID)
+	u, err := s.Users.GetSummary(ctx, s.Pool, claims.UserID)
 	if err != nil {
 		if apperr.IsCode(err, apperr.CodeNotFound) {
 			return Principal{}, apperr.Unauthenticated()
@@ -370,25 +395,15 @@ type RefreshResult struct {
 // revoked and the request rejected. All failures look the same to the client
 // (UNAUTHENTICATED).
 func (s *Service) Refresh(ctx context.Context, rawToken string, client ClientInfo) (RefreshResult, error) {
-	var (
-		rotated RotateResult
-		u       user.User
-	)
+	var rotated RotateResult
 	err := s.Tx.WithTx(ctx, func(tx pgx.Tx) error {
 		var err error
 		rotated, err = s.Sessions.Rotate(ctx, tx, rawToken, client)
-		if err != nil || rotated.Outcome != Rotated {
-			// Nothing else to do; for Reused the family revocation is committed
-			// precisely because we return nil here.
-			return err
-		}
-		u, err = s.Users.GetByID(ctx, tx, rotated.UserID)
+		// For Reused the family revocation is committed precisely because we
+		// return nil here, even though the request is rejected below.
 		return err
 	})
 	if err != nil {
-		if apperr.IsCode(err, apperr.CodeNotFound) {
-			return RefreshResult{}, apperr.Unauthenticated()
-		}
 		return RefreshResult{}, err
 	}
 
@@ -400,6 +415,17 @@ func (s *Service) Refresh(ctx context.Context, rawToken string, client ClientInf
 		return RefreshResult{}, apperr.Unauthenticated()
 	default: // Unknown, Expired
 		return RefreshResult{}, apperr.Unauthenticated()
+	}
+
+	// The account check reads the cached summary (this endpoint is hit often).
+	// Rotation is already committed, which is harmless: an inactive user cannot
+	// use the new tokens anyway, as Authenticate rejects them.
+	u, err := s.Users.GetSummary(ctx, s.Pool, rotated.UserID)
+	if err != nil {
+		if apperr.IsCode(err, apperr.CodeNotFound) {
+			return RefreshResult{}, apperr.Unauthenticated()
+		}
+		return RefreshResult{}, err
 	}
 	if u.Status != user.StatusActive {
 		return RefreshResult{}, apperr.Unauthenticated()

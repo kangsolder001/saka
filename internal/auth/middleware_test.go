@@ -30,9 +30,9 @@ func (f *fixture) accessToken(t *testing.T, userID, sessionID uuid.UUID) string 
 func TestAuthenticate_ValidTokenForActiveUserAndLiveSession(t *testing.T) {
 	f := newFixture(t)
 	verifiedAt := unitEpoch
-	u := user.User{ID: uuid.New(), Status: user.StatusActive, EmailVerifiedAt: &verifiedAt}
+	u := user.Summary{ID: uuid.New(), Status: user.StatusActive, EmailVerifiedAt: &verifiedAt}
 	session := uuid.New()
-	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+	f.users.EXPECT().GetSummary(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
 	f.refresh.EXPECT().SessionActive(mock.Anything, mock.Anything, u.ID, session).Return(true, nil).Once()
 
 	p, err := f.svc.Authenticate(context.Background(), f.accessToken(t, u.ID, session))
@@ -66,23 +66,23 @@ func TestAuthenticate_Rejections(t *testing.T) {
 		{
 			name: "user no longer exists",
 			setup: func(f *fixture) {
-				f.users.EXPECT().GetByID(mock.Anything, mock.Anything, userID).Return(user.User{}, apperr.NotFound()).Once()
+				f.users.EXPECT().GetSummary(mock.Anything, mock.Anything, userID).Return(user.Summary{}, apperr.NotFound()).Once()
 			},
 			wantCode: apperr.CodeUnauthenticated,
 		},
 		{
 			name: "user suspended",
 			setup: func(f *fixture) {
-				f.users.EXPECT().GetByID(mock.Anything, mock.Anything, userID).
-					Return(user.User{ID: userID, Status: user.StatusSuspended}, nil).Once()
+				f.users.EXPECT().GetSummary(mock.Anything, mock.Anything, userID).
+					Return(user.Summary{ID: userID, Status: user.StatusSuspended}, nil).Once()
 			},
 			wantCode: apperr.CodeUnauthenticated,
 		},
 		{
 			name: "session revoked or expired",
 			setup: func(f *fixture) {
-				f.users.EXPECT().GetByID(mock.Anything, mock.Anything, userID).
-					Return(user.User{ID: userID, Status: user.StatusActive}, nil).Once()
+				f.users.EXPECT().GetSummary(mock.Anything, mock.Anything, userID).
+					Return(user.Summary{ID: userID, Status: user.StatusActive}, nil).Once()
 				f.refresh.EXPECT().SessionActive(mock.Anything, mock.Anything, userID, session).Return(false, nil).Once()
 			},
 			wantCode: apperr.CodeUnauthenticated,
@@ -110,7 +110,7 @@ func TestAuthenticate_Rejections(t *testing.T) {
 func TestAuthenticate_InfrastructureErrorsAreNotTurnedIntoUnauthenticated(t *testing.T) {
 	f := newFixture(t)
 	boom := errors.New("db down")
-	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, mock.Anything).Return(user.User{}, boom).Once()
+	f.users.EXPECT().GetSummary(mock.Anything, mock.Anything, mock.Anything).Return(user.Summary{}, boom).Once()
 
 	_, err := f.svc.Authenticate(context.Background(), f.accessToken(t, uuid.New(), uuid.New()))
 
@@ -143,9 +143,9 @@ func getWith(r http.Handler, authorization string) *httptest.ResponseRecorder {
 
 func TestAuthenticateMiddleware_SetsPrincipalAndRequestContext(t *testing.T) {
 	f := newFixture(t)
-	u := user.User{ID: uuid.New(), Status: user.StatusActive}
+	u := user.Summary{ID: uuid.New(), Status: user.StatusActive}
 	session := uuid.New()
-	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+	f.users.EXPECT().GetSummary(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
 	f.refresh.EXPECT().SessionActive(mock.Anything, mock.Anything, u.ID, session).Return(true, nil).Once()
 
 	rec := getWith(protectedRouter(f), "Bearer "+f.accessToken(t, u.ID, session))
@@ -158,9 +158,9 @@ func TestAuthenticateMiddleware_SetsPrincipalAndRequestContext(t *testing.T) {
 
 func TestAuthenticateMiddleware_AcceptsLowercaseScheme(t *testing.T) {
 	f := newFixture(t)
-	u := user.User{ID: uuid.New(), Status: user.StatusActive}
+	u := user.Summary{ID: uuid.New(), Status: user.StatusActive}
 	session := uuid.New()
-	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+	f.users.EXPECT().GetSummary(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
 	f.refresh.EXPECT().SessionActive(mock.Anything, mock.Anything, u.ID, session).Return(true, nil).Once()
 
 	rec := getWith(protectedRouter(f), "bearer "+f.accessToken(t, u.ID, session))
@@ -214,9 +214,9 @@ func TestRequireVerifiedEmail(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			f := newFixture(t)
-			u := user.User{ID: uuid.New(), Status: user.StatusActive, EmailVerifiedAt: tt.verified}
+			u := user.Summary{ID: uuid.New(), Status: user.StatusActive, EmailVerifiedAt: tt.verified}
 			session := uuid.New()
-			f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
+			f.users.EXPECT().GetSummary(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
 			f.refresh.EXPECT().SessionActive(mock.Anything, mock.Anything, u.ID, session).Return(true, nil).Once()
 			guard := auth.NewMiddleware(f.svc).RequireVerifiedEmail()
 

@@ -265,6 +265,144 @@ func (_c *MockUserService_GetByID_Call) RunAndReturn(run func(ctx context.Contex
 	return _c
 }
 
+// GetSummary provides a mock function for the type MockUserService
+func (_mock *MockUserService) GetSummary(ctx context.Context, q db.DBTX, id uuid.UUID) (user.Summary, error) {
+	ret := _mock.Called(ctx, q, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for GetSummary")
+	}
+
+	var r0 user.Summary
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, db.DBTX, uuid.UUID) (user.Summary, error)); ok {
+		return returnFunc(ctx, q, id)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, db.DBTX, uuid.UUID) user.Summary); ok {
+		r0 = returnFunc(ctx, q, id)
+	} else {
+		r0 = ret.Get(0).(user.Summary)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, db.DBTX, uuid.UUID) error); ok {
+		r1 = returnFunc(ctx, q, id)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockUserService_GetSummary_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'GetSummary'
+type MockUserService_GetSummary_Call struct {
+	*mock.Call
+}
+
+// GetSummary is a helper method to define mock.On call
+//   - ctx context.Context
+//   - q db.DBTX
+//   - id uuid.UUID
+func (_e *MockUserService_Expecter) GetSummary(ctx any, q any, id any) *MockUserService_GetSummary_Call {
+	return &MockUserService_GetSummary_Call{Call: _e.mock.On("GetSummary", ctx, q, id)}
+}
+
+func (_c *MockUserService_GetSummary_Call) Run(run func(ctx context.Context, q db.DBTX, id uuid.UUID)) *MockUserService_GetSummary_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 db.DBTX
+		if args[1] != nil {
+			arg1 = args[1].(db.DBTX)
+		}
+		var arg2 uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(uuid.UUID)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockUserService_GetSummary_Call) Return(summary user.Summary, err error) *MockUserService_GetSummary_Call {
+	_c.Call.Return(summary, err)
+	return _c
+}
+
+func (_c *MockUserService_GetSummary_Call) RunAndReturn(run func(ctx context.Context, q db.DBTX, id uuid.UUID) (user.Summary, error)) *MockUserService_GetSummary_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// InvalidateCache provides a mock function for the type MockUserService
+func (_mock *MockUserService) InvalidateCache(ctx context.Context, ids ...uuid.UUID) error {
+	var tmpRet mock.Arguments
+	if len(ids) > 0 {
+		tmpRet = _mock.Called(ctx, ids)
+	} else {
+		tmpRet = _mock.Called(ctx)
+	}
+	ret := tmpRet
+
+	if len(ret) == 0 {
+		panic("no return value specified for InvalidateCache")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ...uuid.UUID) error); ok {
+		r0 = returnFunc(ctx, ids...)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockUserService_InvalidateCache_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'InvalidateCache'
+type MockUserService_InvalidateCache_Call struct {
+	*mock.Call
+}
+
+// InvalidateCache is a helper method to define mock.On call
+//   - ctx context.Context
+//   - ids ...uuid.UUID
+func (_e *MockUserService_Expecter) InvalidateCache(ctx any, ids ...any) *MockUserService_InvalidateCache_Call {
+	return &MockUserService_InvalidateCache_Call{Call: _e.mock.On("InvalidateCache",
+		append([]any{ctx}, ids...)...)}
+}
+
+func (_c *MockUserService_InvalidateCache_Call) Run(run func(ctx context.Context, ids ...uuid.UUID)) *MockUserService_InvalidateCache_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 []uuid.UUID
+		var variadicArgs []uuid.UUID
+		if len(args) > 1 {
+			variadicArgs = args[1].([]uuid.UUID)
+		}
+		arg1 = variadicArgs
+		run(
+			arg0,
+			arg1...,
+		)
+	})
+	return _c
+}
+
+func (_c *MockUserService_InvalidateCache_Call) Return(err error) *MockUserService_InvalidateCache_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockUserService_InvalidateCache_Call) RunAndReturn(run func(ctx context.Context, ids ...uuid.UUID) error) *MockUserService_InvalidateCache_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // MarkEmailVerified provides a mock function for the type MockUserService
 func (_mock *MockUserService) MarkEmailVerified(ctx context.Context, q db.DBTX, id uuid.UUID) error {
 	ret := _mock.Called(ctx, q, id)
