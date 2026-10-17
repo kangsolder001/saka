@@ -30,12 +30,14 @@ type HandlerConfig struct {
 // Handler exposes the auth use cases over HTTP (spec §5.1).
 type Handler struct {
 	svc *Service
+	mw  *Middleware
 	cfg HandlerConfig
 }
 
-// NewHandler creates the HTTP handler.
-func NewHandler(svc *Service, cfg HandlerConfig) *Handler {
-	return &Handler{svc: svc, cfg: cfg}
+// NewHandler creates the HTTP handler. It uses mw to protect the endpoints
+// that need a logged-in user.
+func NewHandler(svc *Service, mw *Middleware, cfg HandlerConfig) *Handler {
+	return &Handler{svc: svc, mw: mw, cfg: cfg}
 }
 
 // Routes registers the auth endpoints under rg (expected to be /api/v1).
@@ -44,6 +46,9 @@ func (h *Handler) Routes(rg *gin.RouterGroup) {
 	g.POST("/register", h.register)
 	g.POST("/verify-email", h.verifyEmail)
 	g.POST("/login", h.login)
+
+	authed := g.Group("", h.mw.Authenticate())
+	authed.POST("/resend-verification", h.resendVerification)
 }
 
 type userResponse struct {
@@ -166,4 +171,13 @@ func (h *Handler) setRefreshCookie(c *gin.Context, value string, expires time.Ti
 
 func clientInfo(c *gin.Context) ClientInfo {
 	return ClientInfo{UserAgent: c.Request.UserAgent(), IP: c.ClientIP()}
+}
+
+func (h *Handler) resendVerification(c *gin.Context) {
+	p, _ := PrincipalFrom(c) // Authenticate guarantees it
+	if err := h.svc.ResendVerification(c.Request.Context(), p.UserID); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "sent"})
 }

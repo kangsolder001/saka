@@ -70,7 +70,9 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 		Log:     log,
 	}, auth.Config{FrontendURL: cfg.App.FrontendURL})
 
+	authMiddleware := auth.NewMiddleware(authService)
+
 	v1 := router.Group("/api/v1")
-	auth.NewHandler(authService, auth.HandlerConfig{SecureCookie: cfg.IsProduction()}).Routes(v1)
+	auth.NewHandler(authService, authMiddleware, auth.HandlerConfig{SecureCookie: cfg.IsProduction()}).Routes(v1)
 	return router, nil
 }

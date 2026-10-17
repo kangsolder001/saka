@@ -24,7 +24,7 @@ func newRouter(f *fixture) *gin.Engine { return newRouterWith(f, auth.HandlerCon
 
 func newRouterWith(f *fixture, cfg auth.HandlerConfig) *gin.Engine {
 	r := gin.New()
-	auth.NewHandler(f.svc, cfg).Routes(r.Group("/api/v1"))
+	auth.NewHandler(f.svc, auth.NewMiddleware(f.svc), cfg).Routes(r.Group("/api/v1"))
 	return r
 }
 

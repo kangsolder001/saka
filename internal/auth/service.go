@@ -275,3 +275,42 @@ func (s *Service) upgradePasswordHash(ctx context.Context, userID uuid.UUID, pas
 		zl.Warn().Err(err).Msg("password rehash could not be saved")
 	}
 }
+
+// Principal is the authenticated caller of a request.
+type Principal struct {
+	UserID        uuid.UUID
+	SessionID     uuid.UUID
+	EmailVerified bool
+}
+
+// Authenticate turns an access token into a Principal. Beyond the JWT's
+// signature and expiry it checks the database on every call: the user must
+// still exist and be active, and the session (refresh token family) must still
+// be alive. That makes logout, password reset and account suspension take
+// effect immediately instead of when the access token expires.
+func (s *Service) Authenticate(ctx context.Context, accessToken string) (Principal, error) {
+	claims, err := s.JWT.Verify(accessToken)
+	if err != nil {
+		return Principal{}, err
+	}
+
+	u, err := s.Users.GetByID(ctx, s.Pool, claims.UserID)
+	if err != nil {
+		if apperr.IsCode(err, apperr.CodeNotFound) {
+			return Principal{}, apperr.Unauthenticated()
+		}
+		return Principal{}, err
+	}
+	if u.Status != user.StatusActive {
+		return Principal{}, apperr.Unauthenticated()
+	}
+
+	active, err := s.Refresh.SessionActive(ctx, s.Pool, u.ID, claims.SessionID)
+	if err != nil {
+		return Principal{}, err
+	}
+	if !active {
+		return Principal{}, apperr.Unauthenticated()
+	}
+	return Principal{UserID: u.ID, SessionID: claims.SessionID, EmailVerified: u.EmailVerified()}, nil
+}

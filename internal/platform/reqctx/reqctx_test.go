@@ -29,7 +29,12 @@ func TestRoundTrip(t *testing.T) {
 	ctx = reqctx.WithRequestID(ctx, "req-1")
 	ctx = reqctx.WithUserID(ctx, userID)
 	ctx = reqctx.WithOrgID(ctx, orgID)
+	sessionID := uuid.New()
+	ctx = reqctx.WithSessionID(ctx, sessionID)
 
+	gotSession, ok := reqctx.SessionID(ctx)
+	require.True(t, ok)
+	assert.Equal(t, sessionID, gotSession)
 	assert.Equal(t, "trace-1", reqctx.TraceID(ctx))
 	assert.Equal(t, "req-1", reqctx.RequestID(ctx))
 	gotUser, ok := reqctx.UserID(ctx)

@@ -19,6 +19,7 @@ const (
 	requestIDKey
 	userIDKey
 	orgIDKey
+	sessionIDKey
 )
 
 // WithTraceID returns a context carrying the trace ID.
@@ -51,6 +52,18 @@ func WithUserID(ctx context.Context, id uuid.UUID) context.Context {
 // UserID returns the authenticated user's ID and whether it is set.
 func UserID(ctx context.Context) (uuid.UUID, bool) {
 	id, ok := ctx.Value(userIDKey).(uuid.UUID)
+	return id, ok
+}
+
+// WithSessionID returns a context carrying the current login session (the
+// refresh token family from the access token's sid claim).
+func WithSessionID(ctx context.Context, id uuid.UUID) context.Context {
+	return context.WithValue(ctx, sessionIDKey, id)
+}
+
+// SessionID returns the current session ID and whether it is set.
+func SessionID(ctx context.Context) (uuid.UUID, bool) {
+	id, ok := ctx.Value(sessionIDKey).(uuid.UUID)
 	return id, ok
 }
 
