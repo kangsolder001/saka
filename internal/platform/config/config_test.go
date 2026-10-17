@@ -16,7 +16,9 @@ import (
 const validDBURL = "postgres://saka:saka@localhost:5433/saka?sslmode=disable"
 
 // minimal is the smallest valid file: only the required database url.
-const minimal = `{"database": {"url": "` + validDBURL + `"}}`
+const validSecret = "0123456789abcdef0123456789abcdef-test"
+
+const minimal = `{"database": {"url": "` + validDBURL + `"}, "auth": {"jwt_secret": "` + validSecret + `"}}`
 
 func TestParse_MinimalFileGetsDefaults(t *testing.T) {
 	cfg, err := config.Parse([]byte(minimal))
@@ -28,6 +30,9 @@ func TestParse_MinimalFileGetsDefaults(t *testing.T) {
 	assert.Equal(t, 15*time.Second, cfg.App.ShutdownTimeout.Std())
 	assert.Equal(t, "info", cfg.App.LogLevel)
 	assert.Empty(t, cfg.App.CORSAllowedOrigins)
+	assert.Equal(t, "http://localhost:3000", cfg.App.FrontendURL)
+	assert.Equal(t, 15*time.Minute, cfg.Auth.AccessTokenTTL.Std())
+	assert.Equal(t, 30*24*time.Hour, cfg.Auth.RefreshTokenTTL.Std())
 	assert.Equal(t, int32(10), cfg.Database.MaxConns)
 	assert.Equal(t, "log", cfg.Mail.Driver)
 	assert.Equal(t, "localhost", cfg.Mail.SMTP.Host)
@@ -41,10 +46,11 @@ func TestParse_MinimalFileGetsDefaults(t *testing.T) {
 
 func TestParse_OverridesAndKeepsUntouchedDefaults(t *testing.T) {
 	cfg, err := config.Parse([]byte(`{
-		"app": {"env": "production", "http_addr": ":9000", "shutdown_timeout": "30s",
+		"app": {"env": "production", "http_addr": ":9000", "shutdown_timeout": "30s", "frontend_url": "https://app.example.com",
 		        "cors_allowed_origins": ["https://a.example", "https://b.example"],
 		        "trusted_proxies": ["10.0.0.0/8"]},
 		"database": {"url": "` + validDBURL + `", "max_conns": 25, "min_conns": 2},
+		"auth": {"jwt_secret": "` + validSecret + `", "access_token_ttl": "10m", "refresh_token_ttl": "240h"},
 		"mail": {"driver": "smtp", "from": "Saka <noreply@example.com>",
 		         "smtp": {"host": "smtp.example.com", "port": 587, "username": "u", "password": "p"}},
 		"worker": {"concurrency": 8, "lease": "10m"}
@@ -58,6 +64,9 @@ func TestParse_OverridesAndKeepsUntouchedDefaults(t *testing.T) {
 	assert.Equal(t, []string{"10.0.0.0/8"}, cfg.App.TrustedProxies)
 	assert.Equal(t, int32(25), cfg.Database.MaxConns)
 	assert.Equal(t, int32(2), cfg.Database.MinConns)
+	assert.Equal(t, "https://app.example.com", cfg.App.FrontendURL)
+	assert.Equal(t, 10*time.Minute, cfg.Auth.AccessTokenTTL.Std())
+	assert.Equal(t, 240*time.Hour, cfg.Auth.RefreshTokenTTL.Std())
 	assert.Equal(t, "smtp.example.com", cfg.Mail.SMTP.Host)
 	assert.Equal(t, 587, cfg.Mail.SMTP.Port)
 	assert.Equal(t, 8, cfg.Worker.Concurrency)
@@ -101,7 +110,8 @@ func TestParse_Validation(t *testing.T) {
 			}
 			return `"` + name + `": ` + v + `,`
 		}
-		return `{` + field("app", app) + field("mail", mail) + field("worker", worker) + `"database": ` + db + `}`
+		return `{` + field("app", app) + field("mail", mail) + field("worker", worker) +
+			`"auth": {"jwt_secret": "` + validSecret + `"}, "database": ` + db + `}`
 	}
 	tests := []struct {
 		name    string
@@ -117,6 +127,12 @@ func TestParse_Validation(t *testing.T) {
 		{"min conns above max", with("", `{"url": "`+validDBURL+`", "max_conns": 2, "min_conns": 5}`, "", ""), "database.min_conns"},
 		{"zero max conns", with("", `{"url": "`+validDBURL+`", "max_conns": 0}`, "", ""), "database.max_conns"},
 		{"wildcard cors in production", with(`{"env": "production", "cors_allowed_origins": ["*"]}`, "", `{"driver": "smtp"}`, ""), "must not contain *"},
+		{"missing jwt secret", `{"database": {"url": "` + validDBURL + `"}}`, "auth.jwt_secret is required"},
+		{"short jwt secret", `{"database": {"url": "` + validDBURL + `"}, "auth": {"jwt_secret": "short"}}`, "at least 32 characters"},
+		{"placeholder jwt secret in production", `{"app": {"env": "production"}, "mail": {"driver": "smtp"}, "database": {"url": "` + validDBURL + `"}, "auth": {"jwt_secret": "change-me-to-a-random-string-of-at-least-32-chars"}}`, "example placeholder"},
+		{"access ttl not below refresh ttl", `{"database": {"url": "` + validDBURL + `"}, "auth": {"jwt_secret": "` + validSecret + `", "access_token_ttl": "48h", "refresh_token_ttl": "24h"}}`, "access_token_ttl must be shorter"},
+		{"zero token ttl", `{"database": {"url": "` + validDBURL + `"}, "auth": {"jwt_secret": "` + validSecret + `", "access_token_ttl": "0s"}}`, "must be positive"},
+		{"bad frontend url", with(`{"frontend_url": "not a url"}`, "", "", ""), "app.frontend_url"},
 		{"unknown mail driver", with("", "", `{"driver": "pigeon"}`, ""), "mail.driver must be one of"},
 		{"log mailer in production", with(`{"env": "production"}`, "", `{"driver": "log"}`, ""), "not allowed in production"},
 		{"smtp without host", with("", "", `{"driver": "smtp", "smtp": {"host": " "}}`, ""), "mail.smtp.host is required"},
@@ -144,6 +160,13 @@ func TestParse_ReportsAllProblemsAtOnce(t *testing.T) {
 	assert.Contains(t, err.Error(), "database.url")
 }
 
+func TestParse_NeverEchoesJWTSecret(t *testing.T) {
+	_, err := config.Parse([]byte(`{"database": {"url": "mysql://x"}, "auth": {"jwt_secret": "topsecretvalue"}}`))
+
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "topsecretvalue")
+}
+
 func TestParse_NeverEchoesDatabaseCredentials(t *testing.T) {
 	_, err := config.Parse([]byte(`{"database": {"url": "mysql://admin:s3cretpass@host/db"}}`))
 
@@ -151,11 +174,12 @@ func TestParse_NeverEchoesDatabaseCredentials(t *testing.T) {
 	assert.NotContains(t, err.Error(), "s3cretpass")
 }
 
-func TestDefault_IsValidOnceTheDatabaseURLIsSet(t *testing.T) {
+func TestDefault_IsValidOnceRequiredSecretsAreSet(t *testing.T) {
 	cfg := config.Default()
-	assert.Error(t, cfg.Validate(), "database.url has no default")
+	assert.Error(t, cfg.Validate(), "database.url and auth.jwt_secret have no default")
 
 	cfg.Database.URL = validDBURL
+	cfg.Auth.JWTSecret = validSecret
 	assert.NoError(t, cfg.Validate())
 }
 

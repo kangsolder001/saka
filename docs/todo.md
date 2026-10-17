@@ -72,7 +72,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 
 ## Fase 2 — Auth (6 hari)
 
-- [ ] Config: section `auth` (jwt_secret, TTL) dan `app.frontend_url` (0.1)
+- [x] Config: section `auth` (jwt_secret, TTL) dan `app.frontend_url` (0.1)
 - [ ] Modul `user` minimal: tabel `users` via sqlc (create, get by id/email, tandai terverifikasi, ganti password) (0.3)
 - [ ] Migrasi `user_tokens`, `refresh_tokens` (§4.2, §4.3) (0.1)
 - [ ] Hashing Argon2id + validasi password (8–72, ≠ email) (0.25)

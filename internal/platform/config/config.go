@@ -20,6 +20,11 @@ import (
 const DefaultPath = "config.json"
 
 const (
+	minJWTSecretLen   = 32
+	placeholderMarker = "change-me"
+)
+
+const (
 	EnvDevelopment = "development"
 	EnvTest        = "test"
 	EnvProduction  = "production"
@@ -54,6 +59,7 @@ func (d Duration) MarshalJSON() ([]byte, error) {
 type Config struct {
 	App      AppConfig      `json:"app"`
 	Database DatabaseConfig `json:"database"`
+	Auth     AuthConfig     `json:"auth"`
 	Mail     MailConfig     `json:"mail"`
 	Worker   WorkerConfig   `json:"worker"`
 }
@@ -67,6 +73,8 @@ type AppConfig struct {
 	LogLevel        string   `json:"log_level"`
 	// CORSAllowedOrigins lists the browser origins allowed to call the API.
 	CORSAllowedOrigins []string `json:"cors_allowed_origins"`
+	// FrontendURL is the base of links sent by email, e.g. <url>/verify-email?token=...
+	FrontendURL string `json:"frontend_url"`
 	// TrustedProxies are the proxy IPs/CIDRs whose X-Forwarded-For is believed.
 	// Empty means the direct peer address is always used as the client IP.
 	TrustedProxies []string `json:"trusted_proxies"`
@@ -77,6 +85,14 @@ type DatabaseConfig struct {
 	URL      string `json:"url"`
 	MaxConns int32  `json:"max_conns"`
 	MinConns int32  `json:"min_conns"`
+}
+
+// AuthConfig covers token signing and lifetimes.
+type AuthConfig struct {
+	// JWTSecret signs access tokens (HS256). Required, at least 32 characters.
+	JWTSecret       string   `json:"jwt_secret"`
+	AccessTokenTTL  Duration `json:"access_token_ttl"`
+	RefreshTokenTTL Duration `json:"refresh_token_ttl"`
 }
 
 // MailConfig covers outgoing email.
@@ -113,6 +129,11 @@ func Default() Config {
 			HTTPAddr:        ":8080",
 			ShutdownTimeout: Duration(15 * time.Second),
 			LogLevel:        "info",
+			FrontendURL:     "http://localhost:3000",
+		},
+		Auth: AuthConfig{
+			AccessTokenTTL:  Duration(15 * time.Minute),
+			RefreshTokenTTL: Duration(30 * 24 * time.Hour),
 		},
 		Database: DatabaseConfig{MaxConns: 10, MinConns: 0},
 		Mail: MailConfig{
@@ -200,6 +221,23 @@ func (c Config) Validate() error {
 				add("app.cors_allowed_origins must not contain * in production")
 			}
 		}
+	}
+
+	if u, err := url.Parse(c.App.FrontendURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		add("app.frontend_url must be an http(s) URL such as https://app.example.com")
+	}
+
+	// The JWT secret is never echoed in errors.
+	switch {
+	case len(c.Auth.JWTSecret) < minJWTSecretLen:
+		add("auth.jwt_secret is required and must be at least %d characters", minJWTSecretLen)
+	case c.IsProduction() && strings.Contains(strings.ToLower(c.Auth.JWTSecret), placeholderMarker):
+		add("auth.jwt_secret still contains the example placeholder; generate a random secret")
+	}
+	if c.Auth.AccessTokenTTL <= 0 || c.Auth.RefreshTokenTTL <= 0 {
+		add("auth.access_token_ttl and auth.refresh_token_ttl must be positive")
+	} else if c.Auth.AccessTokenTTL >= c.Auth.RefreshTokenTTL {
+		add("auth.access_token_ttl must be shorter than auth.refresh_token_ttl")
 	}
 
 	// The database URL contains credentials, so it is never echoed in errors.
