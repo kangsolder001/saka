@@ -1,0 +1,9 @@
+{{define "subject"}}Verifikasi email Anda di {{.App.Name}}{{end}}
+{{define "content"}}Halo {{.Data.name}},
+
+Terima kasih sudah mendaftar di {{.App.Name}}. Buka tautan berikut untuk memverifikasi alamat email Anda (berlaku 24 jam):
+
+{{.Data.url}}
+
+Jika Anda tidak merasa mendaftar, abaikan email ini.{{end}}
+{{template "layout" .}}
