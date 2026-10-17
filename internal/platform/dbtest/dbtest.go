@@ -5,6 +5,7 @@ package dbtest
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strings"
 	"sync"
@@ -13,9 +14,13 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" database/sql driver
+	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go"
 	tcpostgres "github.com/testcontainers/testcontainers-go/modules/postgres"
 	"github.com/testcontainers/testcontainers-go/wait"
+
+	"github.com/kangsolder001/saka/migrations"
 )
 
 const image = "postgres:18"
@@ -90,4 +95,23 @@ func replaceDatabase(dsn, name string) string {
 		query = rest[q:]
 	}
 	return dsn[:schemeEnd+slash+1] + name + query
+}
+
+// Migrate applies every migration in migrations.FS to the database at dsn.
+func Migrate(t testing.TB, dsn string) {
+	t.Helper()
+
+	sqlDB, err := sql.Open("pgx", dsn)
+	if err != nil {
+		t.Fatalf("open database/sql: %v", err)
+	}
+	defer sqlDB.Close()
+
+	provider, err := goose.NewProvider(goose.DialectPostgres, sqlDB, migrations.FS)
+	if err != nil {
+		t.Fatalf("create goose provider: %v", err)
+	}
+	if _, err := provider.Up(context.Background()); err != nil {
+		t.Fatalf("apply migrations: %v", err)
+	}
 }
