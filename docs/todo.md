@@ -35,7 +35,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Konfigurasi `mockery` (`.mockery.yml`, mock di-generate ke folder `mocks/` per package, target `make mocks`) (0.1)
 - [x] `docker-compose`: PostgreSQL 18, Mailpit (0.25)
 - [x] `platform/config`: load env var, validasi (0.25)
-- [ ] `platform/db`: koneksi pool `pgx`, helper transaksi `WithTx` (0.25)
+- [x] `platform/db`: koneksi pool `pgx`, helper transaksi `WithTx` (0.25)
 - [x] `platform/clock`: interface Clock + fake untuk test (0.1)
 - [x] `platform/apperr` (nama package menghindari bentrok dengan `errors` bawaan): tipe error + format JSON & kode error (§3) (0.25)
 - [x] `platform/logger`: `zerolog` JSON; logger di-inject lewat constructor, `FromContext(ctx)` menyertakan `trace_id`, `request_id`, `user_id`, `org_id` (§11.1) (0.25)
