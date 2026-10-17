@@ -1,0 +1,145 @@
+// Package user owns the users table. Other modules reach user data only
+// through Service (spec §2): they never query the table themselves.
+package user
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
+	"github.com/kangsolder001/saka/internal/platform/apperr"
+	"github.com/kangsolder001/saka/internal/platform/clock"
+	"github.com/kangsolder001/saka/internal/platform/db"
+	"github.com/kangsolder001/saka/internal/user/userdb"
+)
+
+// Status is the account state stored in users.status.
+type Status string
+
+const (
+	StatusActive    Status = "active"
+	StatusSuspended Status = "suspended"
+	StatusDeleted   Status = "deleted"
+)
+
+// User is an account.
+type User struct {
+	ID              uuid.UUID
+	Email           string
+	PasswordHash    string
+	Name            string
+	AvatarURL       *string
+	EmailVerifiedAt *time.Time
+	Status          Status
+	CreatedAt       time.Time
+	UpdatedAt       time.Time
+}
+
+// EmailVerified reports whether the user has confirmed their email address.
+func (u User) EmailVerified() bool { return u.EmailVerifiedAt != nil }
+
+// NewUser holds the data needed to create an account.
+type NewUser struct {
+	Email        string
+	PasswordHash string
+	Name         string
+}
+
+// Service is the public API of the user module. Every method takes the
+// database handle to use (the pool, or a transaction when the call belongs
+// to a larger unit of work such as registration).
+type Service struct {
+	clk clock.Clock
+}
+
+// NewService creates a Service.
+func NewService(clk clock.Clock) *Service {
+	return &Service{clk: clk}
+}
+
+// NormalizeEmail trims surrounding spaces and lowercases the address. The
+// column is case-insensitive already; normalizing keeps stored values tidy.
+func NormalizeEmail(email string) string {
+	return strings.ToLower(strings.TrimSpace(email))
+}
+
+// Create inserts a user. A duplicate email returns apperr CONFLICT.
+func (s *Service) Create(ctx context.Context, q db.DBTX, in NewUser) (User, error) {
+	row, err := userdb.New(q).CreateUser(ctx, userdb.CreateUserParams{
+		Email:        NormalizeEmail(in.Email),
+		PasswordHash: in.PasswordHash,
+		Name:         strings.TrimSpace(in.Name),
+		Now:          s.clk.Now(),
+	})
+	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			return User{}, apperr.Conflict("Email sudah terdaftar.")
+		}
+		return User{}, fmt.Errorf("user: create: %w", err)
+	}
+	return fromRow(row), nil
+}
+
+// GetByID returns the user, or apperr NOT_FOUND (deleted users count as missing).
+func (s *Service) GetByID(ctx context.Context, q db.DBTX, id uuid.UUID) (User, error) {
+	row, err := userdb.New(q).GetUserByID(ctx, id)
+	return one(row, err, "get by id")
+}
+
+// GetByEmail returns the user with this email, or apperr NOT_FOUND.
+func (s *Service) GetByEmail(ctx context.Context, q db.DBTX, email string) (User, error) {
+	row, err := userdb.New(q).GetUserByEmail(ctx, NormalizeEmail(email))
+	return one(row, err, "get by email")
+}
+
+// MarkEmailVerified records that the user confirmed their email. It is
+// idempotent: verifying twice keeps the first timestamp.
+func (s *Service) MarkEmailVerified(ctx context.Context, q db.DBTX, id uuid.UUID) error {
+	if _, err := userdb.New(q).MarkEmailVerified(ctx, userdb.MarkEmailVerifiedParams{ID: id, Now: s.clk.Now()}); err != nil {
+		return fmt.Errorf("user: mark email verified: %w", err)
+	}
+	return nil
+}
+
+// SetPasswordHash replaces the stored password hash.
+func (s *Service) SetPasswordHash(ctx context.Context, q db.DBTX, id uuid.UUID, hash string) error {
+	n, err := userdb.New(q).UpdatePasswordHash(ctx, userdb.UpdatePasswordHashParams{ID: id, PasswordHash: hash, Now: s.clk.Now()})
+	if err != nil {
+		return fmt.Errorf("user: set password hash: %w", err)
+	}
+	if n == 0 {
+		return apperr.NotFound()
+	}
+	return nil
+}
+
+func one(row userdb.User, err error, op string) (User, error) {
+	if errors.Is(err, pgx.ErrNoRows) {
+		return User{}, apperr.NotFound()
+	}
+	if err != nil {
+		return User{}, fmt.Errorf("user: %s: %w", op, err)
+	}
+	return fromRow(row), nil
+}
+
+func fromRow(r userdb.User) User {
+	return User{
+		ID:              r.ID,
+		Email:           r.Email,
+		PasswordHash:    r.PasswordHash,
+		Name:            r.Name,
+		AvatarURL:       r.AvatarUrl,
+		EmailVerifiedAt: r.EmailVerifiedAt,
+		Status:          Status(r.Status),
+		CreatedAt:       r.CreatedAt,
+		UpdatedAt:       r.UpdatedAt,
+	}
+}
