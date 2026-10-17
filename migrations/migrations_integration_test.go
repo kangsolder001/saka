@@ -226,3 +226,16 @@ func TestRefreshTokens_TokenHashIsUniqueAndReplacedByMustExist(t *testing.T) {
 	require.ErrorAs(t, err, &pgErr)
 	assert.Equal(t, "23503", pgErr.Code, "replaced_by must reference an existing token")
 }
+
+func TestRateLimitHits_IsAnAppendOnlyCounterTable(t *testing.T) {
+	conn, _ := newConn(t)
+
+	for range 2 {
+		_, err := conn.Exec(context.Background(), "INSERT INTO rate_limit_hits (key, created_at) VALUES ('login:abc', now())")
+		require.NoError(t, err)
+	}
+
+	var n int
+	require.NoError(t, conn.QueryRow(context.Background(), "SELECT count(*) FROM rate_limit_hits WHERE key = 'login:abc'").Scan(&n))
+	assert.Equal(t, 2, n, "several events per key are the point of the table")
+}
