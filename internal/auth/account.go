@@ -196,3 +196,40 @@ func (s *Service) ConfirmEmailChange(ctx context.Context, rawToken string) (stri
 	}
 	return newEmail, nil
 }
+
+// ListSessions returns the caller's live sessions, most recently used first,
+// with the one making this request flagged.
+func (s *Service) ListSessions(ctx context.Context, userID, currentSession uuid.UUID) ([]user.Session, error) {
+	infos, err := s.Sessions.ListSessions(ctx, s.Pool, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]user.Session, len(infos))
+	for i, info := range infos {
+		out[i] = user.Session{
+			ID:         info.ID,
+			UserAgent:  info.UserAgent,
+			IP:         info.IP,
+			StartedAt:  info.StartedAt,
+			LastUsedAt: info.LastUsedAt,
+			ExpiresAt:  info.ExpiresAt,
+			Current:    info.ID == currentSession,
+		}
+	}
+	return out, nil
+}
+
+// RevokeSession ends one of the caller's sessions. A session that is not the
+// caller's (or does not exist, or is already over) is NOT_FOUND, so IDs cannot
+// be probed. Ending the current session is allowed and works like logout: its
+// refresh cookie dies with its next use.
+func (s *Service) RevokeSession(ctx context.Context, userID, sessionID uuid.UUID) error {
+	revoked, err := s.Sessions.RevokeUserSession(ctx, s.Pool, userID, sessionID)
+	if err != nil {
+		return err
+	}
+	if !revoked {
+		return apperr.NotFound()
+	}
+	return nil
+}

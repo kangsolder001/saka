@@ -297,3 +297,120 @@ func TestRevokeOtherSessions_KeepsOnlyTheNamedSessionAndOnlyForThatUser(t *testi
 	require.NoError(t, err)
 	assert.True(t, active, "another user's sessions are untouched")
 }
+
+func TestListSessions_ShowsOneEntryPerLiveLoginWithItsClientAndTimes(t *testing.T) {
+	e := newEnv(t)
+	u, other := e.newUser(t), e.newUser(t)
+	store := auth.NewRefreshTokens(e.clock, refreshTTL)
+	ctx := context.Background()
+	first, err := store.StartSession(ctx, e.db.Pool(), u.ID, auth.ClientInfo{UserAgent: "Firefox", IP: "203.0.113.9"})
+	require.NoError(t, err)
+	e.clock.Advance(time.Hour)
+	_, err = store.StartSession(ctx, e.db.Pool(), u.ID, auth.ClientInfo{UserAgent: "Chrome", IP: "198.51.100.2"})
+	require.NoError(t, err)
+	_, err = store.StartSession(ctx, e.db.Pool(), other.ID, auth.ClientInfo{UserAgent: "Safari"})
+	require.NoError(t, err)
+
+	got, err := store.ListSessions(ctx, e.db.Pool(), u.ID)
+
+	require.NoError(t, err)
+	require.Len(t, got, 2, "only this user's sessions")
+	assert.Equal(t, "Chrome", got[0].UserAgent, "most recently used first")
+	assert.Equal(t, "198.51.100.2", got[0].IP)
+	assert.Equal(t, "Firefox", got[1].UserAgent)
+	assert.Equal(t, first.FamilyID, got[1].ID)
+	assert.True(t, got[1].StartedAt.Equal(epoch))
+	assert.True(t, got[1].ExpiresAt.Equal(epoch.Add(refreshTTL)))
+}
+
+func TestListSessions_RotationKeepsOneEntryAndMovesLastUsedForward(t *testing.T) {
+	e := newEnv(t)
+	u := e.newUser(t)
+	store := auth.NewRefreshTokens(e.clock, refreshTTL)
+	ctx := context.Background()
+	tok, err := store.StartSession(ctx, e.db.Pool(), u.ID, auth.ClientInfo{UserAgent: "Chrome"})
+	require.NoError(t, err)
+	e.clock.Advance(2 * time.Hour)
+	require.NoError(t, e.db.WithTx(ctx, func(tx pgx.Tx) error {
+		_, err := store.Rotate(ctx, tx, tok.Raw, auth.ClientInfo{UserAgent: "Chrome"})
+		return err
+	}))
+
+	got, err := store.ListSessions(ctx, e.db.Pool(), u.ID)
+
+	require.NoError(t, err)
+	require.Len(t, got, 1, "a rotated session is still one session")
+	assert.True(t, got[0].StartedAt.Equal(epoch), "started when the user logged in")
+	assert.True(t, got[0].LastUsedAt.Equal(epoch.Add(2*time.Hour)), "last used when the token was last rotated")
+}
+
+func TestListSessions_OmitsRevokedAndExpiredSessions(t *testing.T) {
+	e := newEnv(t)
+	u := e.newUser(t)
+	store := auth.NewRefreshTokens(e.clock, refreshTTL)
+	ctx := context.Background()
+	revoked, err := store.StartSession(ctx, e.db.Pool(), u.ID, auth.ClientInfo{})
+	require.NoError(t, err)
+	require.NoError(t, store.RevokeSession(ctx, e.db.Pool(), revoked.FamilyID))
+	old, err := store.StartSession(ctx, e.db.Pool(), u.ID, auth.ClientInfo{})
+	require.NoError(t, err)
+	e.clock.Advance(refreshTTL + time.Second)
+	live, err := store.StartSession(ctx, e.db.Pool(), u.ID, auth.ClientInfo{})
+	require.NoError(t, err)
+
+	got, err := store.ListSessions(ctx, e.db.Pool(), u.ID)
+
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, live.FamilyID, got[0].ID)
+	assert.NotEqual(t, old.FamilyID, got[0].ID)
+}
+
+func TestListSessions_IsCapped(t *testing.T) {
+	e := newEnv(t)
+	u := e.newUser(t)
+	store := auth.NewRefreshTokens(e.clock, refreshTTL)
+	ctx := context.Background()
+	for range auth.MaxListedSessions + 5 {
+		_, err := store.StartSession(ctx, e.db.Pool(), u.ID, auth.ClientInfo{})
+		require.NoError(t, err)
+	}
+
+	got, err := store.ListSessions(ctx, e.db.Pool(), u.ID)
+
+	require.NoError(t, err)
+	assert.Len(t, got, auth.MaxListedSessions)
+}
+
+func TestRevokeUserSession_OnlyEndsLiveSessionsOfThatUser(t *testing.T) {
+	e := newEnv(t)
+	u, other := e.newUser(t), e.newUser(t)
+	store := auth.NewRefreshTokens(e.clock, refreshTTL)
+	ctx := context.Background()
+	mine, err := store.StartSession(ctx, e.db.Pool(), u.ID, auth.ClientInfo{})
+	require.NoError(t, err)
+	theirs, err := store.StartSession(ctx, e.db.Pool(), other.ID, auth.ClientInfo{})
+	require.NoError(t, err)
+
+	crossUser, err := store.RevokeUserSession(ctx, e.db.Pool(), u.ID, theirs.FamilyID)
+	require.NoError(t, err)
+	assert.False(t, crossUser, "another user's session cannot be ended")
+	stillActive, err := store.SessionActive(ctx, e.db.Pool(), other.ID, theirs.FamilyID)
+	require.NoError(t, err)
+	assert.True(t, stillActive)
+
+	unknown, err := store.RevokeUserSession(ctx, e.db.Pool(), u.ID, uuid.New())
+	require.NoError(t, err)
+	assert.False(t, unknown)
+
+	ended, err := store.RevokeUserSession(ctx, e.db.Pool(), u.ID, mine.FamilyID)
+	require.NoError(t, err)
+	assert.True(t, ended)
+	active, err := store.SessionActive(ctx, e.db.Pool(), u.ID, mine.FamilyID)
+	require.NoError(t, err)
+	assert.False(t, active)
+
+	again, err := store.RevokeUserSession(ctx, e.db.Pool(), u.ID, mine.FamilyID)
+	require.NoError(t, err)
+	assert.False(t, again, "already ended")
+}

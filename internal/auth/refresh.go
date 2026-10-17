@@ -168,6 +168,56 @@ func (s *RefreshTokens) RevokeOtherSessions(ctx context.Context, q db.DBTX, user
 	return nil
 }
 
+// MaxListedSessions caps how many sessions ListSessions returns (newest first).
+const MaxListedSessions = 100
+
+// SessionInfo describes one live login of a user.
+type SessionInfo struct {
+	// ID is the session (refresh token family) ID, also the sid claim of its
+	// access tokens.
+	ID         uuid.UUID
+	UserAgent  string
+	IP         string
+	StartedAt  time.Time
+	LastUsedAt time.Time
+	ExpiresAt  time.Time
+}
+
+// ListSessions returns the user's live sessions, most recently used first.
+func (s *RefreshTokens) ListSessions(ctx context.Context, q db.DBTX, userID uuid.UUID) ([]SessionInfo, error) {
+	rows, err := authdb.New(q).ListActiveSessions(ctx, authdb.ListActiveSessionsParams{
+		UserID: userID, Now: s.clk.Now(), MaxRows: MaxListedSessions,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("auth: list sessions: %w", err)
+	}
+	out := make([]SessionInfo, len(rows))
+	for i, r := range rows {
+		out[i] = SessionInfo{
+			ID:         r.FamilyID,
+			UserAgent:  deref(r.UserAgent),
+			IP:         deref(r.Ip),
+			StartedAt:  r.StartedAt,
+			LastUsedAt: r.LastUsedAt,
+			ExpiresAt:  r.ExpiresAt,
+		}
+	}
+	return out, nil
+}
+
+// RevokeUserSession ends one of the user's live sessions. It reports false
+// when the user has no live session with that ID (unknown, someone else's,
+// already ended or expired), and the caller cannot tell those apart.
+func (s *RefreshTokens) RevokeUserSession(ctx context.Context, q db.DBTX, userID, sessionID uuid.UUID) (bool, error) {
+	n, err := authdb.New(q).RevokeUserSession(ctx, authdb.RevokeUserSessionParams{
+		FamilyID: sessionID, UserID: userID, Now: s.clk.Now(),
+	})
+	if err != nil {
+		return false, fmt.Errorf("auth: revoke user session: %w", err)
+	}
+	return n > 0, nil
+}
+
 // SessionActive reports whether the session still has a usable refresh token.
 func (s *RefreshTokens) SessionActive(ctx context.Context, q db.DBTX, userID, familyID uuid.UUID) (bool, error) {
 	active, err := authdb.New(q).SessionActive(ctx, authdb.SessionActiveParams{
@@ -177,6 +227,13 @@ func (s *RefreshTokens) SessionActive(ctx context.Context, q db.DBTX, userID, fa
 		return false, fmt.Errorf("auth: check session: %w", err)
 	}
 	return active, nil
+}
+
+func deref(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
 
 func optional(s string) *string {

@@ -72,6 +72,66 @@ func (q *Queries) InsertRefreshToken(ctx context.Context, arg InsertRefreshToken
 	return id, err
 }
 
+const listActiveSessions = `-- name: ListActiveSessions :many
+SELECT t.family_id,
+       t.user_agent,
+       t.ip,
+       t.created_at AS last_used_at,
+       t.expires_at,
+       (SELECT min(f.created_at) FROM refresh_tokens f WHERE f.family_id = t.family_id)::timestamptz AS started_at
+FROM refresh_tokens t
+WHERE t.user_id = $1
+  AND t.revoked_at IS NULL
+  AND t.expires_at > $2::timestamptz
+ORDER BY t.created_at DESC
+LIMIT $3
+`
+
+type ListActiveSessionsParams struct {
+	UserID  uuid.UUID
+	Now     time.Time
+	MaxRows int32
+}
+
+type ListActiveSessionsRow struct {
+	FamilyID   uuid.UUID
+	UserAgent  *string
+	Ip         *string
+	LastUsedAt time.Time
+	ExpiresAt  time.Time
+	StartedAt  time.Time
+}
+
+// A login is one family; rotation keeps exactly one live token in it, so the
+// live token's created_at is when the session was last refreshed and the
+// family's oldest token is when the user logged in.
+func (q *Queries) ListActiveSessions(ctx context.Context, arg ListActiveSessionsParams) ([]ListActiveSessionsRow, error) {
+	rows, err := q.db.Query(ctx, listActiveSessions, arg.UserID, arg.Now, arg.MaxRows)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListActiveSessionsRow
+	for rows.Next() {
+		var i ListActiveSessionsRow
+		if err := rows.Scan(
+			&i.FamilyID,
+			&i.UserAgent,
+			&i.Ip,
+			&i.LastUsedAt,
+			&i.ExpiresAt,
+			&i.StartedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markRefreshTokenRotated = `-- name: MarkRefreshTokenRotated :execrows
 UPDATE refresh_tokens
 SET revoked_at = $1::timestamptz, replaced_by = $2
@@ -145,6 +205,30 @@ type RevokeSessionParams struct {
 
 func (q *Queries) RevokeSession(ctx context.Context, arg RevokeSessionParams) (int64, error) {
 	result, err := q.db.Exec(ctx, revokeSession, arg.Now, arg.FamilyID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const revokeUserSession = `-- name: RevokeUserSession :execrows
+UPDATE refresh_tokens
+SET revoked_at = $1::timestamptz
+WHERE family_id = $2
+  AND user_id = $3
+  AND revoked_at IS NULL
+  AND expires_at > $1::timestamptz
+`
+
+type RevokeUserSessionParams struct {
+	Now      time.Time
+	FamilyID uuid.UUID
+	UserID   uuid.UUID
+}
+
+// Scoped to the user so nobody can end another user's session by guessing an ID.
+func (q *Queries) RevokeUserSession(ctx context.Context, arg RevokeUserSessionParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeUserSession, arg.Now, arg.FamilyID, arg.UserID)
 	if err != nil {
 		return 0, err
 	}

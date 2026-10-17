@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
@@ -306,6 +307,70 @@ func TestConfirmEmailChange_FailureAnywhereFailsTheWholeChange(t *testing.T) {
 
 			require.Error(t, err)
 			assert.Empty(t, got, "no address is reported as changed when the transaction fails")
+		})
+	}
+}
+
+func TestListSessions_MapsTheStoreAndFlagsTheCurrentOne(t *testing.T) {
+	f := newFixture(t)
+	userID, current, other := uuid.New(), uuid.New(), uuid.New()
+	started, used, expires := unitEpoch.Add(-48*time.Hour), unitEpoch.Add(-time.Hour), unitEpoch.Add(24*time.Hour)
+	f.refresh.EXPECT().ListSessions(mock.Anything, mock.Anything, userID).Return([]auth.SessionInfo{
+		{ID: other, UserAgent: "Firefox", IP: "203.0.113.9", StartedAt: started, LastUsedAt: used, ExpiresAt: expires},
+		{ID: current, UserAgent: "Chrome", IP: "198.51.100.2", StartedAt: started, LastUsedAt: used, ExpiresAt: expires},
+	}, nil).Once()
+
+	got, err := f.svc.ListSessions(context.Background(), userID, current)
+
+	require.NoError(t, err)
+	require.Len(t, got, 2)
+	assert.Equal(t, other, got[0].ID, "store order (most recently used first) is kept")
+	assert.False(t, got[0].Current)
+	assert.True(t, got[1].Current)
+	assert.Equal(t, user.Session{
+		ID: current, UserAgent: "Chrome", IP: "198.51.100.2", StartedAt: started, LastUsedAt: used, ExpiresAt: expires, Current: true,
+	}, got[1])
+}
+
+func TestListSessions_NoSessionsIsAnEmptyListNotAnError(t *testing.T) {
+	f := newFixture(t)
+	f.refresh.EXPECT().ListSessions(mock.Anything, mock.Anything, mock.Anything).Return(nil, nil).Once()
+
+	got, err := f.svc.ListSessions(context.Background(), uuid.New(), uuid.New())
+
+	require.NoError(t, err)
+	assert.NotNil(t, got, "serializes as [] rather than null")
+	assert.Empty(t, got)
+}
+
+func TestListSessions_StoreFailureIsReturned(t *testing.T) {
+	f := newFixture(t)
+	boom := errors.New("db down")
+	f.refresh.EXPECT().ListSessions(mock.Anything, mock.Anything, mock.Anything).Return(nil, boom).Once()
+
+	_, err := f.svc.ListSessions(context.Background(), uuid.New(), uuid.New())
+
+	assert.ErrorIs(t, err, boom)
+}
+
+func TestRevokeSession(t *testing.T) {
+	boom := errors.New("db down")
+	tests := map[string]struct {
+		revoked bool
+		err     error
+		check   func(t *testing.T, err error)
+	}{
+		"ended":                    {true, nil, func(t *testing.T, err error) { assert.NoError(t, err) }},
+		"not theirs or not active": {false, nil, func(t *testing.T, err error) { assert.True(t, apperr.IsCode(err, apperr.CodeNotFound)) }},
+		"store failure":            {false, boom, func(t *testing.T, err error) { assert.ErrorIs(t, err, boom) }},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			f := newFixture(t)
+			userID, session := uuid.New(), uuid.New()
+			f.refresh.EXPECT().RevokeUserSession(mock.Anything, mock.Anything, userID, session).Return(tt.revoked, tt.err).Once()
+
+			tt.check(t, f.svc.RevokeSession(context.Background(), userID, session))
 		})
 	}
 }

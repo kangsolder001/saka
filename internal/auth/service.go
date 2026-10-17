@@ -52,6 +52,8 @@ type RefreshStore interface {
 	RevokeSession(ctx context.Context, q db.DBTX, familyID uuid.UUID) error
 	RevokeAllSessions(ctx context.Context, q db.DBTX, userID uuid.UUID) error
 	RevokeOtherSessions(ctx context.Context, q db.DBTX, userID, keepFamilyID uuid.UUID) error
+	ListSessions(ctx context.Context, q db.DBTX, userID uuid.UUID) ([]SessionInfo, error)
+	RevokeUserSession(ctx context.Context, q db.DBTX, userID, sessionID uuid.UUID) (bool, error)
 }
 
 var (

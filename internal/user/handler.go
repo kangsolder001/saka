@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -35,6 +36,22 @@ type AccountSecurity interface {
 	// ConfirmEmailChange applies a requested change from the token in that link
 	// and returns the new email.
 	ConfirmEmailChange(ctx context.Context, rawToken string) (newEmail string, err error)
+	// ListSessions returns the user's live sessions, flagging currentSession.
+	ListSessions(ctx context.Context, userID, currentSession uuid.UUID) ([]Session, error)
+	// RevokeSession ends one of the user's sessions; NOT_FOUND when it is not theirs.
+	RevokeSession(ctx context.Context, userID, sessionID uuid.UUID) error
+}
+
+// Session is one live login of a user (a refresh token family).
+type Session struct {
+	ID         uuid.UUID
+	UserAgent  string
+	IP         string
+	StartedAt  time.Time
+	LastUsedAt time.Time
+	ExpiresAt  time.Time
+	// Current marks the session that made the request.
+	Current bool
 }
 
 var _ ProfileService = (*Service)(nil)
@@ -67,6 +84,8 @@ func (h *Handler) Routes(rg *gin.RouterGroup, authenticate gin.HandlerFunc) {
 	me.PATCH("", h.patch)
 	me.POST("/password", h.changePassword)
 	me.POST("/email", h.requestEmailChange)
+	me.GET("/sessions", h.listSessions)
+	me.DELETE("/sessions/:id", h.revokeSession)
 
 	// The link in the confirmation email is opened from the new inbox, maybe on
 	// another device, so the one-time token is the credential (like verify-email).
@@ -215,4 +234,52 @@ func (h *Handler) confirmEmailChange(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, gin.H{"email": newEmail, "email_verified": true})
+}
+
+type sessionResponse struct {
+	ID         uuid.UUID `json:"id"`
+	UserAgent  string    `json:"user_agent"`
+	IP         string    `json:"ip"`
+	CreatedAt  time.Time `json:"created_at"`
+	LastUsedAt time.Time `json:"last_used_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	Current    bool      `json:"current"`
+}
+
+func (h *Handler) listSessions(c *gin.Context) {
+	id, ok := currentUser(c)
+	if !ok {
+		return
+	}
+	current, _ := reqctx.SessionID(c.Request.Context())
+	sessions, err := h.Security.ListSessions(c.Request.Context(), id, current)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	out := make([]sessionResponse, len(sessions))
+	for i, s := range sessions {
+		out[i] = sessionResponse{
+			ID: s.ID, UserAgent: s.UserAgent, IP: s.IP,
+			CreatedAt: s.StartedAt, LastUsedAt: s.LastUsedAt, ExpiresAt: s.ExpiresAt, Current: s.Current,
+		}
+	}
+	c.JSON(http.StatusOK, gin.H{"sessions": out})
+}
+
+func (h *Handler) revokeSession(c *gin.Context) {
+	id, ok := currentUser(c)
+	if !ok {
+		return
+	}
+	sessionID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		httpx.Error(c, apperr.NotFound()) // same answer as an unknown session
+		return
+	}
+	if err := h.Security.RevokeSession(c.Request.Context(), id, sessionID); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
 }

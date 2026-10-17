@@ -169,6 +169,8 @@ func TestMe_RequiresAnAuthenticatedUser(t *testing.T) {
 		{http.MethodPatch, "/api/v1/me", `{"name":"X"}`},
 		{http.MethodPost, "/api/v1/me/password", `{"current_password":"a","new_password":"b"}`},
 		{http.MethodPost, "/api/v1/me/email", `{"new_email":"a@example.com","current_password":"b"}`},
+		{http.MethodGet, "/api/v1/me/sessions", ""},
+		{http.MethodDelete, "/api/v1/me/sessions/" + uuid.NewString(), ""},
 	} {
 		req := httptest.NewRequestWithContext(context.Background(), c.method, c.path, strings.NewReader(c.body))
 		rec := httptest.NewRecorder()
@@ -291,6 +293,55 @@ func TestConfirmEmailChange_RejectsBadBodiesAndBadTokens(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, f.do(http.MethodPost, "/api/v1/me/email/confirm", `{"token":"`+strings.Repeat("a", 257)+`"}`).Code)
 	rec := f.do(http.MethodPost, "/api/v1/me/email/confirm", `{"token":"used-or-expired"}`)
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestListSessions_ReturnsTheCallersSessionsWithTheCurrentOneFlagged(t *testing.T) {
+	f := newHandlerFixture(t)
+	started := time.Date(2026, 5, 1, 9, 0, 0, 0, time.UTC)
+	id := uuid.New()
+	f.security.EXPECT().ListSessions(mock.Anything, f.userID, f.session).Return([]user.Session{
+		{ID: id, UserAgent: "Chrome", IP: "198.51.100.2", StartedAt: started, LastUsedAt: started.Add(time.Hour), ExpiresAt: started.Add(30 * 24 * time.Hour), Current: true},
+	}, nil).Once()
+
+	rec := f.do(http.MethodGet, "/api/v1/me/sessions", "")
+
+	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
+	assert.JSONEq(t, `{"sessions":[{
+		"id":"`+id.String()+`","user_agent":"Chrome","ip":"198.51.100.2",
+		"created_at":"2026-05-01T09:00:00Z","last_used_at":"2026-05-01T10:00:00Z","expires_at":"2026-05-31T09:00:00Z","current":true
+	}]}`, rec.Body.String())
+}
+
+func TestListSessions_NoSessionsIsAnEmptyArray(t *testing.T) {
+	f := newHandlerFixture(t)
+	f.security.EXPECT().ListSessions(mock.Anything, f.userID, f.session).Return([]user.Session{}, nil).Once()
+
+	rec := f.do(http.MethodGet, "/api/v1/me/sessions", "")
+
+	assert.JSONEq(t, `{"sessions":[]}`, rec.Body.String())
+}
+
+func TestRevokeSession_EndsThatSessionOfTheCaller(t *testing.T) {
+	f := newHandlerFixture(t)
+	target := uuid.New()
+	f.security.EXPECT().RevokeSession(mock.Anything, f.userID, target).Return(nil).Once()
+
+	rec := f.do(http.MethodDelete, "/api/v1/me/sessions/"+target.String(), "")
+
+	assert.Equal(t, http.StatusNoContent, rec.Code)
+	assert.Empty(t, rec.Body.String())
+}
+
+func TestRevokeSession_UnknownAndMalformedIDsAreBothNotFound(t *testing.T) {
+	f := newHandlerFixture(t)
+	f.security.EXPECT().RevokeSession(mock.Anything, f.userID, mock.Anything).Return(apperr.NotFound()).Once()
+
+	unknown := f.do(http.MethodDelete, "/api/v1/me/sessions/"+uuid.NewString(), "")
+	malformed := f.do(http.MethodDelete, "/api/v1/me/sessions/not-a-uuid", "") // the service is not even asked
+
+	assert.Equal(t, http.StatusNotFound, unknown.Code)
+	assert.Equal(t, http.StatusNotFound, malformed.Code)
+	assert.JSONEq(t, unknown.Body.String(), malformed.Body.String(), "indistinguishable")
 }
 
 func ptr[T any](v T) *T { return &v }

@@ -43,3 +43,29 @@ WHERE user_id = @user_id AND revoked_at IS NULL;
 UPDATE refresh_tokens
 SET revoked_at = @now::timestamptz
 WHERE user_id = @user_id AND family_id <> @keep_family_id AND revoked_at IS NULL;
+
+-- A login is one family; rotation keeps exactly one live token in it, so the
+-- live token's created_at is when the session was last refreshed and the
+-- family's oldest token is when the user logged in.
+-- name: ListActiveSessions :many
+SELECT t.family_id,
+       t.user_agent,
+       t.ip,
+       t.created_at AS last_used_at,
+       t.expires_at,
+       (SELECT min(f.created_at) FROM refresh_tokens f WHERE f.family_id = t.family_id)::timestamptz AS started_at
+FROM refresh_tokens t
+WHERE t.user_id = @user_id
+  AND t.revoked_at IS NULL
+  AND t.expires_at > @now::timestamptz
+ORDER BY t.created_at DESC
+LIMIT @max_rows;
+
+-- Scoped to the user so nobody can end another user's session by guessing an ID.
+-- name: RevokeUserSession :execrows
+UPDATE refresh_tokens
+SET revoked_at = @now::timestamptz
+WHERE family_id = @family_id
+  AND user_id = @user_id
+  AND revoked_at IS NULL
+  AND expires_at > @now::timestamptz;

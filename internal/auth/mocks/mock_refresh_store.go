@@ -49,6 +49,80 @@ func (_m *MockRefreshStore) EXPECT() *MockRefreshStore_Expecter {
 	return &MockRefreshStore_Expecter{mock: &_m.Mock}
 }
 
+// ListSessions provides a mock function for the type MockRefreshStore
+func (_mock *MockRefreshStore) ListSessions(ctx context.Context, q db.DBTX, userID uuid.UUID) ([]auth.SessionInfo, error) {
+	ret := _mock.Called(ctx, q, userID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListSessions")
+	}
+
+	var r0 []auth.SessionInfo
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, db.DBTX, uuid.UUID) ([]auth.SessionInfo, error)); ok {
+		return returnFunc(ctx, q, userID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, db.DBTX, uuid.UUID) []auth.SessionInfo); ok {
+		r0 = returnFunc(ctx, q, userID)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]auth.SessionInfo)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, db.DBTX, uuid.UUID) error); ok {
+		r1 = returnFunc(ctx, q, userID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockRefreshStore_ListSessions_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListSessions'
+type MockRefreshStore_ListSessions_Call struct {
+	*mock.Call
+}
+
+// ListSessions is a helper method to define mock.On call
+//   - ctx context.Context
+//   - q db.DBTX
+//   - userID uuid.UUID
+func (_e *MockRefreshStore_Expecter) ListSessions(ctx any, q any, userID any) *MockRefreshStore_ListSessions_Call {
+	return &MockRefreshStore_ListSessions_Call{Call: _e.mock.On("ListSessions", ctx, q, userID)}
+}
+
+func (_c *MockRefreshStore_ListSessions_Call) Run(run func(ctx context.Context, q db.DBTX, userID uuid.UUID)) *MockRefreshStore_ListSessions_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 db.DBTX
+		if args[1] != nil {
+			arg1 = args[1].(db.DBTX)
+		}
+		var arg2 uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(uuid.UUID)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRefreshStore_ListSessions_Call) Return(sessionInfos []auth.SessionInfo, err error) *MockRefreshStore_ListSessions_Call {
+	_c.Call.Return(sessionInfos, err)
+	return _c
+}
+
+func (_c *MockRefreshStore_ListSessions_Call) RunAndReturn(run func(ctx context.Context, q db.DBTX, userID uuid.UUID) ([]auth.SessionInfo, error)) *MockRefreshStore_ListSessions_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // RevokeAllSessions provides a mock function for the type MockRefreshStore
 func (_mock *MockRefreshStore) RevokeAllSessions(ctx context.Context, q db.DBTX, userID uuid.UUID) error {
 	ret := _mock.Called(ctx, q, userID)
@@ -240,6 +314,84 @@ func (_c *MockRefreshStore_RevokeSession_Call) Return(err error) *MockRefreshSto
 }
 
 func (_c *MockRefreshStore_RevokeSession_Call) RunAndReturn(run func(ctx context.Context, q db.DBTX, familyID uuid.UUID) error) *MockRefreshStore_RevokeSession_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// RevokeUserSession provides a mock function for the type MockRefreshStore
+func (_mock *MockRefreshStore) RevokeUserSession(ctx context.Context, q db.DBTX, userID uuid.UUID, sessionID uuid.UUID) (bool, error) {
+	ret := _mock.Called(ctx, q, userID, sessionID)
+
+	if len(ret) == 0 {
+		panic("no return value specified for RevokeUserSession")
+	}
+
+	var r0 bool
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, db.DBTX, uuid.UUID, uuid.UUID) (bool, error)); ok {
+		return returnFunc(ctx, q, userID, sessionID)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, db.DBTX, uuid.UUID, uuid.UUID) bool); ok {
+		r0 = returnFunc(ctx, q, userID, sessionID)
+	} else {
+		r0 = ret.Get(0).(bool)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, db.DBTX, uuid.UUID, uuid.UUID) error); ok {
+		r1 = returnFunc(ctx, q, userID, sessionID)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockRefreshStore_RevokeUserSession_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'RevokeUserSession'
+type MockRefreshStore_RevokeUserSession_Call struct {
+	*mock.Call
+}
+
+// RevokeUserSession is a helper method to define mock.On call
+//   - ctx context.Context
+//   - q db.DBTX
+//   - userID uuid.UUID
+//   - sessionID uuid.UUID
+func (_e *MockRefreshStore_Expecter) RevokeUserSession(ctx any, q any, userID any, sessionID any) *MockRefreshStore_RevokeUserSession_Call {
+	return &MockRefreshStore_RevokeUserSession_Call{Call: _e.mock.On("RevokeUserSession", ctx, q, userID, sessionID)}
+}
+
+func (_c *MockRefreshStore_RevokeUserSession_Call) Run(run func(ctx context.Context, q db.DBTX, userID uuid.UUID, sessionID uuid.UUID)) *MockRefreshStore_RevokeUserSession_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 db.DBTX
+		if args[1] != nil {
+			arg1 = args[1].(db.DBTX)
+		}
+		var arg2 uuid.UUID
+		if args[2] != nil {
+			arg2 = args[2].(uuid.UUID)
+		}
+		var arg3 uuid.UUID
+		if args[3] != nil {
+			arg3 = args[3].(uuid.UUID)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+			arg3,
+		)
+	})
+	return _c
+}
+
+func (_c *MockRefreshStore_RevokeUserSession_Call) Return(b bool, err error) *MockRefreshStore_RevokeUserSession_Call {
+	_c.Call.Return(b, err)
+	return _c
+}
+
+func (_c *MockRefreshStore_RevokeUserSession_Call) RunAndReturn(run func(ctx context.Context, q db.DBTX, userID uuid.UUID, sessionID uuid.UUID) (bool, error)) *MockRefreshStore_RevokeUserSession_Call {
 	_c.Call.Return(run)
 	return _c
 }
