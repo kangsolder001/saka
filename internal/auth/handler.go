@@ -67,8 +67,7 @@ func toUserResponse(u user.User) userResponse {
 	return userResponse{ID: u.ID, Email: u.Email, Name: u.Name, EmailVerified: u.EmailVerified()}
 }
 
-// registerRequest mirrors RegisterInput field for field (checked by the
-// conversion in register), adding the JSON names and validation rules.
+// registerRequest is the JSON body of POST /auth/register.
 type registerRequest struct {
 	Email            string `json:"email" validate:"required,email,max=254"`
 	Password         string `json:"password" validate:"required"`
@@ -82,7 +81,13 @@ func (h *Handler) register(c *gin.Context) {
 		return
 	}
 
-	u, err := h.svc.Register(c.Request.Context(), RegisterInput(req))
+	u, err := h.svc.Register(c.Request.Context(), RegisterInput{
+		Email:            req.Email,
+		Password:         req.Password,
+		Name:             req.Name,
+		OrganizationName: req.OrganizationName,
+		ClientIP:         c.ClientIP(),
+	})
 	if err != nil {
 		httpx.Error(c, err)
 		return

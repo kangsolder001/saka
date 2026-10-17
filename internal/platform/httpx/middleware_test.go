@@ -242,3 +242,24 @@ func TestCORS_DisabledWithoutOrigins(t *testing.T) {
 
 	assert.Empty(t, rec.Header().Get("Access-Control-Allow-Origin"))
 }
+
+func TestError_RateLimitedSetsRetryAfterHeader(t *testing.T) {
+	r, _ := newEngine(t, false)
+	r.GET("/slow", func(c *gin.Context) { httpx.Error(c, apperr.RateLimitedAfter(2*time.Minute)) })
+
+	rec := do(r, http.MethodGet, "/slow", nil)
+
+	assert.Equal(t, http.StatusTooManyRequests, rec.Code)
+	assert.Equal(t, "120", rec.Header().Get("Retry-After"))
+	assert.Contains(t, rec.Body.String(), `"code":"RATE_LIMITED"`)
+	assert.Contains(t, rec.Body.String(), `"retry_after_seconds":120`)
+}
+
+func TestError_OtherErrorsHaveNoRetryAfter(t *testing.T) {
+	r, _ := newEngine(t, false)
+	r.GET("/bad", func(c *gin.Context) { httpx.Error(c, apperr.Validation(nil)) })
+
+	rec := do(r, http.MethodGet, "/bad", nil)
+
+	assert.Empty(t, rec.Header().Get("Retry-After"))
+}

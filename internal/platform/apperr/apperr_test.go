@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -111,4 +112,12 @@ func TestWithDetailsDoesNotMutateOriginal(t *testing.T) {
 	_ = base.WithDetails(map[string]any{"a": 1})
 
 	assert.Nil(t, base.Details)
+}
+
+func TestRateLimitedAfter(t *testing.T) {
+	err := apperr.RateLimitedAfter(90*time.Second + 200*time.Millisecond)
+
+	assert.Equal(t, apperr.CodeRateLimited, err.Code)
+	assert.Equal(t, http.StatusTooManyRequests, err.HTTPStatus())
+	assert.Equal(t, 91, err.Details[apperr.DetailRetryAfterSeconds], "rounded up so clients never retry too early")
 }

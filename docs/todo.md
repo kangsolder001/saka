@@ -87,7 +87,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] `POST /auth/refresh` (cookie HttpOnly untuk web, body untuk mobile) (0.3)
 - [x] `POST /auth/logout` (0.1)
 - [x] `POST /auth/forgot-password` (selalu 200) + `POST /auth/reset-password` (cabut semua refresh token, kirim `password_changed`) (0.5)
-- [ ] Rate limiter berbasis PostgreSQL (tabel `rate_limit_hits`, §5.6) + aturan per endpoint (§5.4) (0.7)
+- [x] Rate limiter berbasis PostgreSQL (tabel `rate_limit_hits`, §5.6) + aturan per endpoint (§5.4) (0.7)
 - [ ] Test unit service auth; integration: rotasi, reuse detection, token sekali pakai, tidak ada user enumeration (0.7)
 
 **Selesai bila:** AC Auth (§12) lulus, kecuali "otomatis punya organisasi dan plan Free" (menunggu Fase 4–5).

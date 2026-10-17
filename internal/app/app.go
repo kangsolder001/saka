@@ -17,6 +17,7 @@ import (
 	"github.com/kangsolder001/saka/internal/platform/httpx"
 	"github.com/kangsolder001/saka/internal/platform/logger"
 	"github.com/kangsolder001/saka/internal/platform/outbox"
+	"github.com/kangsolder001/saka/internal/platform/ratelimit"
 	"github.com/kangsolder001/saka/internal/user"
 	emailtemplates "github.com/kangsolder001/saka/templates/email"
 )
@@ -66,6 +67,7 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 		JWT:      jwt,
 		Mail:     mailer,
 		Hasher:   hasher,
+		Limiter:  ratelimit.New(database, database.Pool(), clk),
 		Clock:    clk,
 		Log:      log,
 	}, auth.Config{FrontendURL: cfg.App.FrontendURL})

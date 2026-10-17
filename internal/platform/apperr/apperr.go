@@ -6,7 +6,9 @@ package apperr
 import (
 	"errors"
 	"fmt"
+	"math"
 	"net/http"
+	"time"
 )
 
 // Code is a stable, machine-readable error code exposed in API responses.
@@ -201,6 +203,16 @@ func Conflict(message string) *Error {
 func RateLimited() *Error {
 	return New(CodeRateLimited, "Terlalu banyak permintaan. Coba lagi nanti.")
 }
+
+// RateLimitedAfter reports too many requests and how long the client should
+// wait. The HTTP layer turns the wait into a Retry-After header.
+func RateLimitedAfter(retryAfter time.Duration) *Error {
+	seconds := int(math.Ceil(retryAfter.Seconds()))
+	return RateLimited().WithDetails(map[string]any{DetailRetryAfterSeconds: seconds})
+}
+
+// DetailRetryAfterSeconds is the details key holding the suggested wait.
+const DetailRetryAfterSeconds = "retry_after_seconds"
 
 // Internal wraps an unexpected failure. The cause is for logs only.
 func Internal(cause error) *Error {

@@ -25,6 +25,9 @@ import (
 
 func init() { gin.SetMode(gin.TestMode) }
 
+// remoteAddrHeader is a pseudo header the test client turns into the request's RemoteAddr.
+const remoteAddrHeader = "X-Test-Remote-Addr"
+
 var epoch = time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
 
 // stack is the real API (router, services, PostgreSQL) driven over HTTP with
@@ -75,6 +78,10 @@ func (s *stack) do(method, path, body string, headers map[string]string) respons
 		req.Header.Set("Content-Type", "application/json")
 	}
 	for k, v := range headers {
+		if k == remoteAddrHeader { // test-only: pretend to be another client address
+			req.RemoteAddr = v + ":4000"
+			continue
+		}
 		req.Header.Set(k, v)
 	}
 	rec := httptest.NewRecorder()

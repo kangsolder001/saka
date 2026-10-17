@@ -14,6 +14,7 @@ import (
 	mailmocks "github.com/kangsolder001/saka/internal/mail/mocks"
 	"github.com/kangsolder001/saka/internal/platform/clock"
 	"github.com/kangsolder001/saka/internal/platform/logger"
+	"github.com/kangsolder001/saka/internal/platform/ratelimit"
 )
 
 // stubDB satisfies db.DBTX without a database: unit tests only pass it around
@@ -38,7 +39,48 @@ type fixture struct {
 	tokens  *authmocks.MockTokenService
 	refresh *authmocks.MockRefreshStore
 	jwt     *auth.JWT
+	limiter *fakeLimiter
 	mail    *mailmocks.MockSender
+}
+
+// fakeLimiter allows everything by default and records what it was asked.
+// Tests flip the deny switches to simulate a client over its limit.
+type fakeLimiter struct {
+	denyTake   bool
+	denyCheck  bool
+	retryAfter time.Duration
+
+	takes   []string // rule names
+	checks  []string
+	records []string
+	resets  int
+}
+
+func (l *fakeLimiter) decision(deny bool) ratelimit.Decision {
+	if deny {
+		return ratelimit.Decision{Allowed: false, RetryAfter: l.retryAfter}
+	}
+	return ratelimit.Decision{Allowed: true, Remaining: 1}
+}
+
+func (l *fakeLimiter) Take(_ context.Context, _ string, r ratelimit.Rule) (ratelimit.Decision, error) {
+	l.takes = append(l.takes, r.Name)
+	return l.decision(l.denyTake), nil
+}
+
+func (l *fakeLimiter) Check(_ context.Context, _ string, r ratelimit.Rule) (ratelimit.Decision, error) {
+	l.checks = append(l.checks, r.Name)
+	return l.decision(l.denyCheck), nil
+}
+
+func (l *fakeLimiter) Record(_ context.Context, _ string, r ratelimit.Rule) error {
+	l.records = append(l.records, r.Name)
+	return nil
+}
+
+func (l *fakeLimiter) Reset(context.Context, string) error {
+	l.resets++
+	return nil
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -50,12 +92,13 @@ func newFixture(t *testing.T) *fixture {
 		users:   authmocks.NewMockUserService(t),
 		tokens:  authmocks.NewMockTokenService(t),
 		refresh: authmocks.NewMockRefreshStore(t),
+		limiter: &fakeLimiter{retryAfter: 90 * time.Second},
 		mail:    mailmocks.NewMockSender(t),
 	}
 	f.jwt = newJWT(t, f.clock)
 	f.svc = auth.NewService(auth.Dependencies{
 		Tx: f.tx, Pool: stubDB{}, Users: f.users, Tokens: f.tokens, Sessions: f.refresh,
-		JWT: f.jwt, Mail: f.mail, Hasher: f.hasher, Clock: f.clock, Log: logger.Nop(),
+		JWT: f.jwt, Mail: f.mail, Hasher: f.hasher, Limiter: f.limiter, Clock: f.clock, Log: logger.Nop(),
 	}, auth.Config{FrontendURL: "https://app.example.com/"})
 	return f
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/kangsolder001/saka/internal/platform/clock"
 	"github.com/kangsolder001/saka/internal/platform/db"
 	"github.com/kangsolder001/saka/internal/platform/logger"
+	"github.com/kangsolder001/saka/internal/platform/ratelimit"
 	"github.com/kangsolder001/saka/internal/user"
 )
 
@@ -72,8 +73,10 @@ type Dependencies struct {
 	JWT    *JWT
 	Mail   mail.Sender
 	Hasher *PasswordHasher
-	Clock  clock.Clock
-	Log    *logger.Logger
+	// Limiter enforces the per-endpoint rate limits (spec §5.4).
+	Limiter RateLimiter
+	Clock   clock.Clock
+	Log     *logger.Logger
 }
 
 // Service implements the auth use cases (spec §5).
@@ -95,12 +98,17 @@ type RegisterInput struct {
 	Name     string
 	// OrganizationName is validated now but only used once organizations exist (Phase 4).
 	OrganizationName string
+	// ClientIP is the caller's address, used for the sign-up rate limit.
+	ClientIP string
 }
 
 // Register creates the user and queues the verification email in a single
 // transaction: either everything exists afterwards or nothing does. It does
 // not log the user in. A taken email returns CONFLICT.
 func (s *Service) Register(ctx context.Context, in RegisterInput) (user.User, error) {
+	if err := s.take(ctx, RuleRegister, in.ClientIP); err != nil {
+		return user.User{}, err
+	}
 	email := user.NormalizeEmail(in.Email)
 	name := strings.TrimSpace(in.Name)
 
@@ -180,6 +188,9 @@ func (s *Service) VerifyEmail(ctx context.Context, rawToken string) error {
 // ones) and queues a new email. A user whose email is already verified gets
 // CONFLICT.
 func (s *Service) ResendVerification(ctx context.Context, userID uuid.UUID) error {
+	if err := s.take(ctx, RuleResendVerification, userID.String()); err != nil {
+		return err
+	}
 	u, err := s.Users.GetByID(ctx, s.Pool, userID)
 	if err != nil {
 		return err
@@ -220,10 +231,22 @@ func errInvalidCredentials() error {
 // latency reveals which accounts exist. A user whose email is not yet
 // verified may log in (spec §5.2).
 func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error) {
+	// Only failed attempts count (spec §5.4), keyed by email AND IP so an
+	// attacker cannot lock a victim out from another address.
+	limitKey := ratelimit.Key(RuleLogin.Name, user.NormalizeEmail(in.Email), in.Client.IP)
+	decision, err := s.Limiter.Check(ctx, limitKey, RuleLogin)
+	if err != nil {
+		return LoginResult{}, err
+	}
+	if !decision.Allowed {
+		return LoginResult{}, apperr.RateLimitedAfter(decision.RetryAfter)
+	}
+
 	u, err := s.Users.GetByEmail(ctx, s.Pool, in.Email)
 	if err != nil {
 		if apperr.IsCode(err, apperr.CodeNotFound) {
 			s.Hasher.VerifyDummy(in.Password)
+			s.recordLoginFailure(ctx, limitKey)
 			return LoginResult{}, errInvalidCredentials()
 		}
 		return LoginResult{}, err
@@ -234,6 +257,7 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 		return LoginResult{}, fmt.Errorf("auth: verify password: %w", err)
 	}
 	if !ok {
+		s.recordLoginFailure(ctx, limitKey)
 		return LoginResult{}, errInvalidCredentials()
 	}
 	if u.Status != user.StatusActive {
@@ -256,6 +280,10 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 	if err != nil {
 		return LoginResult{}, err
 	}
+	if err := s.Limiter.Reset(ctx, limitKey); err != nil {
+		zl := s.Log.FromContext(ctx)
+		zl.Warn().Err(err).Msg("could not reset login failures")
+	}
 	return LoginResult{
 		User:             u,
 		AccessToken:      access,
@@ -263,6 +291,16 @@ func (s *Service) Login(ctx context.Context, in LoginInput) (LoginResult, error)
 		RefreshToken:     refresh.Raw,
 		RefreshExpiresAt: refresh.ExpiresAt,
 	}, nil
+}
+
+// recordLoginFailure counts a failed login. It writes outside any transaction
+// so the count survives, and a failure to record must not turn into a
+// different response for the client.
+func (s *Service) recordLoginFailure(ctx context.Context, limitKey string) {
+	if err := s.Limiter.Record(ctx, limitKey, RuleLogin); err != nil {
+		zl := s.Log.FromContext(ctx)
+		zl.Warn().Err(err).Msg("could not record failed login")
+	}
 }
 
 // upgradePasswordHash re-hashes a password with the current Argon2 cost after
@@ -393,6 +431,11 @@ func (s *Service) Logout(ctx context.Context, p Principal) error {
 // existing account and the email itself is sent asynchronously, so the timing
 // difference is negligible; the per-email rate limit covers the rest.)
 func (s *Service) ForgotPassword(ctx context.Context, email string) error {
+	// The limit applies to the address itself, registered or not, so hitting it
+	// reveals nothing about the account.
+	if err := s.take(ctx, RuleForgotPassword, user.NormalizeEmail(email)); err != nil {
+		return err
+	}
 	u, err := s.Users.GetByEmail(ctx, s.Pool, email)
 	if err != nil {
 		if apperr.IsCode(err, apperr.CodeNotFound) {

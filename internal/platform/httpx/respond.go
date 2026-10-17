@@ -1,6 +1,8 @@
 package httpx
 
 import (
+	"strconv"
+
 	"github.com/gin-gonic/gin"
 
 	"github.com/kangsolder001/saka/internal/platform/apperr"
@@ -12,6 +14,9 @@ import (
 func Error(c *gin.Context, err error) {
 	appErr := apperr.From(err)
 	_ = c.Error(appErr)
+	if seconds, ok := appErr.Details[apperr.DetailRetryAfterSeconds].(int); ok && appErr.Code == apperr.CodeRateLimited {
+		c.Header("Retry-After", strconv.Itoa(seconds))
+	}
 	status, body := appErr.Response()
 	c.AbortWithStatusJSON(status, body)
 }
