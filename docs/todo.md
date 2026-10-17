@@ -74,7 +74,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 
 - [x] Config: section `auth` (jwt_secret, TTL) dan `app.frontend_url` (0.1)
 - [ ] Modul `user` minimal: tabel `users` via sqlc (create, get by id/email, tandai terverifikasi, ganti password) (0.3)
-- [ ] Migrasi `user_tokens`, `refresh_tokens` (§4.2, §4.3) (0.1)
+- [x] Migrasi `user_tokens`, `refresh_tokens` (§4.2, §4.3) (0.1)
 - [ ] Hashing Argon2id + validasi password (8–72, ≠ email) (0.25)
 - [ ] Util token acak + hash SHA-256; service `user_tokens` (buat, pakai sekali, expiry per tipe) (0.4)
 - [ ] `POST /auth/register` (user + job verifikasi; org & subscription di-stub, §5.2) (0.5)

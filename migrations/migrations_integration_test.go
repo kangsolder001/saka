@@ -141,3 +141,88 @@ func TestOutboxJobs_RejectsUnknownStatus(t *testing.T) {
 	require.ErrorAs(t, err, &pgErr)
 	assert.Equal(t, "23514", pgErr.Code, "check_violation")
 }
+
+func createUser(t *testing.T, conn *pgx.Conn, email string) string {
+	t.Helper()
+	var id string
+	require.NoError(t, conn.QueryRow(context.Background(),
+		"INSERT INTO users (email, password_hash, name) VALUES ($1, 'h', 'n') RETURNING id", email).Scan(&id))
+	return id
+}
+
+func TestUserTokens_Constraints(t *testing.T) {
+	conn, _ := newConn(t)
+	userID := createUser(t, conn, "t@example.com")
+	insert := func(tokenType, hash string) error {
+		_, err := conn.Exec(context.Background(),
+			"INSERT INTO user_tokens (user_id, type, token_hash, expires_at) VALUES ($1, $2, $3, now() + interval '1 hour')",
+			userID, tokenType, hash)
+		return err
+	}
+
+	require.NoError(t, insert("email_verification", "hash-1"))
+
+	var pgErr *pgconn.PgError
+	require.ErrorAs(t, insert("email_verification", "hash-1"), &pgErr)
+	assert.Equal(t, "23505", pgErr.Code, "token_hash is unique")
+	require.ErrorAs(t, insert("magic_link", "hash-2"), &pgErr)
+	assert.Equal(t, "23514", pgErr.Code, "type is restricted")
+}
+
+func TestUserTokens_AreRemovedWithTheirUser(t *testing.T) {
+	conn, _ := newConn(t)
+	userID := createUser(t, conn, "cascade@example.com")
+	_, err := conn.Exec(context.Background(),
+		"INSERT INTO user_tokens (user_id, type, token_hash, expires_at) VALUES ($1, 'password_reset', 'h', now())", userID)
+	require.NoError(t, err)
+	_, err = conn.Exec(context.Background(),
+		"INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at) VALUES ($1, uuidv7(), 'r', now())", userID)
+	require.NoError(t, err)
+
+	_, err = conn.Exec(context.Background(), "DELETE FROM users WHERE id = $1", userID)
+	require.NoError(t, err)
+
+	var tokens, refresh int
+	require.NoError(t, conn.QueryRow(context.Background(), "SELECT (SELECT count(*) FROM user_tokens), (SELECT count(*) FROM refresh_tokens)").Scan(&tokens, &refresh))
+	assert.Zero(t, tokens)
+	assert.Zero(t, refresh)
+}
+
+func TestRefreshTokens_Defaults(t *testing.T) {
+	conn, _ := newConn(t)
+	userID := createUser(t, conn, "r@example.com")
+
+	var (
+		version int
+		revoked *string
+		replace *string
+	)
+	err := conn.QueryRow(context.Background(), `
+		INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at)
+		VALUES ($1, uuidv7(), 'rt-1', now() + interval '30 days')
+		RETURNING uuid_extract_version(id), revoked_at::text, replaced_by::text`, userID).Scan(&version, &revoked, &replace)
+
+	require.NoError(t, err)
+	assert.Equal(t, 7, version)
+	assert.Nil(t, revoked)
+	assert.Nil(t, replace)
+}
+
+func TestRefreshTokens_TokenHashIsUniqueAndReplacedByMustExist(t *testing.T) {
+	conn, _ := newConn(t)
+	userID := createUser(t, conn, "r2@example.com")
+	_, err := conn.Exec(context.Background(),
+		"INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at) VALUES ($1, uuidv7(), 'same', now())", userID)
+	require.NoError(t, err)
+
+	var pgErr *pgconn.PgError
+	_, err = conn.Exec(context.Background(),
+		"INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at) VALUES ($1, uuidv7(), 'same', now())", userID)
+	require.ErrorAs(t, err, &pgErr)
+	assert.Equal(t, "23505", pgErr.Code)
+
+	_, err = conn.Exec(context.Background(),
+		"INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at, replaced_by) VALUES ($1, uuidv7(), 'other', now(), uuidv7())", userID)
+	require.ErrorAs(t, err, &pgErr)
+	assert.Equal(t, "23503", pgErr.Code, "replaced_by must reference an existing token")
+}
