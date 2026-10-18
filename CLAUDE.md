@@ -4,7 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Status repo
 
-Saat ini repo **hanya berisi dokumentasi** di `docs/`; belum ada kode Go, `go.mod`, Makefile, atau CI. Belum ada perintah build/lint/test. Fase 0 di `docs/todo.md` yang akan membuatnya, termasuk Makefile (migrate, run, test, seed, sqlc). Jangan mengarang perintah sebelum itu ada.
+Kode Go sudah ada. **Fase 0–3 selesai** (platform, outbox & mail, auth, user); **Fase 4 (organisasi, tim, role, RLS) berikutnya**. Acuan progres adalah centang di `docs/todo.md`, bukan ringkasan ini. Fase 5–7 (entitlement, billing, hardening) belum ada; `internal/org`, `internal/entitlement`, `internal/billing` masih berisi `.gitkeep`.
+
+Perintah (semua lewat `Makefile`; `make help` menampilkan daftarnya):
+- `make up` / `make down`: PostgreSQL 18, Mailpit, Redis via docker compose. `make config` membuat `config.json` dari `config.example.json`.
+- `make migrate`, `migrate-down`, `migrate-status`, `migrate-new name=<snake_case>`: migrasi `goose` di `migrations/`.
+- `make run` (API), `make run-worker` (worker outbox/email), `make build`.
+- `make sqlc` dan `make mocks`: generate kode. **Hasilnya di-commit**; CI gagal bila ada drift (`make tidy mocks sqlc` lalu `git diff --exit-code`). Jalankan keduanya setelah mengubah `queries/*.sql`, `sqlc.yaml`, interface yang ada di `.mockery.yml`, atau menambah interface baru ke file itu.
+- `make test` (unit, tanpa Docker), `make test-integration` (tag `integration`, butuh Docker untuk `testcontainers-go`), `make lint` (`golangci-lint` v2, dijalankan dengan dan tanpa tag `integration`).
+- Belum ada target `seed`; ditambahkan bersama perintah seed (lihat `docs/todo.md`).
 
 Dokumen sumber, dibaca dalam urutan ini:
 - `docs/spec.md`: spesifikasi Tier 1 (sumber kebenaran: model data, endpoint, aturan bisnis, acceptance criteria §12).
@@ -36,6 +44,13 @@ Modular monolith: `cmd/api`, `cmd/worker`, dan `internal/{auth,user,org,billing,
 
 Urutan ketergantungan (juga urutan pengerjaan fase): `platform → mail/outbox → auth → user → org → entitlement → billing → hardening`. Jangan dibalik. Konsekuensinya: registrasi di Fase 2 hanya membuat user; pembuatan org ditambah di Fase 4 dan subscription `free` di Fase 5, sehingga acceptance criteria "daftar otomatis punya org dan plan Free" baru lengkap di akhir Fase 5.
 
+### Peta kode dan kemudi dependensi
+
+- **`internal/app`** adalah composition root (`NewRouter`): semua modul dibangun di sini lewat constructor, dan `cmd/api` serta test e2e memakai jalur yang sama. Tambah modul/route baru di sini. `app.Options` adalah tempat test menyuntikkan pengganti (mis. `Organizations`).
+- Tiap modul punya `queries/*.sql` + paket `<modul>db` hasil `sqlc`; fungsi repository menerima `db.DBTX` (pool atau transaksi) supaya bisa dipakai dalam transaksi pemanggil.
+- **Interface dideklarasikan oleh pemakainya, dan modul tidak boleh saling mengimpor melingkar.** `auth` mengimpor `user`, jadi `user` tidak boleh mengimpor `auth`. Contohnya: `user.Handler` melayani semua endpoint `/me`, tetapi hal yang dimiliki `auth` (password, token sekali pakai, sesi) dicapai lewat interface `user.AccountSecurity` yang diimplementasikan `auth.Service`; middleware autentikasi diteruskan ke `Routes(rg, authenticate)` dan handler membaca user/sesi dari `context.Context` (`reqctx`). Hal yang sama untuk hapus akun: `auth.OrganizationGuard` diimplementasikan modul org (Fase 4), sementara itu `auth.NoOrganizations`.
+- **Tindakan sensitif butuh konfirmasi password lama** (ganti password, ganti email, hapus akun) lewat `auth.Service.confirmPassword`: password salah → `400` pada field `current_password` (bukan 401), tebakan gagal dibatasi 5/15 menit per user. Tindakan sensitif baru memakai helper yang sama. Keputusan rinci modul user ada di `docs/spec.md` §6.1.
+
 ### Aturan lintas modul yang mudah terlewat
 
 - **Isolasi tenant berlapis.** Route `/orgs/{orgId}/...` melewati tenant middleware: bukan anggota → **404** (bukan 403). `orgId` dan `role` hanya diambil dari `context.Context`, tidak pernah dari input user; query tanpa `organization_id` dianggap bug. Lapisan kedua: RLS dengan `SET LOCAL app.current_org` per transaksi (di helper `WithTx`), aplikasi konek dengan role DB **non-owner**, worker/migrasi butuh jalur bypass. Index tabel org-scoped diawali `organization_id`.
@@ -52,6 +67,8 @@ Urutan ketergantungan (juga urutan pengerjaan fase): `platform → mail/outbox �
 ## Testing
 
 Unit test service layer dengan mock hasil generate `mockery` untuk dependensi (repo, `Mailer`, `PaymentProvider`, dll.) dan fake `Clock` buatan sendiri (butuh state waktu yang bisa digeser, bukan sekadar mock); integration test dengan PostgreSQL asli (`testcontainers-go`) untuk repository, webhook, cron, dan **isolasi tenant** (user org A tidak boleh menyentuh data org B). Setiap acceptance criteria di spec §12 harus punya test otomatis.
+
+Konvensi test yang sudah dipakai: file integration diberi `//go:build integration`; unit test service memakai `fixture_test.go` (mock + `clock.Fake`); e2e HTTP di `internal/app` memakai `newStack` (router asli + PostgreSQL + Redis + fake clock; lihat `stack_integration_test.go`). Tiap fitur ditulis bersama testnya, termasuk jalur gagal (rollback transaksi, rate limit, akses lintas user).
 
 ## Konvensi kode
 
