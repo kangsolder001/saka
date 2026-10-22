@@ -1,4 +1,5 @@
-// Command worker runs background jobs: it drains the outbox (email delivery).
+// Command worker runs background jobs: it drains the outbox (email delivery)
+// and runs the periodic billing jobs.
 package main
 
 import (
@@ -16,6 +17,7 @@ import (
 	"github.com/kangsolder001/saka/internal/platform/logger"
 	"github.com/kangsolder001/saka/internal/platform/outbox"
 	"github.com/kangsolder001/saka/internal/platform/safego"
+	"github.com/kangsolder001/saka/internal/platform/scheduler"
 	emailtemplates "github.com/kangsolder001/saka/templates/email"
 )
 
@@ -73,6 +75,11 @@ func run() error {
 		return err
 	}
 	worker.Register(mail.JobTypeSendEmail, emailHandler.Handle)
+
+	// Periodic jobs (spec §8.6) run beside the outbox worker, one at a time
+	// across all workers (advisory locks) and stopped by the same context.
+	jobs := scheduler.New(scheduler.NewPostgresLocker(database.Pool()), clk, runner, log)
+	runner.Go(ctx, "scheduler", jobs.Run)
 
 	base.Info().Str("env", cfg.App.Env).Str("mail_driver", cfg.Mail.Driver).Msg("worker starting")
 	if err := worker.Run(ctx); err != nil { // returns after in-flight jobs finish

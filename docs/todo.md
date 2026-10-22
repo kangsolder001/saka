@@ -177,7 +177,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [ ] Test: webhook ganda diproses sekali, signature salah ditolak, semua transisi dengan fake clock (0.7)
 
 **Bagian C: cron & notifikasi**
-- [ ] Scheduler di worker + advisory lock (0.3)
+- [x] Scheduler di worker + advisory lock (0.3). `internal/platform/scheduler`: satu loop di `cmd/worker` lewat `safego`, `pg_try_advisory_xact_lock` per nama job, interval dari config `billing.*_jobs_interval`; diuji dengan lock Postgres sungguhan (dua worker, panic, koneksi mati)
 - [ ] `billing.renewals` (invoice H-3) (0.3)
 - [ ] `billing.expire` (active→past_due→expired, trial→expired, `grace_until` 3 hari) (0.5)
 - [ ] `billing.apply_scheduled` (pending plan & cancel_at_period_end) (0.3)
