@@ -111,3 +111,63 @@ func (h *Handler) resendInvitation(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"invitation": invitationJSON(inv)})
 }
+
+// publicInvitationRoutes registers the endpoints addressed by the link in the
+// invitation email. Looking up and declining need no login: the link's token is
+// the credential, and the invitee may not have an account yet. Accepting needs
+// a verified login, because it grants membership to whoever holds that email
+// address (spec §7.4).
+func (h *Handler) publicInvitationRoutes(rg *gin.RouterGroup, authenticate, requireVerifiedEmail gin.HandlerFunc) {
+	rg.GET("/invitations/:token", h.invitationInfo)
+	rg.POST("/invitations/:token/accept", authenticate, requireVerifiedEmail, h.acceptInvitation)
+	rg.POST("/invitations/:token/decline", h.declineInvitation)
+}
+
+type invitationInfoResponse struct {
+	Email         string    `json:"email"`
+	Role          Role      `json:"role"`
+	Organization  orgBrief  `json:"organization"`
+	InviterName   string    `json:"inviter_name"`
+	ExpiresAt     time.Time `json:"expires_at"`
+	AccountExists bool      `json:"account_exists"`
+}
+
+type orgBrief struct {
+	Name    string  `json:"name"`
+	LogoURL *string `json:"logo_url"`
+}
+
+func (h *Handler) invitationInfo(c *gin.Context) {
+	info, err := h.svc.InvitationByToken(c.Request.Context(), c.Param("token"))
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"invitation": invitationInfoResponse{
+		Email: info.Email, Role: info.Role, Organization: orgBrief{Name: info.OrganizationName, LogoURL: info.OrganizationLogo},
+		InviterName: info.InviterName, ExpiresAt: info.ExpiresAt, AccountExists: info.AccountExists,
+	}})
+}
+
+func (h *Handler) acceptInvitation(c *gin.Context) {
+	userID, ok := currentUser(c)
+	if !ok {
+		return
+	}
+	joined, err := h.svc.AcceptInvitation(c.Request.Context(), userID, c.Param("token"))
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"organization": memberOrganizationResponse{
+		organizationResponse: organizationJSON(joined.Organization), Role: joined.Role,
+	}})
+}
+
+func (h *Handler) declineInvitation(c *gin.Context) {
+	if err := h.svc.DeclineInvitation(c.Request.Context(), c.Param("token")); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}

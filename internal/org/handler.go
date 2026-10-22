@@ -47,6 +47,7 @@ func (h *Handler) Routes(rg *gin.RouterGroup, authenticate, requireVerifiedEmail
 	one.DELETE("", h.delete)
 	h.memberRoutes(one)
 	h.invitationRoutes(one, requireVerifiedEmail)
+	h.publicInvitationRoutes(rg, authenticate, requireVerifiedEmail)
 }
 
 type organizationResponse struct {

@@ -136,6 +136,33 @@ func (q *Queries) InsertMembership(ctx context.Context, arg InsertMembershipPara
 	return i, err
 }
 
+const insertMembershipIfAbsent = `-- name: InsertMembershipIfAbsent :execrows
+INSERT INTO memberships (organization_id, user_id, role, created_at)
+VALUES ($1, $2, $3, $4::timestamptz)
+ON CONFLICT (organization_id, user_id) DO NOTHING
+`
+
+type InsertMembershipIfAbsentParams struct {
+	OrganizationID uuid.UUID
+	UserID         uuid.UUID
+	Role           string
+	Now            time.Time
+}
+
+// Used when accepting an invitation: already being a member is not an error.
+func (q *Queries) InsertMembershipIfAbsent(ctx context.Context, arg InsertMembershipIfAbsentParams) (int64, error) {
+	result, err := q.db.Exec(ctx, insertMembershipIfAbsent,
+		arg.OrganizationID,
+		arg.UserID,
+		arg.Role,
+		arg.Now,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const listMemberships = `-- name: ListMemberships :many
 SELECT id, organization_id, user_id, role, created_at
 FROM memberships

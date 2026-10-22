@@ -128,7 +128,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Anggota: `GET members`, `PATCH role`, `DELETE member`, `POST leave` (0.6). Matriks izin diuji lewat e2e (`internal/app/members_integration_test.go`); keputusan di spec §7.6
 - [x] Transfer kepemilikan atomik + konfirmasi password (§7.5) (0.4). Atomisitas diuji dengan trigger yang menggagalkan langkah terakhir, balapan dua transfer diuji dengan dua goroutine; `org.NewService` kini menerima `org.Dependencies`
 - [x] Undangan: buat/list/batalkan/resend; perbarui undangan aktif yang sama (§7.4) (0.6). Limit `members` dipasang di Fase 5
-- [ ] Undangan: `GET /invitations/{token}`, accept (cek email sama), decline, kedaluwarsa 7 hari (0.6)
+- [x] Undangan: `GET /invitations/{token}`, accept (cek email sama), decline, kedaluwarsa 7 hari (0.6). Accept mewajibkan email terverifikasi; alasan di `details.reason` (spec §7.6)
 - [ ] Registrasi dengan email yang punya undangan → auto-accept, tanpa org baru (0.3)
 - [x] Template `invitation`; guard `EMAIL_NOT_VERIFIED` untuk undang (0.3). Template dikerjakan lebih awal (mail menolak template yang belum ada saat enqueue); guard dipasang pada `POST /invitations` dan `.../resend`
 - [ ] Hubungkan penolakan hapus akun owner ke modul org: implementasikan `auth.OrganizationGuard` (menolak bila owner org berisi anggota lain; hapus org yang hanya berisi dia + batalkan subscription) dan ganti `auth.NoOrganizations` di `internal/app` (0.3)

@@ -50,3 +50,33 @@ SET token_hash = @token_hash, expires_at = @expires_at::timestamptz
 WHERE id = @id AND organization_id = @organization_id
   AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL
 RETURNING *;
+
+-- The public invitation lookup: the token (by hash) is the credential, so this
+-- is cross-tenant and runs in a system transaction. The two variants differ
+-- only in the row lock the accept/decline paths need.
+-- name: GetInvitationByTokenHash :one
+SELECT i.id, i.organization_id, i.email, i.role, i.invited_by, i.expires_at,
+       i.accepted_at, i.declined_at, i.revoked_at, i.created_at,
+       o.name AS organization_name, o.logo_url AS organization_logo_url,
+       o.deleted_at AS organization_deleted_at
+FROM invitations i
+JOIN organizations o ON o.id = i.organization_id
+WHERE i.token_hash = @token_hash;
+
+-- name: GetInvitationByTokenHashForUpdate :one
+SELECT i.id, i.organization_id, i.email, i.role, i.invited_by, i.expires_at,
+       i.accepted_at, i.declined_at, i.revoked_at, i.created_at,
+       o.name AS organization_name, o.logo_url AS organization_logo_url,
+       o.deleted_at AS organization_deleted_at
+FROM invitations i
+JOIN organizations o ON o.id = i.organization_id
+WHERE i.token_hash = @token_hash
+FOR UPDATE OF i;
+
+-- name: MarkInvitationAccepted :execrows
+UPDATE invitations SET accepted_at = @now::timestamptz
+WHERE id = @id AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL;
+
+-- name: MarkInvitationDeclined :execrows
+UPDATE invitations SET declined_at = @now::timestamptz
+WHERE id = @id AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL;

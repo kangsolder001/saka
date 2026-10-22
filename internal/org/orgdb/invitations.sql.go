@@ -12,6 +12,104 @@ import (
 	"github.com/google/uuid"
 )
 
+const getInvitationByTokenHash = `-- name: GetInvitationByTokenHash :one
+SELECT i.id, i.organization_id, i.email, i.role, i.invited_by, i.expires_at,
+       i.accepted_at, i.declined_at, i.revoked_at, i.created_at,
+       o.name AS organization_name, o.logo_url AS organization_logo_url,
+       o.deleted_at AS organization_deleted_at
+FROM invitations i
+JOIN organizations o ON o.id = i.organization_id
+WHERE i.token_hash = $1
+`
+
+type GetInvitationByTokenHashRow struct {
+	ID                    uuid.UUID
+	OrganizationID        uuid.UUID
+	Email                 string
+	Role                  string
+	InvitedBy             uuid.UUID
+	ExpiresAt             time.Time
+	AcceptedAt            *time.Time
+	DeclinedAt            *time.Time
+	RevokedAt             *time.Time
+	CreatedAt             time.Time
+	OrganizationName      string
+	OrganizationLogoUrl   *string
+	OrganizationDeletedAt *time.Time
+}
+
+// The public invitation lookup: the token (by hash) is the credential, so this
+// is cross-tenant and runs in a system transaction. The two variants differ
+// only in the row lock the accept/decline paths need.
+func (q *Queries) GetInvitationByTokenHash(ctx context.Context, tokenHash string) (GetInvitationByTokenHashRow, error) {
+	row := q.db.QueryRow(ctx, getInvitationByTokenHash, tokenHash)
+	var i GetInvitationByTokenHashRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.Email,
+		&i.Role,
+		&i.InvitedBy,
+		&i.ExpiresAt,
+		&i.AcceptedAt,
+		&i.DeclinedAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+		&i.OrganizationName,
+		&i.OrganizationLogoUrl,
+		&i.OrganizationDeletedAt,
+	)
+	return i, err
+}
+
+const getInvitationByTokenHashForUpdate = `-- name: GetInvitationByTokenHashForUpdate :one
+SELECT i.id, i.organization_id, i.email, i.role, i.invited_by, i.expires_at,
+       i.accepted_at, i.declined_at, i.revoked_at, i.created_at,
+       o.name AS organization_name, o.logo_url AS organization_logo_url,
+       o.deleted_at AS organization_deleted_at
+FROM invitations i
+JOIN organizations o ON o.id = i.organization_id
+WHERE i.token_hash = $1
+FOR UPDATE OF i
+`
+
+type GetInvitationByTokenHashForUpdateRow struct {
+	ID                    uuid.UUID
+	OrganizationID        uuid.UUID
+	Email                 string
+	Role                  string
+	InvitedBy             uuid.UUID
+	ExpiresAt             time.Time
+	AcceptedAt            *time.Time
+	DeclinedAt            *time.Time
+	RevokedAt             *time.Time
+	CreatedAt             time.Time
+	OrganizationName      string
+	OrganizationLogoUrl   *string
+	OrganizationDeletedAt *time.Time
+}
+
+func (q *Queries) GetInvitationByTokenHashForUpdate(ctx context.Context, tokenHash string) (GetInvitationByTokenHashForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getInvitationByTokenHashForUpdate, tokenHash)
+	var i GetInvitationByTokenHashForUpdateRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.Email,
+		&i.Role,
+		&i.InvitedBy,
+		&i.ExpiresAt,
+		&i.AcceptedAt,
+		&i.DeclinedAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+		&i.OrganizationName,
+		&i.OrganizationLogoUrl,
+		&i.OrganizationDeletedAt,
+	)
+	return i, err
+}
+
 const getOpenInvitationByEmailForUpdate = `-- name: GetOpenInvitationByEmailForUpdate :one
 SELECT id FROM invitations
 WHERE organization_id = $1 AND email = $2
@@ -91,6 +189,42 @@ func (q *Queries) ListActiveInvitations(ctx context.Context, arg ListActiveInvit
 		return nil, err
 	}
 	return items, nil
+}
+
+const markInvitationAccepted = `-- name: MarkInvitationAccepted :execrows
+UPDATE invitations SET accepted_at = $1::timestamptz
+WHERE id = $2 AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL
+`
+
+type MarkInvitationAcceptedParams struct {
+	Now time.Time
+	ID  uuid.UUID
+}
+
+func (q *Queries) MarkInvitationAccepted(ctx context.Context, arg MarkInvitationAcceptedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markInvitationAccepted, arg.Now, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const markInvitationDeclined = `-- name: MarkInvitationDeclined :execrows
+UPDATE invitations SET declined_at = $1::timestamptz
+WHERE id = $2 AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL
+`
+
+type MarkInvitationDeclinedParams struct {
+	Now time.Time
+	ID  uuid.UUID
+}
+
+func (q *Queries) MarkInvitationDeclined(ctx context.Context, arg MarkInvitationDeclinedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, markInvitationDeclined, arg.Now, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const renewInvitation = `-- name: RenewInvitation :one

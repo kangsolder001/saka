@@ -52,3 +52,9 @@ WHERE organization_id = @organization_id AND user_id = @user_id AND role = 'owne
 -- name: PromoteToOwner :execrows
 UPDATE memberships SET role = 'owner'
 WHERE organization_id = @organization_id AND user_id = @user_id AND role <> 'owner';
+
+-- Used when accepting an invitation: already being a member is not an error.
+-- name: InsertMembershipIfAbsent :execrows
+INSERT INTO memberships (organization_id, user_id, role, created_at)
+VALUES (@organization_id, @user_id, @role, @now::timestamptz)
+ON CONFLICT (organization_id, user_id) DO NOTHING;
