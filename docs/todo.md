@@ -161,7 +161,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 **Bagian A: pondasi & checkout**
 - [ ] Spike Midtrans sandbox: buat payment, terima webhook, cek signature (0.5)
 - [x] Migrasi `invoices`, `payment_events` (§4.9, §4.10) (0.3). `migrations/00010`: `invoices` ber-RLS (policy + index berawalan `organization_id`), kolom tambahan `kind` (`checkout`/`renewal`) dan penanda pengingat; indeks unik parsial mencegah dua checkout hidup atau dua invoice untuk periode renewal yang sama; `payment_events` global tanpa RLS; sequence `invoice_number_seq`
-- [ ] Interface `PaymentProvider` + implementasi Midtrans + fake provider untuk test (§8.1) (1)
+- [x] Interface `PaymentProvider` + implementasi Midtrans + fake provider untuk test (§8.1) (1). `internal/billing/payment` (+ `midtrans`, `fake`), config `billing`; Midtrans ditulis terhadap dokumentasi dan diuji dengan server palsu + vektor signature, **belum ke sandbox sungguhan** (asumsi yang perlu diverifikasi ada di spec §8.7)
 - [ ] Generator nomor invoice global `INV-YYYY-NNNNNN` (sequence) (0.15)
 - [ ] `POST …/subscription/checkout` (butuh role owner + email terverifikasi) → invoice + payment link (0.6)
 - [ ] `GET …/invoices`, `GET …/invoices/{id}` (0.3)

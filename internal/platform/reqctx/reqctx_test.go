@@ -11,6 +11,23 @@ import (
 	"github.com/kangsolder001/saka/internal/platform/reqctx"
 )
 
+func TestTraceparent_ContinuesTheTraceOfTheContext(t *testing.T) {
+	traceID := reqctx.NewTraceID()
+	ctx := reqctx.WithTraceID(context.Background(), traceID)
+
+	header := reqctx.Traceparent(ctx)
+
+	parsed, ok := reqctx.ParseTraceparent(header)
+	assert.True(t, ok, header)
+	assert.Equal(t, traceID, parsed)
+	assert.NotEqual(t, header, reqctx.Traceparent(ctx), "every call gets a fresh span ID")
+}
+
+func TestTraceparent_IsEmptyWithoutAValidTraceID(t *testing.T) {
+	assert.Empty(t, reqctx.Traceparent(context.Background()))
+	assert.Empty(t, reqctx.Traceparent(reqctx.WithTraceID(context.Background(), "not-a-trace-id")))
+}
+
 func TestEmptyContext(t *testing.T) {
 	ctx := context.Background()
 

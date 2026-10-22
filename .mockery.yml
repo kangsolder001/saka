@@ -39,3 +39,6 @@ packages:
   github.com/kangsolder001/saka/internal/entitlement:
     interfaces:
       PlanSource:
+  github.com/kangsolder001/saka/internal/billing/payment:
+    interfaces:
+      Provider:

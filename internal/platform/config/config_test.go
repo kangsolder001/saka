@@ -40,6 +40,16 @@ func TestParse_MinimalFileGetsDefaults(t *testing.T) {
 	assert.Equal(t, "log", cfg.Mail.Driver)
 	assert.Equal(t, "localhost", cfg.Mail.SMTP.Host)
 	assert.Equal(t, 1025, cfg.Mail.SMTP.Port)
+	assert.Equal(t, "fake", cfg.Billing.Provider)
+	assert.Equal(t, 7, cfg.Billing.InvoiceDueDays)
+	assert.Equal(t, 3, cfg.Billing.RenewalLeadDays)
+	assert.Equal(t, 3, cfg.Billing.GraceDays)
+	assert.Equal(t, time.Hour, cfg.Billing.HourlyJobsInterval.Std())
+	assert.Equal(t, 24*time.Hour, cfg.Billing.DailyJobsInterval.Std())
+	assert.Equal(t, time.Hour, cfg.Billing.ReconcileMinAge.Std())
+	assert.Equal(t, "https://app.sandbox.midtrans.com", cfg.Billing.Midtrans.SnapBaseURL)
+	assert.Equal(t, "https://api.sandbox.midtrans.com", cfg.Billing.Midtrans.APIBaseURL)
+	assert.Empty(t, cfg.Billing.Midtrans.ServerKey)
 	assert.Equal(t, 4, cfg.Worker.Concurrency)
 	assert.Equal(t, 5*time.Second, cfg.Worker.PollInterval.Std())
 	assert.Equal(t, time.Minute, cfg.Worker.JobTimeout.Std())
@@ -57,7 +67,8 @@ func TestParse_OverridesAndKeepsUntouchedDefaults(t *testing.T) {
 		"mail": {"driver": "smtp", "from": "Saka <noreply@example.com>",
 		         "smtp": {"host": "smtp.example.com", "port": 587, "username": "u", "password": "p"}},
 		"redis": {"addr": "redis.internal:6380", "password": "pw", "db": 3, "key_prefix": "acme-prod", "user_cache_ttl": "90s"},
-		"worker": {"concurrency": 8, "lease": "10m"}
+		"worker": {"concurrency": 8, "lease": "10m"},
+		"billing": {"provider": "midtrans", "grace_days": 5, "midtrans": {"server_key": "Mid-server-abc", "snap_base_url": "https://app.midtrans.com", "api_base_url": "https://api.midtrans.com"}}
 	}`))
 
 	require.NoError(t, err)
@@ -79,6 +90,11 @@ func TestParse_OverridesAndKeepsUntouchedDefaults(t *testing.T) {
 	assert.Equal(t, 90*time.Second, cfg.Redis.UserCacheTTL.Std())
 	assert.Equal(t, 8, cfg.Worker.Concurrency)
 	assert.Equal(t, 10*time.Minute, cfg.Worker.Lease.Std())
+	assert.Equal(t, "midtrans", cfg.Billing.Provider)
+	assert.Equal(t, 5, cfg.Billing.GraceDays)
+	assert.Equal(t, 3, cfg.Billing.RenewalLeadDays, "keys not in the section keep their default")
+	assert.Equal(t, "Mid-server-abc", cfg.Billing.Midtrans.ServerKey)
+	assert.Equal(t, 15*time.Second, cfg.Billing.Midtrans.RequestTimeout.Std())
 	assert.Equal(t, "Saka", cfg.App.Name, "keys not in the file keep their default")
 	assert.Equal(t, time.Minute, cfg.Worker.JobTimeout.Std(), "partial sections keep sibling defaults")
 }
@@ -125,6 +141,13 @@ func TestParse_Validation(t *testing.T) {
 		return `{` + field("app", app) + field("mail", mail) + field("worker", worker) +
 			`"auth": {"jwt_secret": "` + validSecret + `"}, "database": ` + db + `}`
 	}
+	billing := func(section string) string {
+		return `{"billing": ` + section + `, "auth": {"jwt_secret": "` + validSecret + `"}, "database": {"url": "` + validDBURL + `"}}`
+	}
+	billingInProduction := func(section string) string {
+		return `{"app": {"env": "production"}, "mail": {"driver": "smtp"}, "billing": ` + section +
+			`, "auth": {"jwt_secret": "` + validSecret + `"}, "database": {"url": "` + validDBURL + `"}}`
+	}
 	tests := []struct {
 		name    string
 		input   string
@@ -162,6 +185,19 @@ func TestParse_Validation(t *testing.T) {
 		{"smtp bad from", with("", "", `{"driver": "smtp", "from": "nope"}`, ""), "mail.from"},
 		{"zero worker concurrency", with("", "", "", `{"concurrency": 0}`), "worker.concurrency"},
 		{"lease not above timeout", with("", "", "", `{"lease": "30s", "job_timeout": "1m"}`), "worker.lease must be longer"},
+		{"unknown billing provider", billing(`{"provider": "stripe"}`), "billing.provider must be one of"},
+		{"midtrans without a server key", billing(`{"provider": "midtrans"}`), "billing.midtrans.server_key is required"},
+		{"fake provider in production", billingInProduction(`{"provider": "fake"}`), `billing.provider "fake" is not allowed in production`},
+		{"sandbox host in production", billingInProduction(`{"provider": "midtrans", "midtrans": {"server_key": "Mid-server-abc"}}`), "points at the Midtrans sandbox"},
+		{"sandbox key in production", billingInProduction(`{"provider": "midtrans", "midtrans": {"server_key": "SB-Mid-server-abc", "snap_base_url": "https://app.midtrans.com", "api_base_url": "https://api.midtrans.com"}}`), "sandbox key"},
+		{"placeholder key in production", billingInProduction(`{"provider": "midtrans", "midtrans": {"server_key": "Mid-server-change-me", "snap_base_url": "https://app.midtrans.com", "api_base_url": "https://api.midtrans.com"}}`), "example placeholder"},
+		{"invoice due days zero", billing(`{"invoice_due_days": 0}`), "billing.invoice_due_days"},
+		{"renewal lead too long", billing(`{"renewal_lead_days": 31}`), "billing.renewal_lead_days"},
+		{"negative grace", billing(`{"grace_days": -1}`), "billing.grace_days"},
+		{"zero job interval", billing(`{"hourly_jobs_interval": "0s"}`), "billing.hourly_jobs_interval"},
+		{"negative reconcile age", billing(`{"reconcile_min_age": "-1m"}`), "billing.reconcile_min_age"},
+		{"bad midtrans url", billing(`{"midtrans": {"snap_base_url": "app.midtrans.com"}}`), "billing.midtrans.snap_base_url"},
+		{"zero midtrans timeout", billing(`{"midtrans": {"request_timeout": "0s"}}`), "billing.midtrans.request_timeout"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -240,6 +276,24 @@ func TestExampleFileIsValid(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "smtp", cfg.Mail.Driver)
+	assert.Equal(t, "fake", cfg.Billing.Provider, "the example runs without a payment account")
+}
+
+func TestParse_NeverEchoesTheMidtransServerKey(t *testing.T) {
+	_, err := config.Parse([]byte(`{"app": {"env": "production"}, "mail": {"driver": "smtp"}, "database": {"url": "` + validDBURL + `"},
+		"auth": {"jwt_secret": "` + validSecret + `"}, "billing": {"provider": "midtrans", "grace_days": 99, "midtrans": {"server_key": "SB-Mid-server-topsecret"}}}`))
+
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "topsecret")
+}
+
+func TestParse_AProductionConfigWithRealMidtransSettingsIsValid(t *testing.T) {
+	cfg, err := config.Parse([]byte(`{"app": {"env": "production"}, "mail": {"driver": "smtp"}, "database": {"url": "` + validDBURL + `"},
+		"auth": {"jwt_secret": "` + validSecret + `"}, "billing": {"provider": "midtrans", "midtrans": {"server_key": "Mid-server-abc",
+		"snap_base_url": "https://app.midtrans.com", "api_base_url": "https://api.midtrans.com"}}}`))
+
+	require.NoError(t, err)
+	assert.Equal(t, "midtrans", cfg.Billing.Provider)
 }
 
 func TestParse_TheApplicationRoleDefaultsToSakaApp(t *testing.T) {

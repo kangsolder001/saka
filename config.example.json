@@ -42,5 +42,20 @@
     "poll_interval": "5s",
     "job_timeout": "1m",
     "lease": "5m"
+  },
+  "billing": {
+    "provider": "fake",
+    "invoice_due_days": 7,
+    "renewal_lead_days": 3,
+    "grace_days": 3,
+    "hourly_jobs_interval": "1h",
+    "daily_jobs_interval": "24h",
+    "reconcile_min_age": "1h",
+    "midtrans": {
+      "server_key": "",
+      "snap_base_url": "https://app.sandbox.midtrans.com",
+      "api_base_url": "https://api.sandbox.midtrans.com",
+      "request_timeout": "15s"
+    }
   }
 }

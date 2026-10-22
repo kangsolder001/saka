@@ -69,6 +69,7 @@ type Config struct {
 	Redis    RedisConfig    `json:"redis"`
 	Mail     MailConfig     `json:"mail"`
 	Worker   WorkerConfig   `json:"worker"`
+	Billing  BillingConfig  `json:"billing"`
 }
 
 // AppConfig covers the HTTP server and general behaviour.
@@ -145,6 +146,49 @@ type WorkerConfig struct {
 	Lease        Duration `json:"lease"`
 }
 
+// Payment providers a deployment can choose (billing.provider).
+const (
+	BillingProviderMidtrans = "midtrans"
+	// BillingProviderFake is the in-memory gateway for development and tests.
+	BillingProviderFake = "fake"
+)
+
+// BillingConfig covers invoices, the payment gateway and the billing jobs
+// (spec §8).
+type BillingConfig struct {
+	// Provider is the gateway new invoices are created with: "midtrans", or
+	// "fake" (development and tests only, refused in production). Webhooks of
+	// every configured provider are accepted.
+	Provider string `json:"provider"`
+	// InvoiceDueDays is how long a checkout invoice stays payable.
+	InvoiceDueDays int `json:"invoice_due_days"`
+	// RenewalLeadDays is how long before a period ends its renewal invoice is issued.
+	RenewalLeadDays int `json:"renewal_lead_days"`
+	// GraceDays is how long a subscription keeps its access after the period
+	// ended without payment (past_due), before it expires.
+	GraceDays int `json:"grace_days"`
+	// HourlyJobsInterval is how often the worker runs billing.renewals,
+	// billing.expire and billing.apply_scheduled (spec §8.6).
+	HourlyJobsInterval Duration `json:"hourly_jobs_interval"`
+	// DailyJobsInterval is how often it runs billing.reminders and billing.reconcile.
+	DailyJobsInterval Duration `json:"daily_jobs_interval"`
+	// ReconcileMinAge is how old an open invoice must be before billing.reconcile
+	// asks the gateway about it (a fresh invoice is still being paid).
+	ReconcileMinAge Duration       `json:"reconcile_min_age"`
+	Midtrans        MidtransConfig `json:"midtrans"`
+}
+
+// MidtransConfig is the Midtrans account. The server key is a secret: it lives
+// in config.json only and is never logged.
+type MidtransConfig struct {
+	ServerKey string `json:"server_key"`
+	// SnapBaseURL and APIBaseURL default to the sandbox; production uses
+	// https://app.midtrans.com and https://api.midtrans.com.
+	SnapBaseURL    string   `json:"snap_base_url"`
+	APIBaseURL     string   `json:"api_base_url"`
+	RequestTimeout Duration `json:"request_timeout"`
+}
+
 // Default returns the built-in defaults. It is not valid on its own because
 // database.url has no default; tests set it and call Validate when needed.
 func Default() Config {
@@ -177,6 +221,20 @@ func Default() Config {
 			PollInterval: Duration(5 * time.Second),
 			JobTimeout:   Duration(time.Minute),
 			Lease:        Duration(5 * time.Minute),
+		},
+		Billing: BillingConfig{
+			Provider:           BillingProviderFake,
+			InvoiceDueDays:     7,
+			RenewalLeadDays:    3,
+			GraceDays:          3,
+			HourlyJobsInterval: Duration(time.Hour),
+			DailyJobsInterval:  Duration(24 * time.Hour),
+			ReconcileMinAge:    Duration(time.Hour),
+			Midtrans: MidtransConfig{
+				SnapBaseURL:    "https://app.sandbox.midtrans.com",
+				APIBaseURL:     "https://api.sandbox.midtrans.com",
+				RequestTimeout: Duration(15 * time.Second),
+			},
 		},
 	}
 }
@@ -332,8 +390,65 @@ func (c Config) Validate() error {
 		add("worker.lease must be longer than worker.job_timeout")
 	}
 
+	c.validateBilling(add)
+
 	if len(errs) > 0 {
 		return fmt.Errorf("invalid configuration: %w", errors.Join(errs...))
 	}
 	return nil
+}
+
+// validateBilling checks the billing section. Secrets are never echoed.
+func (c Config) validateBilling(add func(format string, args ...any)) {
+	b := c.Billing
+	switch b.Provider {
+	case BillingProviderMidtrans:
+		if strings.TrimSpace(b.Midtrans.ServerKey) == "" {
+			add("billing.midtrans.server_key is required when billing.provider is midtrans")
+		}
+	case BillingProviderFake:
+		if c.IsProduction() {
+			add("billing.provider \"fake\" is not allowed in production: payments would never reach a real gateway")
+		}
+	default:
+		add("billing.provider must be one of midtrans, fake (got %q)", b.Provider)
+	}
+	if b.InvoiceDueDays < 1 || b.InvoiceDueDays > 60 {
+		add("billing.invoice_due_days must be between 1 and 60")
+	}
+	if b.RenewalLeadDays < 1 || b.RenewalLeadDays > 30 {
+		add("billing.renewal_lead_days must be between 1 and 30")
+	}
+	if b.GraceDays < 0 || b.GraceDays > 30 {
+		add("billing.grace_days must be between 0 and 30")
+	}
+	if b.HourlyJobsInterval <= 0 || b.DailyJobsInterval <= 0 {
+		add("billing.hourly_jobs_interval and billing.daily_jobs_interval must be positive")
+	}
+	if b.ReconcileMinAge < 0 {
+		add("billing.reconcile_min_age must not be negative")
+	}
+
+	m := b.Midtrans
+	for name, raw := range map[string]string{"billing.midtrans.snap_base_url": m.SnapBaseURL, "billing.midtrans.api_base_url": m.APIBaseURL} {
+		u, err := url.Parse(raw)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			add("%s must be an http(s) URL", name)
+			continue
+		}
+		if c.IsProduction() && b.Provider == BillingProviderMidtrans && strings.Contains(u.Host, "sandbox") {
+			add("%s points at the Midtrans sandbox, which is not allowed in production", name)
+		}
+	}
+	if m.RequestTimeout <= 0 {
+		add("billing.midtrans.request_timeout must be positive")
+	}
+	if c.IsProduction() && b.Provider == BillingProviderMidtrans {
+		if strings.HasPrefix(m.ServerKey, "SB-") {
+			add("billing.midtrans.server_key is a sandbox key, which is not allowed in production")
+		}
+		if strings.Contains(strings.ToLower(m.ServerKey), placeholderMarker) {
+			add("billing.midtrans.server_key still contains the example placeholder")
+		}
+	}
 }

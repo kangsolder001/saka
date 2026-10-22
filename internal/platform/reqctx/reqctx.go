@@ -133,3 +133,18 @@ func isLowerHex(s string) bool {
 func isAllZero(s string) bool {
 	return strings.Trim(s, "0") == ""
 }
+
+// Traceparent returns a W3C traceparent header value that continues the trace
+// of ctx, for outgoing calls (spec §11.1): the same trace ID with a fresh span
+// ID. It is empty when ctx has no (valid) trace ID.
+func Traceparent(ctx context.Context) string {
+	traceID := TraceID(ctx)
+	if len(traceID) != 32 || !isLowerHex(traceID) || isAllZero(traceID) {
+		return ""
+	}
+	var span [8]byte
+	if _, err := rand.Read(span[:]); err != nil || isAllZero(hex.EncodeToString(span[:])) {
+		span = [8]byte{0, 0, 0, 0, 0, 0, 0, 1}
+	}
+	return "00-" + traceID + "-" + hex.EncodeToString(span[:]) + "-01"
+}
