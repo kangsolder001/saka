@@ -1,0 +1,7 @@
+{{define "content"}}
+<p>Halo {{.Data.name}},</p>
+<p>Pembayaran invoice <strong>{{.Data.invoice_number}}</strong> sebesar <strong>{{.Data.amount}}</strong> telah kami terima. Terima kasih!</p>
+<p>Organisasi <strong>{{.Data.organization_name}}</strong> kini berlangganan paket {{.Data.plan_name}} sampai {{.Data.period_end}}.</p>
+<p>Simpan email ini sebagai bukti pembayaran.</p>
+{{end}}
+{{template "layout" .}}

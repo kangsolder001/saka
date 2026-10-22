@@ -165,7 +165,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Generator nomor invoice global `INV-YYYY-NNNNNN` (sequence) (0.15). `billing.NextInvoiceNumber`; sequence global yang tidak mulai ulang tiap tahun dan tidak ikut di-rollback (celah boleh, nomor ganda tidak)
 - [ ] `POST …/subscription/checkout` (butuh role owner + email terverifikasi) → invoice + payment link (0.6)
 - [ ] `GET …/invoices`, `GET …/invoices/{id}` (0.3)
-- [ ] Template `invoice_created`, `payment_succeeded` (0.3)
+- [x] Template `invoice_created`, `payment_succeeded` (0.3). Data: nama pemilik, organisasi, nomor invoice, plan, nominal (`Rp99.000`), tanggal (WIB); tautan bayar hanya dari gateway, tanpa secret
 - [ ] Test checkout end-to-end dengan fake provider (0.3)
 
 **Bagian B: webhook & state machine**

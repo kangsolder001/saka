@@ -35,9 +35,19 @@ func TestRealTemplates_AllRenderWithTheirData(t *testing.T) {
 			"inviter_name": "Ann", "organization_name": "Acme Corp", "role_label": "Admin", "expires_in_days": 7,
 			"url": "https://app.example/accept-invitation?token=inv123",
 		},
+
+		"invoice_created": {
+			"name": "Ann", "organization_name": "Acme Corp", "invoice_number": "INV-2026-000123", "plan_name": "Pro",
+			"amount": "Rp99.000", "due_date": "8 Juni 2026", "payment_url": "https://pay.example/INV-2026-000123",
+		},
+		"payment_succeeded": {
+			"name": "Ann", "organization_name": "Acme Corp", "invoice_number": "INV-2026-000123", "plan_name": "Pro",
+			"amount": "Rp99.000", "period_end": "1 Juli 2026",
+		},
 	}
 	require.ElementsMatch(t, []string{
 		"verify_email", "password_reset", "password_changed", "email_change_confirm", "email_changed_notice", "invitation",
+		"invoice_created", "payment_succeeded",
 	}, r.Names(),
 		"update this test when a template is added so it is rendered here")
 
@@ -54,9 +64,22 @@ func TestRealTemplates_AllRenderWithTheirData(t *testing.T) {
 				assert.Contains(t, out.Text, "Halo Ann")
 			}
 			if org, ok := d["organization_name"].(string); ok {
-				assert.Contains(t, out.Subject, org)
 				assert.Contains(t, out.HTML, org)
+				assert.Contains(t, out.Text, org)
+			}
+			if _, ok := d["inviter_name"]; ok {
+				assert.Contains(t, out.Subject, d["organization_name"])
 				assert.Contains(t, out.Text, "Ann mengundang Anda")
+			}
+			for _, key := range []string{"invoice_number", "plan_name", "amount", "due_date", "period_end"} {
+				if v, ok := d[key].(string); ok {
+					assert.Contains(t, out.HTML, v, key)
+					assert.Contains(t, out.Text, v, key)
+				}
+			}
+			if url, ok := d["payment_url"].(string); ok {
+				assert.Contains(t, out.HTML, url)
+				assert.Contains(t, out.Text, url)
 			}
 			assert.NotContains(t, out.Text, "<p>", "text version must not contain HTML")
 			assert.Contains(t, out.Text, "Saka")

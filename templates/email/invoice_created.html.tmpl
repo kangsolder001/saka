@@ -1,0 +1,8 @@
+{{define "content"}}
+<p>Halo {{.Data.name}},</p>
+<p>Invoice <strong>{{.Data.invoice_number}}</strong> untuk organisasi <strong>{{.Data.organization_name}}</strong> telah terbit: paket {{.Data.plan_name}} sebesar <strong>{{.Data.amount}}</strong>. Mohon dibayar sebelum {{.Data.due_date}}.</p>
+<p style="margin:24px 0;"><a href="{{.Data.payment_url}}" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;">Bayar sekarang</a></p>
+<p>Jika tombol tidak berfungsi, salin tautan ini ke browser Anda:<br><a href="{{.Data.payment_url}}">{{.Data.payment_url}}</a></p>
+<p>Paket baru berlaku setelah pembayaran kami terima. Jika Anda tidak merasa membuat invoice ini, abaikan email ini.</p>
+{{end}}
+{{template "layout" .}}

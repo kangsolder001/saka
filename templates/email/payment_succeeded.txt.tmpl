@@ -1,0 +1,9 @@
+{{define "subject"}}Pembayaran {{.Data.invoice_number}} berhasil{{end}}
+{{define "content"}}Halo {{.Data.name}},
+
+Pembayaran invoice {{.Data.invoice_number}} sebesar {{.Data.amount}} telah kami terima. Terima kasih!
+
+Organisasi {{.Data.organization_name}} kini berlangganan paket {{.Data.plan_name}} sampai {{.Data.period_end}}.
+
+Simpan email ini sebagai bukti pembayaran.{{end}}
+{{template "layout" .}}
