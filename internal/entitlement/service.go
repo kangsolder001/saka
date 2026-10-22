@@ -44,6 +44,8 @@ type Counter func(ctx context.Context, q db.DBTX, orgID uuid.UUID) (int, error)
 // counters.
 type Service struct {
 	plans PlanSource
+	// tx opens the transaction of RequireFeature.
+	tx Transactor
 
 	mu       sync.RWMutex
 	counters map[string]Counter
@@ -51,10 +53,10 @@ type Service struct {
 
 var _ Entitlements = (*Service)(nil)
 
-// NewService creates a Service. Counters are added with RegisterCounter by the
-// composition root.
-func NewService(plans PlanSource) *Service {
-	return &Service{plans: plans, counters: map[string]Counter{}}
+// NewService creates a Service. tx is only used by the RequireFeature
+// middleware. Counters are added with RegisterCounter by the composition root.
+func NewService(plans PlanSource, tx Transactor) *Service {
+	return &Service{plans: plans, tx: tx, counters: map[string]Counter{}}
 }
 
 // RegisterCounter makes limit checkable: fn counts its current usage. It is

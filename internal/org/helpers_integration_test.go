@@ -59,7 +59,7 @@ func newEnv(t *testing.T) *env {
 	orgs := org.NewService(org.Dependencies{
 		Clock: clk, Tx: d, Users: users, Passwords: passwords, Subscriptions: billingService, Mail: mailer, FrontendURL: "https://app.example.com/",
 	})
-	entitlements := entitlement.NewService(billingService)
+	entitlements := entitlement.NewService(billingService, d)
 	entitlements.RegisterCounter(org.MembersLimit, orgs.CountSeats)
 	orgs.Limits = entitlements
 	return &env{

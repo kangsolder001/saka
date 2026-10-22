@@ -33,6 +33,11 @@ type Options struct {
 	// Organizations takes part in account deletion. Nil means the organization
 	// module; tests inject a guard to exercise the refusal path.
 	Organizations auth.OrganizationGuard
+	// TenantRoutes, when set, mounts extra routes under /orgs/{orgId} (after
+	// authentication and the tenant middleware). Tests use it to exercise
+	// middleware such as RequireFeature on a route that does not exist in
+	// production yet.
+	TenantRoutes func(rg *gin.RouterGroup, entitlements *entitlement.Service)
 }
 
 // guardOrDefault returns the injected guard, or the organization module.
@@ -105,7 +110,7 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 	organizations.Passwords = authService
 	// entitlement counts seats through org and org enforces the limit through
 	// entitlement: the loop is closed here, like the one with auth above.
-	entitlements := entitlement.NewService(billingService)
+	entitlements := entitlement.NewService(billingService, database)
 	entitlements.RegisterCounter(org.MembersLimit, organizations.CountSeats)
 	organizations.Limits = entitlements
 	authMiddleware := auth.NewMiddleware(authService)
@@ -115,5 +120,8 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 	user.NewHandler(user.Dependencies{Profiles: users, Security: authService, Pool: database.Pool(), Organizations: organizations}).
 		Routes(v1, authMiddleware.Authenticate())
 	org.NewHandler(organizations).Routes(v1, authMiddleware.Authenticate(), authMiddleware.RequireVerifiedEmail())
+	if opts.TenantRoutes != nil {
+		opts.TenantRoutes(org.TenantRoutes(v1, authMiddleware.Authenticate(), organizations), entitlements)
+	}
 	return router, nil
 }

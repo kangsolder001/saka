@@ -47,7 +47,7 @@ func newFixture(t *testing.T, plan entitlement.Plan, used int) *fixture {
 	f := &fixture{plans: mocks.NewMockPlanSource(t)}
 	f.plans.EXPECT().EffectivePlan(mock.Anything, mock.Anything, orgID).Return(plan, nil).Maybe()
 	f.plans.EXPECT().ActivePlans(mock.Anything, mock.Anything).Return(catalogue, nil).Maybe()
-	f.svc = entitlement.NewService(f.plans)
+	f.svc = entitlement.NewService(f.plans, nil)
 	f.svc.RegisterCounter("members", func(context.Context, db.DBTX, uuid.UUID) (int, error) {
 		f.counted++
 		return used, nil
@@ -83,7 +83,7 @@ func TestHasFeature_APlanLookupFailureIsNotAnAnswer(t *testing.T) {
 	plans := mocks.NewMockPlanSource(t)
 	plans.EXPECT().EffectivePlan(mock.Anything, mock.Anything, orgID).Return(entitlement.Plan{}, errors.New("db down"))
 
-	got, err := entitlement.NewService(plans).HasFeature(t.Context(), nil, orgID, "export_csv")
+	got, err := entitlement.NewService(plans, nil).HasFeature(t.Context(), nil, orgID, "export_csv")
 
 	require.Error(t, err)
 	assert.False(t, got)
@@ -179,7 +179,7 @@ func TestCheckLimit_NoPlanOffersEnoughMeansNoUpgrade(t *testing.T) {
 	small := entitlement.Plan{Code: "free", Name: "Free", Limits: map[string]int{"members": 3}}
 	plans.EXPECT().EffectivePlan(mock.Anything, mock.Anything, orgID).Return(small, nil)
 	plans.EXPECT().ActivePlans(mock.Anything, mock.Anything).Return([]entitlement.Plan{small, pro}, nil)
-	svc := entitlement.NewService(plans)
+	svc := entitlement.NewService(plans, nil)
 	svc.RegisterCounter("members", func(context.Context, db.DBTX, uuid.UUID) (int, error) { return 10, nil })
 
 	err := svc.CheckLimit(t.Context(), nil, orgID, "members", 1)
@@ -193,7 +193,7 @@ func TestCheckLimit_TheCheapestFittingPlanWinsRegardlessOfCatalogueOrder(t *test
 	plans := mocks.NewMockPlanSource(t)
 	plans.EXPECT().EffectivePlan(mock.Anything, mock.Anything, orgID).Return(free, nil)
 	plans.EXPECT().ActivePlans(mock.Anything, mock.Anything).Return([]entitlement.Plan{business, free, pro}, nil)
-	svc := entitlement.NewService(plans)
+	svc := entitlement.NewService(plans, nil)
 	svc.RegisterCounter("members", func(context.Context, db.DBTX, uuid.UUID) (int, error) { return 3, nil })
 
 	err := svc.CheckLimit(t.Context(), nil, orgID, "members", 1)
@@ -223,7 +223,7 @@ func TestCheckLimit_ALimitTheCurrentPlanDoesNotListIsZero(t *testing.T) {
 	noMembers := entitlement.Plan{Code: "odd", Name: "Odd", Limits: map[string]int{}}
 	plans.EXPECT().EffectivePlan(mock.Anything, mock.Anything, orgID).Return(noMembers, nil)
 	plans.EXPECT().ActivePlans(mock.Anything, mock.Anything).Return(catalogue, nil)
-	svc := entitlement.NewService(plans)
+	svc := entitlement.NewService(plans, nil)
 	svc.RegisterCounter("members", func(context.Context, db.DBTX, uuid.UUID) (int, error) { return 0, nil })
 
 	err := svc.CheckLimit(t.Context(), nil, orgID, "members", 1)
@@ -251,7 +251,7 @@ func TestCheckLimit_FailuresOfTheCollaboratorsPropagate(t *testing.T) {
 	t.Run("plan lookup", func(t *testing.T) {
 		plans := mocks.NewMockPlanSource(t)
 		plans.EXPECT().EffectivePlan(mock.Anything, mock.Anything, orgID).Return(entitlement.Plan{}, errors.New("db down"))
-		svc := entitlement.NewService(plans)
+		svc := entitlement.NewService(plans, nil)
 		svc.RegisterCounter("members", func(context.Context, db.DBTX, uuid.UUID) (int, error) { return 0, nil })
 
 		err := svc.CheckLimit(t.Context(), nil, orgID, "members", 1)
@@ -262,7 +262,7 @@ func TestCheckLimit_FailuresOfTheCollaboratorsPropagate(t *testing.T) {
 	t.Run("counter", func(t *testing.T) {
 		plans := mocks.NewMockPlanSource(t)
 		plans.EXPECT().EffectivePlan(mock.Anything, mock.Anything, orgID).Return(free, nil)
-		svc := entitlement.NewService(plans)
+		svc := entitlement.NewService(plans, nil)
 		svc.RegisterCounter("members", func(context.Context, db.DBTX, uuid.UUID) (int, error) { return 0, errors.New("count failed") })
 
 		err := svc.CheckLimit(t.Context(), nil, orgID, "members", 1)
@@ -273,7 +273,7 @@ func TestCheckLimit_FailuresOfTheCollaboratorsPropagate(t *testing.T) {
 		plans := mocks.NewMockPlanSource(t)
 		plans.EXPECT().EffectivePlan(mock.Anything, mock.Anything, orgID).Return(free, nil)
 		plans.EXPECT().ActivePlans(mock.Anything, mock.Anything).Return(nil, errors.New("db down"))
-		svc := entitlement.NewService(plans)
+		svc := entitlement.NewService(plans, nil)
 		svc.RegisterCounter("members", func(context.Context, db.DBTX, uuid.UUID) (int, error) { return 3, nil })
 
 		err := svc.CheckLimit(t.Context(), nil, orgID, "members", 1)
@@ -286,7 +286,7 @@ func TestCheckLimit_FailuresOfTheCollaboratorsPropagate(t *testing.T) {
 func TestUsage_ReportsEveryCountedLimitAgainstThePlan(t *testing.T) {
 	plans := mocks.NewMockPlanSource(t)
 	plans.EXPECT().EffectivePlan(mock.Anything, mock.Anything, orgID).Return(pro, nil)
-	svc := entitlement.NewService(plans)
+	svc := entitlement.NewService(plans, nil)
 	svc.RegisterCounter("members", func(context.Context, db.DBTX, uuid.UUID) (int, error) { return 4, nil })
 	svc.RegisterCounter("projects", func(context.Context, db.DBTX, uuid.UUID) (int, error) { return 2, nil })
 
@@ -313,7 +313,7 @@ func TestUsage_ALimitWithoutACounterIsNotReported(t *testing.T) {
 	plans := mocks.NewMockPlanSource(t)
 	extra := entitlement.Plan{Code: "x", Limits: map[string]int{"members": 5, "seats": 9}}
 	plans.EXPECT().EffectivePlan(mock.Anything, mock.Anything, orgID).Return(extra, nil)
-	svc := entitlement.NewService(plans)
+	svc := entitlement.NewService(plans, nil)
 	svc.RegisterCounter("members", func(context.Context, db.DBTX, uuid.UUID) (int, error) { return 1, nil })
 
 	got, err := svc.Usage(t.Context(), nil, orgID)
@@ -325,7 +325,7 @@ func TestUsage_ALimitWithoutACounterIsNotReported(t *testing.T) {
 func TestUsage_FailuresPropagate(t *testing.T) {
 	plans := mocks.NewMockPlanSource(t)
 	plans.EXPECT().EffectivePlan(mock.Anything, mock.Anything, orgID).Return(free, nil)
-	svc := entitlement.NewService(plans)
+	svc := entitlement.NewService(plans, nil)
 	svc.RegisterCounter("members", func(context.Context, db.DBTX, uuid.UUID) (int, error) { return 0, errors.New("count failed") })
 
 	_, err := svc.Usage(t.Context(), nil, orgID)
@@ -335,7 +335,7 @@ func TestUsage_FailuresPropagate(t *testing.T) {
 
 func TestRegisterCounter_RejectsDuplicatesAndEmptyRegistrations(t *testing.T) {
 	count := func(context.Context, db.DBTX, uuid.UUID) (int, error) { return 0, nil }
-	svc := entitlement.NewService(mocks.NewMockPlanSource(t))
+	svc := entitlement.NewService(mocks.NewMockPlanSource(t), nil)
 	svc.RegisterCounter("members", count)
 
 	assert.Panics(t, func() { svc.RegisterCounter("members", count) }, "two owners for one limit is a wiring bug")
