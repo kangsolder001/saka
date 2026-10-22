@@ -44,10 +44,23 @@ func TestRealTemplates_AllRenderWithTheirData(t *testing.T) {
 			"name": "Ann", "organization_name": "Acme Corp", "invoice_number": "INV-2026-000123", "plan_name": "Pro",
 			"amount": "Rp99.000", "period_end": "1 Juli 2026",
 		},
+		"payment_reminder": {
+			"name": "Ann", "organization_name": "Acme Corp", "invoice_number": "INV-2026-000123", "plan_name": "Pro",
+			"amount": "Rp99.000", "due_date": "8 Juni 2026", "days_left": 3, "payment_url": "https://pay.example/INV-2026-000123",
+		},
+		"trial_ending": {
+			"name": "Ann", "organization_name": "Acme Corp", "plan_name": "Pro", "amount": "Rp99.000",
+			"trial_end_date": "15 Juni 2026", "days_left": 3, "payment_url": "https://pay.example/INV-2026-000123",
+		},
+		"subscription_past_due": {
+			"name": "Ann", "organization_name": "Acme Corp", "plan_name": "Pro", "grace_until": "4 Juli 2026",
+			"payment_url": "https://pay.example/INV-2026-000123",
+		},
+		"subscription_expired": {"name": "Ann", "organization_name": "Acme Corp", "plan_name": "Pro"},
 	}
 	require.ElementsMatch(t, []string{
 		"verify_email", "password_reset", "password_changed", "email_change_confirm", "email_changed_notice", "invitation",
-		"invoice_created", "payment_succeeded",
+		"invoice_created", "payment_succeeded", "payment_reminder", "trial_ending", "subscription_past_due", "subscription_expired",
 	}, r.Names(),
 		"update this test when a template is added so it is rendered here")
 
@@ -71,7 +84,7 @@ func TestRealTemplates_AllRenderWithTheirData(t *testing.T) {
 				assert.Contains(t, out.Subject, d["organization_name"])
 				assert.Contains(t, out.Text, "Ann mengundang Anda")
 			}
-			for _, key := range []string{"invoice_number", "plan_name", "amount", "due_date", "period_end"} {
+			for _, key := range []string{"invoice_number", "plan_name", "amount", "due_date", "period_end", "trial_end_date", "grace_until"} {
 				if v, ok := d[key].(string); ok {
 					assert.Contains(t, out.HTML, v, key)
 					assert.Contains(t, out.Text, v, key)
@@ -217,4 +230,25 @@ func TestNewRenderer_AcceptsMinimalValidSet(t *testing.T) {
 	assert.Equal(t, "Subject 1", out.Subject)
 	assert.Equal(t, "<html><b>1</b></html>", out.HTML)
 	assert.Equal(t, "1\n", out.Text)
+}
+
+// subscription_past_due works without a payment link (the renewal invoice may
+// not exist yet): it then points at the subscription settings instead.
+func TestRender_PastDueWithoutAPaymentLinkPointsAtTheSettings(t *testing.T) {
+	r := realRenderer(t)
+	data := map[string]any{"name": "Ann", "organization_name": "Acme", "plan_name": "Pro", "grace_until": "4 Juli 2026", "payment_url": ""}
+
+	out, err := r.Render("subscription_past_due", data)
+
+	require.NoError(t, err)
+	assert.Contains(t, out.HTML, "pengaturan langganan")
+	assert.Contains(t, out.Text, "pengaturan langganan")
+	assert.NotContains(t, out.HTML, `href=""`)
+
+	withLink, err := r.Render("subscription_past_due", map[string]any{
+		"name": "Ann", "organization_name": "Acme", "plan_name": "Pro", "grace_until": "4 Juli 2026", "payment_url": "https://pay.example/x",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, withLink.HTML, "https://pay.example/x")
+	assert.NotContains(t, withLink.Text, "pengaturan langganan")
 }

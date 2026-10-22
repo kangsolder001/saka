@@ -1,0 +1,11 @@
+{{define "subject"}}Pengingat: invoice {{.Data.invoice_number}} jatuh tempo {{.Data.due_date}}{{end}}
+{{define "content"}}Halo {{.Data.name}},
+
+Pengingat: invoice {{.Data.invoice_number}} untuk organisasi {{.Data.organization_name}} (paket {{.Data.plan_name}}, {{.Data.amount}}) jatuh tempo pada {{.Data.due_date}}, {{.Data.days_left}} hari lagi.
+
+Bayar lewat tautan berikut:
+
+{{.Data.payment_url}}
+
+Jika invoice sudah dibayar, abaikan email ini.{{end}}
+{{template "layout" .}}

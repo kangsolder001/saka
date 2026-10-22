@@ -1,0 +1,7 @@
+{{define "subject"}}Langganan {{.Data.organization_name}} telah berakhir{{end}}
+{{define "content"}}Halo {{.Data.name}},
+
+Langganan paket {{.Data.plan_name}} untuk organisasi {{.Data.organization_name}} telah berakhir karena pembayaran tidak kami terima.
+
+Organisasi Anda kini memakai paket Free. Data Anda tidak dihapus; hanya batas dan fitur paket Free yang berlaku. Anda bisa berlangganan lagi kapan saja dari pengaturan langganan di {{.App.Name}}.{{end}}
+{{template "layout" .}}

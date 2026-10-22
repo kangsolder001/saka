@@ -182,7 +182,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [ ] `billing.expire` (active→past_due→expired, trial→expired, `grace_until` 3 hari) (0.5)
 - [ ] `billing.apply_scheduled` (pending plan & cancel_at_period_end) (0.3)
 - [ ] `billing.reminders` (H-3, H-1) + `billing.reconcile` (cek status `open` ke gateway) (0.8)
-- [ ] Template: `payment_reminder`, `subscription_past_due`, `subscription_expired`, `trial_ending` (0.4)
+- [x] Template: `payment_reminder`, `subscription_past_due`, `subscription_expired`, `trial_ending` (0.4). `subscription_past_due` boleh tanpa tautan bayar (renewal belum terbit): ia mengarahkan ke pengaturan langganan
 - [ ] Test cron idempoten & aman bersamaan (jalan 2×, 2 worker) (0.5)
 - [ ] Test reconcile memperbaiki invoice dengan webhook hilang (0.2)
 

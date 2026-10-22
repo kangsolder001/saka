@@ -1,0 +1,9 @@
+{{define "subject"}}Masa percobaan {{.Data.plan_name}} berakhir {{.Data.trial_end_date}}{{end}}
+{{define "content"}}Halo {{.Data.name}},
+
+Masa percobaan paket {{.Data.plan_name}} untuk organisasi {{.Data.organization_name}} berakhir pada {{.Data.trial_end_date}}, {{.Data.days_left}} hari lagi. Agar tetap memakai paket ini tanpa terputus, bayar invoice sebesar {{.Data.amount}} sebelum masa percobaan berakhir:
+
+{{.Data.payment_url}}
+
+Tanpa pembayaran, organisasi kembali ke paket Free setelah masa percobaan berakhir. Data Anda tidak dihapus; hanya batas penggunaannya yang kembali ke paket Free.{{end}}
+{{template "layout" .}}

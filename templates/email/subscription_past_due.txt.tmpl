@@ -1,0 +1,11 @@
+{{define "subject"}}Pembayaran langganan {{.Data.organization_name}} belum diterima{{end}}
+{{define "content"}}Halo {{.Data.name}},
+
+Periode langganan paket {{.Data.plan_name}} untuk organisasi {{.Data.organization_name}} telah berakhir dan pembayaran perpanjangan belum kami terima.
+
+Organisasi Anda tetap bisa memakai paket {{.Data.plan_name}} selama masa tenggang, sampai {{.Data.grace_until}}. Setelah itu langganan berakhir dan organisasi kembali ke paket Free (data tidak dihapus).
+
+{{if .Data.payment_url}}Bayar lewat tautan berikut:
+
+{{.Data.payment_url}}{{else}}Masuk ke {{.App.Name}} dan buka pengaturan langganan untuk membayar.{{end}}{{end}}
+{{template "layout" .}}
