@@ -130,7 +130,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [ ] Undangan: buat/list/batalkan/resend; perbarui undangan aktif yang sama (§7.4) (0.6)
 - [ ] Undangan: `GET /invitations/{token}`, accept (cek email sama), decline, kedaluwarsa 7 hari (0.6)
 - [ ] Registrasi dengan email yang punya undangan → auto-accept, tanpa org baru (0.3)
-- [ ] Template `invitation`; guard `EMAIL_NOT_VERIFIED` untuk undang (0.3)
+- [ ] Template `invitation`; guard `EMAIL_NOT_VERIFIED` untuk undang (0.3). Template selesai (dikerjakan lebih awal karena mail menolak template yang belum ada saat enqueue); guard dipasang bersama rute undangan
 - [ ] Hubungkan penolakan hapus akun owner ke modul org: implementasikan `auth.OrganizationGuard` (menolak bila owner org berisi anggota lain; hapus org yang hanya berisi dia + batalkan subscription) dan ganti `auth.NoOrganizations` di `internal/app` (0.3)
 - [ ] **Daftar akun sandbox Midtrans** (0.1) ⚠️ lakukan di fase ini, persetujuan bisa lama
 - [ ] Test: matriks izin lengkap, isolasi tenant A vs B, transfer atomik, siklus undangan (0.7)

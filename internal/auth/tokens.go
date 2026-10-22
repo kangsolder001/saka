@@ -2,10 +2,6 @@ package auth
 
 import (
 	"context"
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,28 +14,15 @@ import (
 	"github.com/kangsolder001/saka/internal/platform/apperr"
 	"github.com/kangsolder001/saka/internal/platform/clock"
 	"github.com/kangsolder001/saka/internal/platform/db"
+	"github.com/kangsolder001/saka/internal/platform/token"
 )
-
-// tokenBytes is the entropy of every opaque token (256 bits).
-const tokenBytes = 32
 
 // GenerateToken returns a new random token and its storage hash. The raw
 // value goes to the user (email link, cookie); only the hash is stored.
-func GenerateToken() (raw, hash string, err error) {
-	b := make([]byte, tokenBytes)
-	if _, err := rand.Read(b); err != nil {
-		return "", "", fmt.Errorf("generate token: %w", err)
-	}
-	raw = base64.RawURLEncoding.EncodeToString(b)
-	return raw, HashToken(raw), nil
-}
+func GenerateToken() (raw, hash string, err error) { return token.Generate() }
 
-// HashToken returns the hex SHA-256 of a raw token. A fast hash is
-// appropriate here: tokens are 256-bit random values, not guessable passwords.
-func HashToken(raw string) string {
-	sum := sha256.Sum256([]byte(raw))
-	return hex.EncodeToString(sum[:])
-}
+// HashToken returns the hex SHA-256 of a raw token.
+func HashToken(raw string) string { return token.Hash(raw) }
 
 // TokenType is the purpose of a single-use token.
 type TokenType string

@@ -1,0 +1,8 @@
+{{define "content"}}
+<p>Halo,</p>
+<p>{{.Data.inviter_name}} mengundang Anda bergabung dengan organisasi <strong>{{.Data.organization_name}}</strong> di {{.App.Name}} sebagai {{.Data.role_label}}. Klik tombol di bawah untuk melihat dan menerima undangan. Tautan berlaku selama {{.Data.expires_in_days}} hari.</p>
+<p style="margin:24px 0;"><a href="{{.Data.url}}" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;">Lihat undangan</a></p>
+<p>Jika tombol tidak berfungsi, salin tautan ini ke browser Anda:<br><a href="{{.Data.url}}">{{.Data.url}}</a></p>
+<p>Anda perlu masuk atau mendaftar dengan alamat email ini untuk menerima undangan. Jika Anda tidak mengenal pengundang, abaikan email ini.</p>
+{{end}}
+{{template "layout" .}}
