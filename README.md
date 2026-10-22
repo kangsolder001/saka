@@ -123,6 +123,7 @@ Tiap modul punya `queries/*.sql` dan paket `<modul>db` hasil `sqlc` (tanpa ORM).
 | [docs/openapi.yaml](docs/openapi.yaml) | referensi API (OpenAPI 3.1) untuk **semua** route, format error, autentikasi, paginasi; dijaga test agar tidak melenceng dari router |
 | [docs/panduan-modul-baru.md](docs/panduan-modul-baru.md) | cara menambah modul domain baru (tenant, RLS, limit, fitur) |
 | [docs/demo.md](docs/demo.md) | skenario demo end-to-end dengan `curl` |
+| [docs/issue.md](docs/issue.md) | masalah terbuka, hal yang belum terverifikasi, dan utang teknis |
 | [docs/email.md](docs/email.md) | email produksi: Resend, SPF, DKIM, DMARC |
 | [docs/loadtest.md](docs/loadtest.md) | uji beban ringan dan hasilnya |
 | [docs/rls.md](docs/rls.md) | desain Row Level Security |
