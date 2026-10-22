@@ -56,6 +56,15 @@ func (s *Service) transition(ctx context.Context, q db.DBTX, sub billingdb.Subsc
 	return res, nil
 }
 
+// paidInvoiceOf describes an invoice row for the state machine. The plan's
+// billing interval lengthens the period of a checkout.
+func paidInvoiceOf(inv billingdb.Invoice, plan billingdb.Plan) PaidInvoice {
+	return PaidInvoice{
+		Kind: InvoiceKind(inv.Kind), PlanID: inv.PlanID, Interval: plan.Interval,
+		PeriodStart: inv.PeriodStart, PeriodEnd: inv.PeriodEnd,
+	}
+}
+
 // contactOf finds whom to write to about an organization. A missing contact
 // (the organization or its owner is gone) is not an error for billing: the
 // work goes on and nobody is emailed.
