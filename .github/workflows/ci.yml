@@ -42,6 +42,19 @@ jobs:
       - name: Fail on drift
         run: git diff --exit-code
 
+  vulnerabilities:
+    name: govulncheck (advisory, see docs/spec.md section 11.3)
+    runs-on: ubuntu-latest
+    # Advisory: the vulnerability database changes independently of the code, so
+    # a new entry must not block unrelated pull requests. Read the log before a release.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
   unit:
     runs-on: ubuntu-latest
     steps:
