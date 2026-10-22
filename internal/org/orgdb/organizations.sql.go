@@ -32,6 +32,25 @@ func (q *Queries) GetOrganization(ctx context.Context, id uuid.UUID) (Organizati
 	return i, err
 }
 
+const getOrganizationAnyState = `-- name: GetOrganizationAnyState :one
+SELECT id, name, owner_id FROM organizations WHERE id = $1
+`
+
+type GetOrganizationAnyStateRow struct {
+	ID      uuid.UUID
+	Name    string
+	OwnerID uuid.UUID
+}
+
+// Deleted organizations included: billing still has to tell the owner about a
+// payment that arrives after the organization was deleted.
+func (q *Queries) GetOrganizationAnyState(ctx context.Context, id uuid.UUID) (GetOrganizationAnyStateRow, error) {
+	row := q.db.QueryRow(ctx, getOrganizationAnyState, id)
+	var i GetOrganizationAnyStateRow
+	err := row.Scan(&i.ID, &i.Name, &i.OwnerID)
+	return i, err
+}
+
 const insertOrganization = `-- name: InsertOrganization :one
 INSERT INTO organizations (id, name, slug, owner_id, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5::timestamptz, $5::timestamptz)

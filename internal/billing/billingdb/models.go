@@ -10,6 +10,29 @@ import (
 	"github.com/google/uuid"
 )
 
+type Invoice struct {
+	ID               uuid.UUID
+	OrganizationID   uuid.UUID
+	SubscriptionID   uuid.UUID
+	Number           string
+	Kind             string
+	PlanID           uuid.UUID
+	Amount           int64
+	Currency         string
+	Status           string
+	PeriodStart      time.Time
+	PeriodEnd        time.Time
+	DueAt            time.Time
+	PaidAt           *time.Time
+	Provider         string
+	ProviderRef      *string
+	PaymentUrl       *string
+	Reminder3dSentAt *time.Time
+	Reminder1dSentAt *time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+}
+
 type Plan struct {
 	ID          uuid.UUID
 	Code        string
@@ -24,4 +47,19 @@ type Plan struct {
 	SortOrder   int32
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+type Subscription struct {
+	ID                 uuid.UUID
+	OrganizationID     uuid.UUID
+	PlanID             uuid.UUID
+	Status             string
+	TrialEndsAt        *time.Time
+	CurrentPeriodStart time.Time
+	CurrentPeriodEnd   *time.Time
+	CancelAtPeriodEnd  bool
+	PendingPlanID      *uuid.UUID
+	GraceUntil         *time.Time
+	CreatedAt          time.Time
+	UpdatedAt          time.Time
 }

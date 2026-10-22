@@ -50,13 +50,16 @@ func NewHandler(deps HandlerDependencies) *Handler {
 	return &Handler{HandlerDependencies: deps}
 }
 
-// Routes registers the endpoints: GET /plans under rg (expected to be /api/v1,
-// public) and GET /subscription under tenant (expected to be
+// Routes registers the endpoints: GET /plans and the webhooks under rg
+// (expected to be /api/v1, public: a webhook's signature is its credential)
+// and the subscription and invoice endpoints under tenant (expected to be
 // org.TenantRoutes, so the caller is an authenticated member of the
-// organization).
-func (h *Handler) Routes(rg, tenant *gin.RouterGroup) {
+// organization). requireVerifiedEmail guards the endpoints that make the
+// service email the customer or create a payment (checkout, change-plan).
+func (h *Handler) Routes(rg, tenant *gin.RouterGroup, requireVerifiedEmail gin.HandlerFunc) {
 	rg.GET("/plans", h.listPlans)
 	tenant.GET("/subscription", h.getSubscription)
+	h.paymentRoutes(tenant, requireVerifiedEmail)
 }
 
 type planResponse struct {
@@ -111,12 +114,21 @@ type subscriptionResponse struct {
 // getSubscription answers the current organization's subscription with its
 // usage against the limits it has access to. Any member may read it.
 func (h *Handler) getSubscription(c *gin.Context) {
-	ctx := c.Request.Context()
+	out, err := h.subscriptionView(c.Request.Context())
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"subscription": out})
+}
+
+// subscriptionView reads the current organization's subscription in a
+// transaction of its own, pinned to the tenant on ctx.
+func (h *Handler) subscriptionView(ctx context.Context) (subscriptionResponse, error) {
 	orgID, ok := reqctx.OrgID(ctx)
 	if !ok {
 		// Wiring bug: the route was mounted without the tenant middleware.
-		httpx.Error(c, apperr.Unauthenticated())
-		return
+		return subscriptionResponse{}, apperr.Unauthenticated()
 	}
 	var out subscriptionResponse
 	err := h.Tx.WithTx(ctx, func(tx pgx.Tx) error {
@@ -143,11 +155,7 @@ func (h *Handler) getSubscription(c *gin.Context) {
 		}
 		return nil
 	})
-	if err != nil {
-		httpx.Error(c, err)
-		return
-	}
-	c.JSON(http.StatusOK, gin.H{"subscription": out})
+	return out, err
 }
 
 // utc renders a timestamp in UTC, as every time in the API is (the driver

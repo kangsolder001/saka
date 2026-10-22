@@ -163,10 +163,10 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Migrasi `invoices`, `payment_events` (§4.9, §4.10) (0.3). `migrations/00010`: `invoices` ber-RLS (policy + index berawalan `organization_id`), kolom tambahan `kind` (`checkout`/`renewal`) dan penanda pengingat; indeks unik parsial mencegah dua checkout hidup atau dua invoice untuk periode renewal yang sama; `payment_events` global tanpa RLS; sequence `invoice_number_seq`
 - [x] Interface `PaymentProvider` + implementasi Midtrans + fake provider untuk test (§8.1) (1). `internal/billing/payment` (+ `midtrans`, `fake`), config `billing`; Midtrans ditulis terhadap dokumentasi dan diuji dengan server palsu + vektor signature, **belum ke sandbox sungguhan** (asumsi yang perlu diverifikasi ada di spec §8.7)
 - [x] Generator nomor invoice global `INV-YYYY-NNNNNN` (sequence) (0.15). `billing.NextInvoiceNumber`; sequence global yang tidak mulai ulang tiap tahun dan tidak ikut di-rollback (celah boleh, nomor ganda tidak)
-- [ ] `POST …/subscription/checkout` (butuh role owner + email terverifikasi) → invoice + payment link (0.6)
-- [ ] `GET …/invoices`, `GET …/invoices/{id}` (0.3)
+- [x] `POST …/subscription/checkout` (butuh role owner + email terverifikasi) → invoice + payment link (0.6). Trial untuk organisasi Free yang belum pernah trial, invoice idempoten per plan, gateway gagal → `502` tanpa efek samping; keputusan di spec §8.7
+- [x] `GET …/invoices`, `GET …/invoices/{id}` (0.3). Owner saja, cursor terbaru dulu, ditambahkan ke inventaris rute tenant
 - [x] Template `invoice_created`, `payment_succeeded` (0.3). Data: nama pemilik, organisasi, nomor invoice, plan, nominal (`Rp99.000`), tanggal (WIB); tautan bayar hanya dari gateway, tanpa secret
-- [ ] Test checkout end-to-end dengan fake provider (0.3)
+- [x] Test checkout end-to-end dengan fake provider (0.3). `internal/app/checkout_integration_test.go` (HTTP + fake gateway) dan `internal/billing/checkout_integration_test.go` (rollback, balapan, RLS)
 
 **Bagian B: webhook & state machine**
 - [ ] `POST /webhooks/{provider}`: verifikasi signature → 401 jika salah (§8.5) (0.4)

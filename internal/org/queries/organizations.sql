@@ -52,3 +52,8 @@ WHERE id = @id AND owner_id = @old_owner_id AND deleted_at IS NULL;
 -- join (invitation accept, verification) between the count and the cleanup.
 -- name: LockOrganizationForUpdate :one
 SELECT id FROM organizations WHERE id = @id AND deleted_at IS NULL FOR UPDATE;
+
+-- Deleted organizations included: billing still has to tell the owner about a
+-- payment that arrives after the organization was deleted.
+-- name: GetOrganizationAnyState :one
+SELECT id, name, owner_id FROM organizations WHERE id = @id;

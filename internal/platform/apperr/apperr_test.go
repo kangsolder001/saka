@@ -30,6 +30,7 @@ func TestHTTPStatusMapping(t *testing.T) {
 		{apperr.NotFound(), http.StatusNotFound},
 		{apperr.Conflict("email sudah terdaftar"), http.StatusConflict},
 		{apperr.RateLimited(), http.StatusTooManyRequests},
+		{apperr.PaymentProviderError(errors.New("boom")), http.StatusBadGateway},
 		{apperr.Internal(errors.New("boom")), http.StatusInternalServerError},
 		{apperr.New("UNKNOWN", "x"), http.StatusInternalServerError},
 	}

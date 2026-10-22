@@ -1,0 +1,113 @@
+package billing
+
+import (
+	"net/http"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+
+	"github.com/kangsolder001/saka/internal/org"
+	"github.com/kangsolder001/saka/internal/platform/apperr"
+	"github.com/kangsolder001/saka/internal/platform/httpx"
+	"github.com/kangsolder001/saka/internal/platform/pagination"
+)
+
+// paymentRoutes mounts the endpoints that deal with money on the tenant group.
+// Only owners manage billing (spec §7.2): the role is checked here for a quick
+// 403 and again in the service, which is what protects non-HTTP callers.
+func (h *Handler) paymentRoutes(tenant *gin.RouterGroup, requireVerifiedEmail gin.HandlerFunc) {
+	owner := org.Require(org.ActionManageBilling)
+	tenant.POST("/subscription/checkout", owner, requireVerifiedEmail, h.checkout)
+	tenant.GET("/invoices", owner, h.listInvoices)
+	tenant.GET("/invoices/:id", owner, h.getInvoice)
+}
+
+type invoiceResponse struct {
+	ID          uuid.UUID     `json:"id"`
+	Number      string        `json:"number"`
+	Kind        InvoiceKind   `json:"kind"`
+	Plan        string        `json:"plan"`
+	PlanName    string        `json:"plan_name"`
+	Amount      int64         `json:"amount"`
+	Currency    string        `json:"currency"`
+	Status      InvoiceStatus `json:"status"`
+	PeriodStart time.Time     `json:"period_start"`
+	PeriodEnd   time.Time     `json:"period_end"`
+	DueAt       time.Time     `json:"due_at"`
+	PaidAt      *time.Time    `json:"paid_at"`
+	// PaymentURL is where to pay; null once the invoice can no longer be paid.
+	PaymentURL *string   `json:"payment_url"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
+func invoiceJSON(i Invoice) invoiceResponse {
+	return invoiceResponse{
+		ID: i.ID, Number: i.Number, Kind: i.Kind, Plan: i.PlanCode, PlanName: i.PlanName, Amount: i.Amount,
+		Currency: i.Currency, Status: i.Status, PeriodStart: i.PeriodStart.UTC(), PeriodEnd: i.PeriodEnd.UTC(),
+		DueAt: i.DueAt.UTC(), PaidAt: utc(i.PaidAt), PaymentURL: i.PaymentURL, CreatedAt: i.CreatedAt.UTC(),
+	}
+}
+
+type checkoutRequest struct {
+	Plan string `json:"plan" validate:"required,max=64"`
+}
+
+// checkout answers 201 with the new invoice, or 200 with the invoice that was
+// already waiting for payment for that plan. trial_started tells the client
+// the organization is on a trial of the plan from now on.
+func (h *Handler) checkout(c *gin.Context) {
+	var req checkoutRequest
+	if !httpx.BindJSON(c, &req) {
+		return
+	}
+	ctx := c.Request.Context()
+	res, err := h.Service.Checkout(ctx, req.Plan)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	sub, err := h.subscriptionView(ctx)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	status := http.StatusCreated
+	if res.Reused {
+		status = http.StatusOK
+	}
+	c.JSON(status, gin.H{"invoice": invoiceJSON(res.Invoice), "subscription": sub, "trial_started": res.TrialStarted})
+}
+
+func (h *Handler) listInvoices(c *gin.Context) {
+	params, err := pagination.ParseQuery(c.Request.URL.Query())
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	rows, err := h.Service.ListInvoices(c.Request.Context(), params)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	page := pagination.Paginate(rows, params.Limit, Invoice.CursorOf)
+	items := make([]invoiceResponse, len(page.Items))
+	for i, inv := range page.Items {
+		items[i] = invoiceJSON(inv)
+	}
+	c.JSON(http.StatusOK, pagination.Page[invoiceResponse]{Items: items, NextCursor: page.NextCursor})
+}
+
+func (h *Handler) getInvoice(c *gin.Context) {
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		httpx.Error(c, apperr.NotFound())
+		return
+	}
+	inv, err := h.Service.GetInvoice(c.Request.Context(), id)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"invoice": invoiceJSON(inv)})
+}

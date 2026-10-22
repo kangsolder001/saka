@@ -83,3 +83,99 @@ func (q *Queries) InsertFreeSubscription(ctx context.Context, arg InsertFreeSubs
 	err := row.Scan(&id)
 	return id, err
 }
+
+const lockSubscriptionByID = `-- name: LockSubscriptionByID :one
+SELECT id, organization_id, plan_id, status, trial_ends_at, current_period_start, current_period_end, cancel_at_period_end, pending_plan_id, grace_until, created_at, updated_at FROM subscriptions WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockSubscriptionByID(ctx context.Context, id uuid.UUID) (Subscription, error) {
+	row := q.db.QueryRow(ctx, lockSubscriptionByID, id)
+	var i Subscription
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.PlanID,
+		&i.Status,
+		&i.TrialEndsAt,
+		&i.CurrentPeriodStart,
+		&i.CurrentPeriodEnd,
+		&i.CancelAtPeriodEnd,
+		&i.PendingPlanID,
+		&i.GraceUntil,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const lockSubscriptionByOrganization = `-- name: LockSubscriptionByOrganization :one
+SELECT id, organization_id, plan_id, status, trial_ends_at, current_period_start, current_period_end, cancel_at_period_end, pending_plan_id, grace_until, created_at, updated_at FROM subscriptions WHERE organization_id = $1 FOR UPDATE
+`
+
+// The raw row (plan ids, not codes) for the state machine, locked so two
+// requests or jobs cannot change one subscription at the same time. Locks are
+// always taken subscription first, then its invoices, so a webhook and a job
+// touching the same organization cannot deadlock.
+func (q *Queries) LockSubscriptionByOrganization(ctx context.Context, organizationID uuid.UUID) (Subscription, error) {
+	row := q.db.QueryRow(ctx, lockSubscriptionByOrganization, organizationID)
+	var i Subscription
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.PlanID,
+		&i.Status,
+		&i.TrialEndsAt,
+		&i.CurrentPeriodStart,
+		&i.CurrentPeriodEnd,
+		&i.CancelAtPeriodEnd,
+		&i.PendingPlanID,
+		&i.GraceUntil,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateSubscriptionState = `-- name: UpdateSubscriptionState :exec
+UPDATE subscriptions
+SET status               = $1,
+    plan_id              = $2,
+    trial_ends_at        = $3::timestamptz,
+    current_period_start = $4,
+    current_period_end   = $5::timestamptz,
+    cancel_at_period_end = $6,
+    pending_plan_id      = $7::uuid,
+    grace_until          = $8::timestamptz,
+    updated_at           = $9::timestamptz
+WHERE id = $10
+`
+
+type UpdateSubscriptionStateParams struct {
+	Status             string
+	PlanID             uuid.UUID
+	TrialEndsAt        *time.Time
+	CurrentPeriodStart time.Time
+	CurrentPeriodEnd   *time.Time
+	CancelAtPeriodEnd  bool
+	PendingPlanID      *uuid.UUID
+	GraceUntil         *time.Time
+	Now                time.Time
+	ID                 uuid.UUID
+}
+
+// Writes the fields the state machine owns (billing.Snapshot).
+func (q *Queries) UpdateSubscriptionState(ctx context.Context, arg UpdateSubscriptionStateParams) error {
+	_, err := q.db.Exec(ctx, updateSubscriptionState,
+		arg.Status,
+		arg.PlanID,
+		arg.TrialEndsAt,
+		arg.CurrentPeriodStart,
+		arg.CurrentPeriodEnd,
+		arg.CancelAtPeriodEnd,
+		arg.PendingPlanID,
+		arg.GraceUntil,
+		arg.Now,
+		arg.ID,
+	)
+	return err
+}

@@ -85,6 +85,8 @@ func TestTenantIsolation_TheOrganizationRouteInventory(t *testing.T) {
 		"DELETE /api/v1/orgs/:orgId/members/:userId",
 		"GET /api/v1/orgs/:orgId",
 		"GET /api/v1/orgs/:orgId/invitations",
+		"GET /api/v1/orgs/:orgId/invoices",
+		"GET /api/v1/orgs/:orgId/invoices/:id",
 		"GET /api/v1/orgs/:orgId/members",
 		"GET /api/v1/orgs/:orgId/subscription",
 		"PATCH /api/v1/orgs/:orgId",
@@ -92,6 +94,7 @@ func TestTenantIsolation_TheOrganizationRouteInventory(t *testing.T) {
 		"POST /api/v1/orgs/:orgId/invitations",
 		"POST /api/v1/orgs/:orgId/invitations/:id/resend",
 		"POST /api/v1/orgs/:orgId/leave",
+		"POST /api/v1/orgs/:orgId/subscription/checkout",
 		"POST /api/v1/orgs/:orgId/transfer-ownership",
 	}, s.tenantRoutes(), "update this list (and the role tests) when a route under /orgs/{orgId} is added")
 }

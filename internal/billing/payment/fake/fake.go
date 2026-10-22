@@ -27,7 +27,7 @@ const SignatureHeader = "X-Fake-Signature"
 
 // secret signs the fake's webhooks. It is public on purpose: the fake only
 // exists outside production, and tests must be able to forge notifications.
-const secret = "fake-webhook-secret"
+const secret = "fake-webhook-secret" //nolint:gosec // public on purpose, see above
 
 // PaymentURL is the link CreatePayment returns for an invoice.
 func PaymentURL(invoiceNumber string) string { return "https://pay.fake.test/" + invoiceNumber }

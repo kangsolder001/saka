@@ -11,6 +11,7 @@ import (
 
 	"github.com/kangsolder001/saka/internal/auth"
 	"github.com/kangsolder001/saka/internal/billing"
+	"github.com/kangsolder001/saka/internal/billing/payment"
 	"github.com/kangsolder001/saka/internal/entitlement"
 	"github.com/kangsolder001/saka/internal/mail"
 	"github.com/kangsolder001/saka/internal/org"
@@ -38,6 +39,9 @@ type Options struct {
 	// middleware such as RequireFeature on a route that does not exist in
 	// production yet.
 	TenantRoutes func(rg *gin.RouterGroup, entitlements *entitlement.Service)
+	// PaymentProviders replaces the gateways built from billing.provider in
+	// the configuration; tests inject the fake one to drive payments.
+	PaymentProviders payment.Registry
 }
 
 // guardOrDefault returns the injected guard, or the organization module.
@@ -113,6 +117,20 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 	entitlements := entitlement.NewService(billingService, database)
 	entitlements.RegisterCounter(org.MembersLimit, organizations.CountSeats)
 	organizations.Limits = entitlements
+	// Billing writes to the owner of an organization (found through the
+	// organization module), reads usage from entitlement and calls payment
+	// gateways; both modules exist now, so the loop is closed here too.
+	providers := opts.PaymentProviders
+	if providers == nil {
+		var err error
+		if providers, err = billing.NewProviders(cfg.Billing, clk); err != nil {
+			return nil, fmt.Errorf("payment providers: %w", err)
+		}
+	}
+	billingService.EnablePayments(billing.PaymentDependencies{
+		Tx: database, Mail: mailer, Contacts: organizations, Providers: providers, Usage: entitlements,
+		Settings: billing.SettingsFrom(cfg.Billing), Log: log.Component("billing"),
+	})
 	authMiddleware := auth.NewMiddleware(authService)
 
 	v1 := router.Group("/api/v1")
@@ -124,7 +142,7 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 	// has already passed authentication and the tenant middleware.
 	tenant := org.TenantRoutes(v1, authMiddleware.Authenticate(), organizations)
 	billing.NewHandler(billing.HandlerDependencies{Service: billingService, Usage: entitlements, Tx: database, Pool: database.Pool()}).
-		Routes(v1, tenant)
+		Routes(v1, tenant, authMiddleware.RequireVerifiedEmail())
 	if opts.TenantRoutes != nil {
 		opts.TenantRoutes(tenant, entitlements)
 	}

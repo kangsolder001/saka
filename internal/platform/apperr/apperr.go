@@ -26,6 +26,7 @@ const (
 	CodeNotFound               Code = "NOT_FOUND"
 	CodeConflict               Code = "CONFLICT"
 	CodeRateLimited            Code = "RATE_LIMITED"
+	CodePaymentProvider        Code = "PAYMENT_PROVIDER_ERROR"
 	CodeInternal               Code = "INTERNAL_ERROR"
 )
 
@@ -41,6 +42,7 @@ var statusByCode = map[Code]int{
 	CodeNotFound:               http.StatusNotFound,
 	CodeConflict:               http.StatusConflict,
 	CodeRateLimited:            http.StatusTooManyRequests,
+	CodePaymentProvider:        http.StatusBadGateway,
 	CodeInternal:               http.StatusInternalServerError,
 }
 
@@ -235,6 +237,13 @@ func RateLimitedAfter(retryAfter time.Duration) *Error {
 
 // DetailRetryAfterSeconds is the details key holding the suggested wait.
 const DetailRetryAfterSeconds = "retry_after_seconds"
+
+// PaymentProviderError is returned when the payment gateway could not be
+// reached or refused the request. Nothing was created; the caller may retry.
+// The cause (never sent to clients) is kept for the log.
+func PaymentProviderError(cause error) *Error {
+	return &Error{Code: CodePaymentProvider, Message: "Penyedia pembayaran sedang tidak dapat dihubungi. Coba lagi nanti.", Cause: cause}
+}
 
 // Internal wraps an unexpected failure. The cause is for logs only.
 func Internal(cause error) *Error {

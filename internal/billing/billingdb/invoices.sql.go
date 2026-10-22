@@ -7,7 +7,342 @@ package billingdb
 
 import (
 	"context"
+	"time"
+
+	"github.com/google/uuid"
 )
+
+const getInvoice = `-- name: GetInvoice :one
+SELECT i.id, i.organization_id, i.subscription_id, i.number, i.kind, i.plan_id, i.amount, i.currency, i.status, i.period_start, i.period_end, i.due_at, i.paid_at, i.provider, i.provider_ref, i.payment_url, i.reminder_3d_sent_at, i.reminder_1d_sent_at, i.created_at, i.updated_at, p.code AS plan_code, p.name AS plan_name
+FROM invoices i
+JOIN plans p ON p.id = i.plan_id
+WHERE i.id = $1 AND i.organization_id = $2
+`
+
+type GetInvoiceParams struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+}
+
+type GetInvoiceRow struct {
+	ID               uuid.UUID
+	OrganizationID   uuid.UUID
+	SubscriptionID   uuid.UUID
+	Number           string
+	Kind             string
+	PlanID           uuid.UUID
+	Amount           int64
+	Currency         string
+	Status           string
+	PeriodStart      time.Time
+	PeriodEnd        time.Time
+	DueAt            time.Time
+	PaidAt           *time.Time
+	Provider         string
+	ProviderRef      *string
+	PaymentUrl       *string
+	Reminder3dSentAt *time.Time
+	Reminder1dSentAt *time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	PlanCode         string
+	PlanName         string
+}
+
+// The plan code and name are joined in so callers never see internal plan IDs.
+func (q *Queries) GetInvoice(ctx context.Context, arg GetInvoiceParams) (GetInvoiceRow, error) {
+	row := q.db.QueryRow(ctx, getInvoice, arg.ID, arg.OrganizationID)
+	var i GetInvoiceRow
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.SubscriptionID,
+		&i.Number,
+		&i.Kind,
+		&i.PlanID,
+		&i.Amount,
+		&i.Currency,
+		&i.Status,
+		&i.PeriodStart,
+		&i.PeriodEnd,
+		&i.DueAt,
+		&i.PaidAt,
+		&i.Provider,
+		&i.ProviderRef,
+		&i.PaymentUrl,
+		&i.Reminder3dSentAt,
+		&i.Reminder1dSentAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.PlanCode,
+		&i.PlanName,
+	)
+	return i, err
+}
+
+const getPaidRenewalForPeriod = `-- name: GetPaidRenewalForPeriod :one
+SELECT id, organization_id, subscription_id, number, kind, plan_id, amount, currency, status, period_start, period_end, due_at, paid_at, provider, provider_ref, payment_url, reminder_3d_sent_at, reminder_1d_sent_at, created_at, updated_at FROM invoices
+WHERE subscription_id = $1 AND kind = 'renewal' AND status = 'paid' AND period_start = $2
+`
+
+type GetPaidRenewalForPeriodParams struct {
+	SubscriptionID uuid.UUID
+	PeriodStart    time.Time
+}
+
+// The paid renewal for the period that starts when the subscription's current
+// one ends: what the state machine needs to roll into the next period.
+func (q *Queries) GetPaidRenewalForPeriod(ctx context.Context, arg GetPaidRenewalForPeriodParams) (Invoice, error) {
+	row := q.db.QueryRow(ctx, getPaidRenewalForPeriod, arg.SubscriptionID, arg.PeriodStart)
+	var i Invoice
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.SubscriptionID,
+		&i.Number,
+		&i.Kind,
+		&i.PlanID,
+		&i.Amount,
+		&i.Currency,
+		&i.Status,
+		&i.PeriodStart,
+		&i.PeriodEnd,
+		&i.DueAt,
+		&i.PaidAt,
+		&i.Provider,
+		&i.ProviderRef,
+		&i.PaymentUrl,
+		&i.Reminder3dSentAt,
+		&i.Reminder1dSentAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const insertInvoice = `-- name: InsertInvoice :one
+INSERT INTO invoices (
+    organization_id, subscription_id, number, kind, plan_id, amount, currency, status,
+    period_start, period_end, due_at, provider, provider_ref, payment_url,
+    reminder_3d_sent_at, reminder_1d_sent_at, created_at, updated_at
+) VALUES (
+    $1, $2, $3, $4, $5, $6, $7, $8,
+    $9, $10, $11, $12, $13, $14,
+    $15::timestamptz, $16::timestamptz,
+    $17::timestamptz, $17::timestamptz
+)
+RETURNING id, organization_id, subscription_id, number, kind, plan_id, amount, currency, status, period_start, period_end, due_at, paid_at, provider, provider_ref, payment_url, reminder_3d_sent_at, reminder_1d_sent_at, created_at, updated_at
+`
+
+type InsertInvoiceParams struct {
+	OrganizationID   uuid.UUID
+	SubscriptionID   uuid.UUID
+	Number           string
+	Kind             string
+	PlanID           uuid.UUID
+	Amount           int64
+	Currency         string
+	Status           string
+	PeriodStart      time.Time
+	PeriodEnd        time.Time
+	DueAt            time.Time
+	Provider         string
+	ProviderRef      *string
+	PaymentUrl       *string
+	Reminder3dSentAt *time.Time
+	Reminder1dSentAt *time.Time
+	Now              time.Time
+}
+
+func (q *Queries) InsertInvoice(ctx context.Context, arg InsertInvoiceParams) (Invoice, error) {
+	row := q.db.QueryRow(ctx, insertInvoice,
+		arg.OrganizationID,
+		arg.SubscriptionID,
+		arg.Number,
+		arg.Kind,
+		arg.PlanID,
+		arg.Amount,
+		arg.Currency,
+		arg.Status,
+		arg.PeriodStart,
+		arg.PeriodEnd,
+		arg.DueAt,
+		arg.Provider,
+		arg.ProviderRef,
+		arg.PaymentUrl,
+		arg.Reminder3dSentAt,
+		arg.Reminder1dSentAt,
+		arg.Now,
+	)
+	var i Invoice
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.SubscriptionID,
+		&i.Number,
+		&i.Kind,
+		&i.PlanID,
+		&i.Amount,
+		&i.Currency,
+		&i.Status,
+		&i.PeriodStart,
+		&i.PeriodEnd,
+		&i.DueAt,
+		&i.PaidAt,
+		&i.Provider,
+		&i.ProviderRef,
+		&i.PaymentUrl,
+		&i.Reminder3dSentAt,
+		&i.Reminder1dSentAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listInvoices = `-- name: ListInvoices :many
+SELECT i.id, i.organization_id, i.subscription_id, i.number, i.kind, i.plan_id, i.amount, i.currency, i.status, i.period_start, i.period_end, i.due_at, i.paid_at, i.provider, i.provider_ref, i.payment_url, i.reminder_3d_sent_at, i.reminder_1d_sent_at, i.created_at, i.updated_at, p.code AS plan_code, p.name AS plan_name
+FROM invoices i
+JOIN plans p ON p.id = i.plan_id
+WHERE i.organization_id = $1
+  AND (
+    $2::timestamptz IS NULL
+    OR (i.created_at, i.id) < ($2::timestamptz, $3::uuid)
+  )
+ORDER BY i.created_at DESC, i.id DESC
+LIMIT $4
+`
+
+type ListInvoicesParams struct {
+	OrganizationID  uuid.UUID
+	BeforeCreatedAt *time.Time
+	BeforeID        *uuid.UUID
+	RowLimit        int32
+}
+
+type ListInvoicesRow struct {
+	ID               uuid.UUID
+	OrganizationID   uuid.UUID
+	SubscriptionID   uuid.UUID
+	Number           string
+	Kind             string
+	PlanID           uuid.UUID
+	Amount           int64
+	Currency         string
+	Status           string
+	PeriodStart      time.Time
+	PeriodEnd        time.Time
+	DueAt            time.Time
+	PaidAt           *time.Time
+	Provider         string
+	ProviderRef      *string
+	PaymentUrl       *string
+	Reminder3dSentAt *time.Time
+	Reminder1dSentAt *time.Time
+	CreatedAt        time.Time
+	UpdatedAt        time.Time
+	PlanCode         string
+	PlanName         string
+}
+
+// Newest first; keyset pagination on (created_at, id).
+func (q *Queries) ListInvoices(ctx context.Context, arg ListInvoicesParams) ([]ListInvoicesRow, error) {
+	rows, err := q.db.Query(ctx, listInvoices,
+		arg.OrganizationID,
+		arg.BeforeCreatedAt,
+		arg.BeforeID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListInvoicesRow
+	for rows.Next() {
+		var i ListInvoicesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.SubscriptionID,
+			&i.Number,
+			&i.Kind,
+			&i.PlanID,
+			&i.Amount,
+			&i.Currency,
+			&i.Status,
+			&i.PeriodStart,
+			&i.PeriodEnd,
+			&i.DueAt,
+			&i.PaidAt,
+			&i.Provider,
+			&i.ProviderRef,
+			&i.PaymentUrl,
+			&i.Reminder3dSentAt,
+			&i.Reminder1dSentAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.PlanCode,
+			&i.PlanName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const lockLiveInvoicesForSubscription = `-- name: LockLiveInvoicesForSubscription :many
+SELECT id, organization_id, subscription_id, number, kind, plan_id, amount, currency, status, period_start, period_end, due_at, paid_at, provider, provider_ref, payment_url, reminder_3d_sent_at, reminder_1d_sent_at, created_at, updated_at FROM invoices
+WHERE subscription_id = $1 AND status IN ('draft', 'open')
+ORDER BY created_at, id
+FOR UPDATE
+`
+
+// The invoices of a subscription that can still be paid, locked. The caller
+// already holds the subscription lock.
+func (q *Queries) LockLiveInvoicesForSubscription(ctx context.Context, subscriptionID uuid.UUID) ([]Invoice, error) {
+	rows, err := q.db.Query(ctx, lockLiveInvoicesForSubscription, subscriptionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Invoice
+	for rows.Next() {
+		var i Invoice
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.SubscriptionID,
+			&i.Number,
+			&i.Kind,
+			&i.PlanID,
+			&i.Amount,
+			&i.Currency,
+			&i.Status,
+			&i.PeriodStart,
+			&i.PeriodEnd,
+			&i.DueAt,
+			&i.PaidAt,
+			&i.Provider,
+			&i.ProviderRef,
+			&i.PaymentUrl,
+			&i.Reminder3dSentAt,
+			&i.Reminder1dSentAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
 
 const nextInvoiceSequence = `-- name: NextInvoiceSequence :one
 SELECT nextval('invoice_number_seq')::bigint AS seq
@@ -21,4 +356,35 @@ func (q *Queries) NextInvoiceSequence(ctx context.Context) (int64, error) {
 	var seq int64
 	err := row.Scan(&seq)
 	return seq, err
+}
+
+const voidLiveInvoices = `-- name: VoidLiveInvoices :execrows
+UPDATE invoices
+SET status = 'void', updated_at = $1::timestamptz
+WHERE subscription_id = $2
+  AND status IN ('draft', 'open')
+  AND ($3::text IS NULL OR kind = $3::text)
+  AND ($4::uuid IS NULL OR id <> $4::uuid)
+`
+
+type VoidLiveInvoicesParams struct {
+	Now            time.Time
+	SubscriptionID uuid.UUID
+	Kind           *string
+	ExceptID       *uuid.UUID
+}
+
+// Closes the live invoices of a subscription: all of them, or only one kind,
+// optionally sparing one. Returns how many were closed.
+func (q *Queries) VoidLiveInvoices(ctx context.Context, arg VoidLiveInvoicesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, voidLiveInvoices,
+		arg.Now,
+		arg.SubscriptionID,
+		arg.Kind,
+		arg.ExceptID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

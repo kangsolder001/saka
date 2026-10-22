@@ -18,6 +18,8 @@ import (
 
 	"github.com/kangsolder001/saka/internal/app"
 	"github.com/kangsolder001/saka/internal/auth"
+	"github.com/kangsolder001/saka/internal/billing/payment"
+	"github.com/kangsolder001/saka/internal/billing/payment/fake"
 	"github.com/kangsolder001/saka/internal/platform/clock"
 	"github.com/kangsolder001/saka/internal/platform/config"
 	"github.com/kangsolder001/saka/internal/platform/db"
@@ -50,6 +52,9 @@ type stack struct {
 	// users shares the API's Redis cache, so tests can invalidate it the way
 	// an admin or profile flow would after changing a user.
 	users *user.Service
+	// gateway is the fake payment gateway the API creates payments with; tests
+	// drive payments by posting webhooks signed for it.
+	gateway *fake.Provider
 }
 
 // newStack builds the API; tweak adjusts the wiring (see app.Options) when a test needs to.
@@ -73,14 +78,17 @@ func newStack(t *testing.T, tweak ...func(*app.Options)) *stack {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = rdb.Close() })
 
-	opts := app.Options{PasswordParams: &light}
+	gateway := fake.New()
+	registry, err := payment.NewRegistry(gateway)
+	require.NoError(t, err)
+	opts := app.Options{PasswordParams: &light, PaymentProviders: registry}
 	for _, f := range tweak {
 		f(&opts)
 	}
 	router, err := app.NewRouter(cfg, logger.Nop(), clk, d, rdb, opts)
 	require.NoError(t, err)
 	users := user.NewService(clk, user.WithCache(rdb.Namespace("user"), cfg.Redis.UserCacheTTL.Std(), logger.Nop()))
-	return &stack{t: t, router: router, engine: router, db: d, admin: dbtest.AdminPool(t, dsn), redis: rdb, clock: clk, users: users}
+	return &stack{t: t, router: router, engine: router, db: d, admin: dbtest.AdminPool(t, dsn), redis: rdb, clock: clk, users: users, gateway: gateway}
 }
 
 type response struct {

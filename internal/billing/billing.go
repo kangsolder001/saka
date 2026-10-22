@@ -1,7 +1,8 @@
-// Package billing owns plans, subscriptions and, from Phase 6, invoices and
-// payment providers (spec §8). The organization is what subscribes. Phase 5
-// only needs the read side and the Free subscription every organization starts
-// with; the state machine and payments build on the types here.
+// Package billing owns plans, subscriptions, invoices and the payment
+// providers (spec §8). The organization is what subscribes, never a user.
+// The subscription state machine is a set of pure functions
+// (statemachine.go); the rest applies what they decide to the database,
+// inside the caller's transaction.
 package billing
 
 import (
@@ -56,9 +57,12 @@ func subscriptionFromRow(r billingdb.GetSubscriptionByOrganizationRow) Subscript
 	}
 }
 
-// Service is the public API of the billing module.
+// Service is the public API of the billing module. Without options it only
+// has the read side every organization needs (plans, subscriptions, the Free
+// subscription); EnablePayments adds checkout, invoices, webhooks and the jobs.
 type Service struct {
 	clk clock.Clock
+	pay *payments
 }
 
 // NewService creates a Service.
