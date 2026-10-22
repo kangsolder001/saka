@@ -4,6 +4,7 @@ package org_test
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/uuid"
@@ -12,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kangsolder001/saka/internal/org"
+	"github.com/kangsolder001/saka/internal/platform/apperr"
 	"github.com/kangsolder001/saka/internal/platform/clock"
 	"github.com/kangsolder001/saka/internal/platform/config"
 	"github.com/kangsolder001/saka/internal/platform/db"
@@ -25,9 +27,11 @@ type env struct {
 	db    *db.DB        // the application's connection: restricted by row-level security
 	admin *pgxpool.Pool // the owner's: sees every tenant, for arranging and asserting
 	dsn   string
-	clock *clock.Fake
-	users *user.Service
-	orgs  *org.Service
+	// passwords stands in for auth's password check.
+	passwords *fakePasswords
+	clock     *clock.Fake
+	users     *user.Service
+	orgs      *org.Service
 }
 
 func newEnv(t *testing.T) *env {
@@ -43,7 +47,11 @@ func newEnv(t *testing.T) *env {
 
 	clk := clock.NewFake(epoch)
 	users := user.NewService(clk)
-	return &env{t: t, db: d, dsn: dsn, admin: dbtest.AdminPool(t, dsn), clock: clk, users: users, orgs: org.NewService(clk, d, users)}
+	passwords := &fakePasswords{}
+	return &env{
+		t: t, db: d, dsn: dsn, admin: dbtest.AdminPool(t, dsn), clock: clk, users: users, passwords: passwords,
+		orgs: org.NewService(org.Dependencies{Clock: clk, Tx: d, Users: users, Passwords: passwords}),
+	}
 }
 
 // newUser inserts a user and returns it.
@@ -79,4 +87,15 @@ func (e *env) create(ownerID uuid.UUID, name, slug string) (org.Organization, er
 		return err
 	})
 	return created, err
+}
+
+// fakePasswords accepts exactly "correct-horse" and counts the checks.
+type fakePasswords struct{ calls atomic.Int32 }
+
+func (f *fakePasswords) ConfirmPassword(_ context.Context, _ uuid.UUID, password string) error {
+	f.calls.Add(1)
+	if password != "correct-horse" {
+		return apperr.Validation(map[string]string{"current_password": "is incorrect"})
+	}
+	return nil
 }

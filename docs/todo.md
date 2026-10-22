@@ -126,7 +126,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] RLS: role DB aplikasi non-owner, `SET LOCAL app.current_org` di `WithTx`, policy dengan `(SELECT current_setting(...))`, index berawalan `organization_id` (0.8). Migrasi `00007` (role `saka_app`, policy di `organizations`/`memberships`/`invitations`), `database.app_role` (`SET ROLE` per koneksi), `db.WithSystemTx` untuk alur lintas tenant, `db.PinTenant` untuk org yang baru dibuat. Index `(organization_id, ...)` sudah ada sejak `00006`
 - [x] Test RLS: query tanpa filter org tidak bocor; lupa `SET LOCAL` → hasil kosong; worker/migrasi punya jalur bypass (0.3). `internal/org/rls_integration_test.go` + penjaga struktural di `migrations/` (setiap tabel ber-`organization_id` wajib RLS + policy dan punya index berawalan `organization_id`, jadi tabel Fase 5–6 otomatis terjaga)
 - [x] Anggota: `GET members`, `PATCH role`, `DELETE member`, `POST leave` (0.6). Matriks izin diuji lewat e2e (`internal/app/members_integration_test.go`); keputusan di spec §7.6
-- [ ] Transfer kepemilikan atomik + konfirmasi password (§7.5) (0.4)
+- [x] Transfer kepemilikan atomik + konfirmasi password (§7.5) (0.4). Atomisitas diuji dengan trigger yang menggagalkan langkah terakhir, balapan dua transfer diuji dengan dua goroutine; `org.NewService` kini menerima `org.Dependencies`
 - [ ] Undangan: buat/list/batalkan/resend; perbarui undangan aktif yang sama (§7.4) (0.6)
 - [ ] Undangan: `GET /invitations/{token}`, accept (cek email sama), decline, kedaluwarsa 7 hari (0.6)
 - [ ] Registrasi dengan email yang punya undangan → auto-accept, tanpa org baru (0.3)

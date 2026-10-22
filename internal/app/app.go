@@ -69,7 +69,11 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 		orgs = auth.NoOrganizations{} // TODO(phase-4): wire the organization module
 	}
 	users := user.NewService(clk, user.WithCache(redis.Namespace("user"), cfg.Redis.UserCacheTTL.Std(), log))
-	organizations := org.NewService(clk, database, users)
+	// auth and org need each other (registration creates the organization; the
+	// ownership transfer confirms a password), each through an interface the
+	// consumer declares. The composition root closes the loop: org is built
+	// first and receives auth once it exists.
+	organizations := org.NewService(org.Dependencies{Clock: clk, Tx: database, Users: users})
 	authService := auth.NewService(auth.Dependencies{
 		Tx:          database,
 		Pool:        database.Pool(),
@@ -86,6 +90,7 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 		Log:         log,
 	}, auth.Config{FrontendURL: cfg.App.FrontendURL})
 
+	organizations.Passwords = authService
 	authMiddleware := auth.NewMiddleware(authService)
 
 	v1 := router.Group("/api/v1")

@@ -56,7 +56,7 @@ func (s *Service) ListMembers(ctx context.Context, p pagination.Params) ([]Membe
 		for i, r := range rows {
 			ids[i] = r.UserID
 		}
-		people, err := s.users.GetSummaries(ctx, tx, ids)
+		people, err := s.Users.GetSummaries(ctx, tx, ids)
 		if err != nil {
 			return err
 		}
@@ -85,7 +85,7 @@ func (s *Service) memberOf(ctx context.Context, tx pgx.Tx, orgID, userID uuid.UU
 		}
 		return Member{}, fmt.Errorf("org: get member: %w", err)
 	}
-	people, err := s.users.GetSummaries(ctx, tx, []uuid.UUID{userID})
+	people, err := s.Users.GetSummaries(ctx, tx, []uuid.UUID{userID})
 	if err != nil {
 		return Member{}, err
 	}

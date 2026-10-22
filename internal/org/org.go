@@ -63,17 +63,35 @@ type UserDirectory interface {
 
 var _ UserDirectory = (*user.Service)(nil)
 
-// Service is the public API of the organization module.
-type Service struct {
-	clk   clock.Clock
-	tx    Transactor
-	users UserDirectory
+// PasswordConfirmer checks a user's current password before a sensitive
+// action (transferring ownership). auth.Service implements it, with its
+// failed-guess rate limit; org declares it so the modules stay decoupled.
+type PasswordConfirmer interface {
+	// ConfirmPassword returns a VALIDATION_ERROR on "current_password" when
+	// the password is wrong, and RATE_LIMITED after too many wrong guesses.
+	ConfirmPassword(ctx context.Context, userID uuid.UUID, password string) error
 }
 
-// NewService creates a Service. tx runs the transactions of methods that open
-// their own (those that do not take a db.DBTX).
-func NewService(clk clock.Clock, tx Transactor, users UserDirectory) *Service {
-	return &Service{clk: clk, tx: tx, users: users}
+// Dependencies are the collaborators of Service, injected by the composition root.
+type Dependencies struct {
+	Clock clock.Clock
+	// Tx runs the transactions of methods that open their own (those that do
+	// not take a db.DBTX).
+	Tx        Transactor
+	Users     UserDirectory
+	Passwords PasswordConfirmer
+}
+
+// Service is the public API of the organization module.
+type Service struct {
+	Dependencies
+	clk clock.Clock
+	tx  Transactor
+}
+
+// NewService creates a Service.
+func NewService(deps Dependencies) *Service {
+	return &Service{Dependencies: deps, clk: deps.Clock, tx: deps.Tx}
 }
 
 func organizationFromRow(r orgdb.Organization) Organization {

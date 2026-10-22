@@ -144,6 +144,33 @@ func (q *Queries) ListOrganizationsForUser(ctx context.Context, arg ListOrganiza
 	return items, nil
 }
 
+const setOrganizationOwner = `-- name: SetOrganizationOwner :execrows
+UPDATE organizations
+SET owner_id = $1, updated_at = $2::timestamptz
+WHERE id = $3 AND owner_id = $4 AND deleted_at IS NULL
+`
+
+type SetOrganizationOwnerParams struct {
+	NewOwnerID uuid.UUID
+	Now        time.Time
+	ID         uuid.UUID
+	OldOwnerID uuid.UUID
+}
+
+// Compare-and-set on the previous owner, so a transfer that lost a race matches no row.
+func (q *Queries) SetOrganizationOwner(ctx context.Context, arg SetOrganizationOwnerParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setOrganizationOwner,
+		arg.NewOwnerID,
+		arg.Now,
+		arg.ID,
+		arg.OldOwnerID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const softDeleteOrganization = `-- name: SoftDeleteOrganization :execrows
 UPDATE organizations
 SET deleted_at = $1::timestamptz, updated_at = $1::timestamptz

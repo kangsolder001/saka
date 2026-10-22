@@ -42,3 +42,13 @@ RETURNING id, organization_id, user_id, role, created_at;
 -- name: DeleteMembership :execrows
 DELETE FROM memberships
 WHERE organization_id = @organization_id AND user_id = @user_id AND role <> 'owner';
+
+-- Ownership transfer, in three compare-and-set steps (see Service.TransferOwnership).
+-- The demotion goes first because the partial unique index allows one owner.
+-- name: DemoteOwnerToAdmin :execrows
+UPDATE memberships SET role = 'admin'
+WHERE organization_id = @organization_id AND user_id = @user_id AND role = 'owner';
+
+-- name: PromoteToOwner :execrows
+UPDATE memberships SET role = 'owner'
+WHERE organization_id = @organization_id AND user_id = @user_id AND role <> 'owner';

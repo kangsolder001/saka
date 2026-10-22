@@ -41,3 +41,9 @@ RETURNING *;
 UPDATE organizations
 SET deleted_at = @now::timestamptz, updated_at = @now::timestamptz
 WHERE id = @id AND deleted_at IS NULL;
+
+-- Compare-and-set on the previous owner, so a transfer that lost a race matches no row.
+-- name: SetOrganizationOwner :execrows
+UPDATE organizations
+SET owner_id = @new_owner_id, updated_at = @now::timestamptz
+WHERE id = @id AND owner_id = @old_owner_id AND deleted_at IS NULL;

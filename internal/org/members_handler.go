@@ -31,6 +31,7 @@ func (h *Handler) memberRoutes(one *gin.RouterGroup) {
 	one.PATCH("/members/:userId", h.changeRole)
 	one.DELETE("/members/:userId", h.removeMember)
 	one.POST("/leave", h.leave)
+	one.POST("/transfer-ownership", h.transferOwnership)
 }
 
 func (h *Handler) listMembers(c *gin.Context) {
@@ -98,6 +99,23 @@ func (h *Handler) removeMember(c *gin.Context) {
 
 func (h *Handler) leave(c *gin.Context) {
 	if err := h.svc.Leave(c.Request.Context()); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
+type transferRequest struct {
+	UserID          uuid.UUID `json:"user_id" validate:"required"`
+	CurrentPassword string    `json:"current_password" validate:"required,max=1024"` // capped so a huge body cannot force a huge hash
+}
+
+func (h *Handler) transferOwnership(c *gin.Context) {
+	var req transferRequest
+	if !httpx.BindJSON(c, &req) {
+		return
+	}
+	if err := h.svc.TransferOwnership(c.Request.Context(), req.UserID, req.CurrentPassword); err != nil {
 		httpx.Error(c, err)
 		return
 	}

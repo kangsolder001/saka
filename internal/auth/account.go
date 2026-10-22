@@ -52,6 +52,19 @@ func (s *Service) confirmPassword(ctx context.Context, u user.User, password str
 	return nil
 }
 
+// ConfirmPassword checks userID's current password before a sensitive action
+// owned by another module (transferring organization ownership). It has the
+// same behaviour as the checks inside this package: a wrong password is a
+// VALIDATION_ERROR on "current_password", and wrong guesses share the
+// per-user limit.
+func (s *Service) ConfirmPassword(ctx context.Context, userID uuid.UUID, password string) error {
+	u, err := s.Users.GetByID(ctx, s.Pool, userID)
+	if err != nil {
+		return err
+	}
+	return s.confirmPassword(ctx, u, password)
+}
+
 // ChangePassword replaces the caller's password after checking the current one.
 // In one transaction it stores the new hash, revokes every session except
 // currentSession (the caller stays logged in) and queues the "password

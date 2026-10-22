@@ -30,6 +30,26 @@ func (q *Queries) DeleteMembership(ctx context.Context, arg DeleteMembershipPara
 	return result.RowsAffected(), nil
 }
 
+const demoteOwnerToAdmin = `-- name: DemoteOwnerToAdmin :execrows
+UPDATE memberships SET role = 'admin'
+WHERE organization_id = $1 AND user_id = $2 AND role = 'owner'
+`
+
+type DemoteOwnerToAdminParams struct {
+	OrganizationID uuid.UUID
+	UserID         uuid.UUID
+}
+
+// Ownership transfer, in three compare-and-set steps (see Service.TransferOwnership).
+// The demotion goes first because the partial unique index allows one owner.
+func (q *Queries) DemoteOwnerToAdmin(ctx context.Context, arg DemoteOwnerToAdminParams) (int64, error) {
+	result, err := q.db.Exec(ctx, demoteOwnerToAdmin, arg.OrganizationID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getMembership = `-- name: GetMembership :one
 SELECT m.id, m.organization_id, m.user_id, m.role, m.created_at
 FROM memberships m
@@ -165,6 +185,24 @@ func (q *Queries) ListMemberships(ctx context.Context, arg ListMembershipsParams
 		return nil, err
 	}
 	return items, nil
+}
+
+const promoteToOwner = `-- name: PromoteToOwner :execrows
+UPDATE memberships SET role = 'owner'
+WHERE organization_id = $1 AND user_id = $2 AND role <> 'owner'
+`
+
+type PromoteToOwnerParams struct {
+	OrganizationID uuid.UUID
+	UserID         uuid.UUID
+}
+
+func (q *Queries) PromoteToOwner(ctx context.Context, arg PromoteToOwnerParams) (int64, error) {
+	result, err := q.db.Exec(ctx, promoteToOwner, arg.OrganizationID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const updateMembershipRole = `-- name: UpdateMembershipRole :one

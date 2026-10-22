@@ -185,3 +185,90 @@ func TestLeave_MembersAndAdminsMayButTheOwnerMustTransferFirst(t *testing.T) {
 		assert.NotEqual(t, tm.orgID, it.(map[string]any)["id"], "no longer listed")
 	}
 }
+
+func (tm team) transferPath() string { return orgPath(tm.orgID) + "/transfer-ownership" }
+
+func transferBody(userID, password string) string {
+	return `{"user_id":"` + userID + `","current_password":"` + password + `"}`
+}
+
+// ownerRow returns the owner recorded on the organization and the user whose
+// membership has the owner role: they must always agree.
+func (s *stack) ownerRow(orgID string) (recorded, byRole string) {
+	s.t.Helper()
+	require.NoError(s.t, s.queryRow(`SELECT o.owner_id::text, (SELECT user_id::text FROM memberships WHERE organization_id = o.id AND role = 'owner')
+		FROM organizations o WHERE o.id = $1`, orgID).Scan(&recorded, &byRole))
+	return recorded, byRole
+}
+
+func TestTransferOwnership_SwapsRolesAndOwnerTogether(t *testing.T) {
+	s := newStack(t)
+	tm := s.newTeam()
+	admin := s.userID("admin@example.com")
+
+	res := s.post(tm.transferPath(), transferBody(admin, "correct-horse"), bearer(tm.owner))
+
+	require.Equal(t, http.StatusNoContent, res.Code, res.Body.String())
+	recorded, byRole := s.ownerRow(tm.orgID)
+	assert.Equal(t, admin, recorded)
+	assert.Equal(t, admin, byRole)
+	oldRole, _ := s.roleOf(tm.orgID, "owner@example.com")
+	assert.Equal(t, "admin", oldRole, "the previous owner stays as an admin")
+
+	// The new owner holds the owner powers and the old owner lost them, immediately.
+	assert.Equal(t, http.StatusForbidden, s.do(http.MethodDelete, orgPath(tm.orgID), "", bearer(tm.owner)).Code)
+	assert.Equal(t, http.StatusForbidden, s.post(tm.transferPath(), transferBody(admin, "correct-horse"), bearer(tm.owner)).Code)
+	assert.Equal(t, http.StatusNoContent, s.post(orgPath(tm.orgID)+"/leave", ``, bearer(tm.owner)).Code, "no longer the owner, so leaving is allowed")
+	assert.Equal(t, http.StatusNoContent, s.do(http.MethodDelete, orgPath(tm.orgID), "", bearer(tm.admin)).Code)
+}
+
+func TestTransferOwnership_NeedsTheCorrectPasswordAndChangesNothingOtherwise(t *testing.T) {
+	s := newStack(t)
+	tm := s.newTeam()
+	admin := s.userID("admin@example.com")
+
+	res := s.post(tm.transferPath(), transferBody(admin, "wrong-password"), bearer(tm.owner))
+
+	require.Equal(t, http.StatusBadRequest, res.Code)
+	assert.Contains(t, res.Body.String(), "current_password")
+	recorded, byRole := s.ownerRow(tm.orgID)
+	assert.Equal(t, s.userID("owner@example.com"), recorded)
+	assert.Equal(t, recorded, byRole)
+
+	for range 4 {
+		s.post(tm.transferPath(), transferBody(admin, "wrong-password"), bearer(tm.owner))
+	}
+	assert.Equal(t, http.StatusTooManyRequests, s.post(tm.transferPath(), transferBody(admin, "correct-horse"), bearer(tm.owner)).Code,
+		"guessing the password is rate limited like every sensitive action")
+}
+
+func TestTransferOwnership_Rejections(t *testing.T) {
+	tests := []struct {
+		name  string
+		actor func(team) string
+		body  func(s *stack) string
+		want  int
+	}{
+		{"an admin cannot transfer", func(tm team) string { return tm.admin }, func(s *stack) string { return transferBody(s.userID("member@example.com"), "correct-horse") }, http.StatusForbidden},
+		{"a member cannot transfer", func(tm team) string { return tm.member }, func(s *stack) string { return transferBody(s.userID("admin@example.com"), "correct-horse") }, http.StatusForbidden},
+		{"an outsider gets 404", func(tm team) string { return tm.outside }, func(s *stack) string { return transferBody(s.userID("admin@example.com"), "correct-horse") }, http.StatusNotFound},
+		{"to yourself", func(tm team) string { return tm.owner }, func(s *stack) string { return transferBody(s.userID("owner@example.com"), "correct-horse") }, http.StatusBadRequest},
+		{"to a non-member", func(tm team) string { return tm.owner }, func(s *stack) string { return transferBody(s.userID("outsider@example.com"), "correct-horse") }, http.StatusNotFound},
+		{"to an unknown user", func(tm team) string { return tm.owner }, func(*stack) string { return transferBody(uuid.NewString(), "correct-horse") }, http.StatusNotFound},
+		{"without a password", func(tm team) string { return tm.owner }, func(s *stack) string { return `{"user_id":"` + s.userID("admin@example.com") + `"}` }, http.StatusBadRequest},
+		{"without a target", func(tm team) string { return tm.owner }, func(*stack) string { return `{"current_password":"correct-horse"}` }, http.StatusBadRequest},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newStack(t)
+			tm := s.newTeam()
+
+			res := s.post(tm.transferPath(), tt.body(s), bearer(tt.actor(tm)))
+
+			assert.Equal(t, tt.want, res.Code, res.Body.String())
+			recorded, byRole := s.ownerRow(tm.orgID)
+			assert.Equal(t, s.userID("owner@example.com"), recorded, "ownership did not move")
+			assert.Equal(t, recorded, byRole)
+		})
+	}
+}
