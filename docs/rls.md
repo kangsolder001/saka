@@ -25,3 +25,11 @@
 - **Tenant.** `db.WithTx` menyetel `app.current_org` dari `reqctx.OrgID(ctx)` (hanya diisi tenant middleware). Policy: `organization_id = (SELECT NULLIF(current_setting('app.current_org', true), '')::uuid)`.
 - **Jalur bypass eksplisit.** Alur yang memang lintas tenant (daftar organisasi milik user, undangan lewat token, registrasi, cron billing, worker) memakai `db.WithSystemTx`, yang menyetel `app.bypass_rls = 'on'`. Policy menerima kondisi ini. Jalur ini sengaja sempit dan mudah dicari (`grep WithSystemTx`); RLS menjaga dari query yang lupa filter, bukan dari kode yang sengaja meminta bypass.
 - **Query di luar transaksi** (lewat pool) pada tabel ber-RLS mengembalikan nol baris. Kode org-scoped selalu berjalan di dalam `WithTx`.
+
+## Aturan pakai (ringkas)
+
+- Kode per organisasi: `s.tx.WithTx(ctx, ...)` dengan `ctx` dari tenant middleware. Jangan memakai pool langsung untuk tabel ber-RLS.
+- Lintas tenant: `WithSystemTx` (transaksi baru) atau `db.WithBypass(ctx, tx, fn)` (satu langkah di transaksi yang sudah ada, mis. registrasi). Query di dalamnya wajib punya filter eksplisit.
+- Organisasi baru: `db.PinTenant(ctx, tx, newID)` sebelum memasukkan barisnya.
+- `FOR UPDATE`/`FOR SHARE` pada baris tenant tetap tunduk pada RLS: tanpa tenant atau bypass, baris tidak terlihat sehingga tidak ada yang terkunci (ditemukan lewat `TestGuard_JoiningWaitsForTheOrganizationLock`).
+- Test: pool aplikasi (`db.Connect`) berjalan sebagai `saka_app`; susun dan periksa data lewat `dbtest.AdminPool`.

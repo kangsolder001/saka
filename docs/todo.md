@@ -132,10 +132,10 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Registrasi dengan email yang punya undangan → auto-accept, tanpa org baru (0.3). Tanpa org baru saat mendaftar; keanggotaan diberikan saat email terbukti (verifikasi / konfirmasi ganti email), bukan saat mendaftar, supaya tidak bisa dibajak dengan mendaftar memakai email korban (spec §7.6)
 - [x] Template `invitation`; guard `EMAIL_NOT_VERIFIED` untuk undang (0.3). Template dikerjakan lebih awal (mail menolak template yang belum ada saat enqueue); guard dipasang pada `POST /invitations` dan `.../resend`
 - [x] Hubungkan penolakan hapus akun owner ke modul org: implementasikan `auth.OrganizationGuard` (menolak bila owner org berisi anggota lain; hapus org yang hanya berisi dia + batalkan subscription) dan ganti `auth.NoOrganizations` di `internal/app` (0.3). Pembatalan subscription menyusul di Fase 6 (hook saat organisasi dihapus, baik lewat `DELETE /orgs/{orgId}` maupun hapus akun)
-- [ ] **Daftar akun sandbox Midtrans** (0.1) ⚠️ lakukan di fase ini, persetujuan bisa lama
+- [ ] **Daftar akun sandbox Midtrans** (0.1) ⚠️ lakukan di fase ini, persetujuan bisa lama. *Tindakan manual pemilik repo (akun dan Server Key tidak bisa dibuat dari kode); belum dikerjakan. Fase 6 ditulis terhadap dokumentasi Midtrans dan diuji dengan server palsu, jadi validasi sandbox sungguhan menunggu akun ini*
 - [x] Test: matriks izin lengkap, isolasi tenant A vs B, transfer atomik, siklus undangan (0.7). Ditambah penjaga struktural: tes mengambil daftar rute `/orgs/{orgId}` dari router dan memastikan semuanya menjawab 404 untuk non-anggota, plus inventaris rute yang harus diperbarui bersama tes perannya
 
-**Selesai bila:** AC Multi-tenancy & Tim (§12) lulus; AC User hapus akun lulus.
+**Selesai bila:** AC Multi-tenancy & Tim (§12) lulus; AC User hapus akun lulus. ✅ (kecuali tugas pendaftaran akun sandbox di atas)
 
 ---
 
