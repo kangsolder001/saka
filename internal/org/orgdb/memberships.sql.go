@@ -12,6 +12,24 @@ import (
 	"github.com/google/uuid"
 )
 
+const deleteMembership = `-- name: DeleteMembership :execrows
+DELETE FROM memberships
+WHERE organization_id = $1 AND user_id = $2 AND role <> 'owner'
+`
+
+type DeleteMembershipParams struct {
+	OrganizationID uuid.UUID
+	UserID         uuid.UUID
+}
+
+func (q *Queries) DeleteMembership(ctx context.Context, arg DeleteMembershipParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteMembership, arg.OrganizationID, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getMembership = `-- name: GetMembership :one
 SELECT m.id, m.organization_id, m.user_id, m.role, m.created_at
 FROM memberships m
@@ -30,6 +48,32 @@ type GetMembershipParams struct {
 // organization, so a deleted tenant is indistinguishable from an unknown one.
 func (q *Queries) GetMembership(ctx context.Context, arg GetMembershipParams) (Membership, error) {
 	row := q.db.QueryRow(ctx, getMembership, arg.OrganizationID, arg.UserID)
+	var i Membership
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.UserID,
+		&i.Role,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getMembershipForUpdate = `-- name: GetMembershipForUpdate :one
+SELECT id, organization_id, user_id, role, created_at
+FROM memberships
+WHERE organization_id = $1 AND user_id = $2
+FOR UPDATE
+`
+
+type GetMembershipForUpdateParams struct {
+	OrganizationID uuid.UUID
+	UserID         uuid.UUID
+}
+
+// Row-locks the target so two concurrent role changes or removals serialize.
+func (q *Queries) GetMembershipForUpdate(ctx context.Context, arg GetMembershipForUpdateParams) (Membership, error) {
+	row := q.db.QueryRow(ctx, getMembershipForUpdate, arg.OrganizationID, arg.UserID)
 	var i Membership
 	err := row.Scan(
 		&i.ID,
@@ -61,6 +105,84 @@ func (q *Queries) InsertMembership(ctx context.Context, arg InsertMembershipPara
 		arg.Role,
 		arg.Now,
 	)
+	var i Membership
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.UserID,
+		&i.Role,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const listMemberships = `-- name: ListMemberships :many
+SELECT id, organization_id, user_id, role, created_at
+FROM memberships
+WHERE organization_id = $1
+  AND (
+    $2::timestamptz IS NULL
+    OR (created_at, id) > ($2::timestamptz, $3::uuid)
+  )
+ORDER BY created_at, id
+LIMIT $4
+`
+
+type ListMembershipsParams struct {
+	OrganizationID uuid.UUID
+	AfterCreatedAt *time.Time
+	AfterID        *uuid.UUID
+	RowLimit       int32
+}
+
+// Keyset pagination on (created_at, id), oldest first: the owner leads.
+func (q *Queries) ListMemberships(ctx context.Context, arg ListMembershipsParams) ([]Membership, error) {
+	rows, err := q.db.Query(ctx, listMemberships,
+		arg.OrganizationID,
+		arg.AfterCreatedAt,
+		arg.AfterID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Membership
+	for rows.Next() {
+		var i Membership
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.UserID,
+			&i.Role,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateMembershipRole = `-- name: UpdateMembershipRole :one
+UPDATE memberships
+SET role = $1
+WHERE organization_id = $2 AND user_id = $3 AND role <> 'owner'
+RETURNING id, organization_id, user_id, role, created_at
+`
+
+type UpdateMembershipRoleParams struct {
+	Role           string
+	OrganizationID uuid.UUID
+	UserID         uuid.UUID
+}
+
+// The owner is never touched here: ownership moves only by transfer.
+func (q *Queries) UpdateMembershipRole(ctx context.Context, arg UpdateMembershipRoleParams) (Membership, error) {
+	row := q.db.QueryRow(ctx, updateMembershipRole, arg.Role, arg.OrganizationID, arg.UserID)
 	var i Membership
 	err := row.Scan(
 		&i.ID,

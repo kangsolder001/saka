@@ -446,6 +446,8 @@ Hal-hal yang tidak ditentukan §7.1–7.5 dan sudah diputuskan di Fase 4:
 - **`PATCH /orgs/{orgId}`** menerima `name`, `slug`, `logo_url` (`null` menghapus; hanya URL `http(s)` absolut). Hanya owner dan admin. Body kosong atau field tak dikenal (mis. `owner_id`) ditolak.
 - **`DELETE /orgs/{orgId}`** (owner saja) adalah soft delete: baris dan slug tetap tercadangkan, undangan terbuka dicabut dalam transaksi yang sama, dan semua anggota langsung kehilangan akses (404). Pembatalan subscription menyusul di Fase 6.
 
+- **Anggota.** `GET /orgs/{orgId}/members` (semua anggota; berpaginasi cursor, owner paling awal) menggabungkan `memberships` dengan nama/email dari `user.Service.GetSummaries`, jadi `org` tidak membaca tabel `users`. `PATCH .../members/{userId}` (`{"role":"admin|member"}`) dan `DELETE .../members/{userId}` mengikuti `CanManageMember`: owner mengelola admin dan member, admin hanya member (admin boleh menaikkan member jadi admin, tetapi tidak menurunkan admin), tidak ada yang mengelola owner atau dirinya sendiri lewat endpoint ini. `role: "owner"` ditolak `400`. Target dikunci (`FOR UPDATE`) sehingga perubahan bersamaan berurutan; target yang bukan anggota atau ID tak valid → `404`. `POST .../leave` → `204`; owner → `403` dengan `details.reason = "owner_must_transfer_ownership"`. Role dibaca dari DB tiap request, jadi perubahan role atau pengeluaran anggota berlaku di request berikutnya tanpa login ulang.
+
 ---
 
 ## 8. Modul Billing & Subscription

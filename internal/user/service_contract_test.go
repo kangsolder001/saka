@@ -23,6 +23,7 @@ var notCacheWriters = map[string]string{
 	"GetByID":         "read",
 	"GetByEmail":      "read",
 	"GetSummary":      "read (fills the cache)",
+	"GetSummaries":    "read",
 	"InvalidateCache": "cache control itself",
 }
 

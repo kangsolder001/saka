@@ -43,6 +43,7 @@ func (h *Handler) Routes(rg *gin.RouterGroup, authenticate gin.HandlerFunc) {
 	one.GET("", h.get)
 	one.PATCH("", h.update)
 	one.DELETE("", h.delete)
+	h.memberRoutes(one)
 }
 
 type organizationResponse struct {

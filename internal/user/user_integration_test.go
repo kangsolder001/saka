@@ -160,3 +160,26 @@ func TestSetPasswordHash(t *testing.T) {
 	err = e.svc.SetPasswordHash(ctx, e.db.Pool(), uuid.New(), "x")
 	assert.True(t, apperr.IsCode(err, apperr.CodeNotFound))
 }
+
+func TestGetSummaries_ReturnsKnownActiveUsersByID(t *testing.T) {
+	e := newEnv(t)
+	ann, bob := e.create(t, "ann@example.com"), e.create(t, "bob@example.com")
+	gone := e.create(t, "gone@example.com")
+	require.NoError(t, e.svc.Delete(context.Background(), e.db.Pool(), gone.ID))
+
+	got, err := e.svc.GetSummaries(context.Background(), e.db.Pool(), []uuid.UUID{ann.ID, bob.ID, gone.ID, uuid.New()})
+
+	require.NoError(t, err)
+	assert.Len(t, got, 2, "unknown and deleted users are absent")
+	assert.Equal(t, "ann@example.com", got[ann.ID].Email)
+	assert.Equal(t, "bob@example.com", got[bob.ID].Email)
+}
+
+func TestGetSummaries_EmptyInputNeedsNoQuery(t *testing.T) {
+	e := newEnv(t)
+
+	got, err := e.svc.GetSummaries(context.Background(), e.db.Pool(), nil)
+
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}

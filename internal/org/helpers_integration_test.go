@@ -42,7 +42,8 @@ func newEnv(t *testing.T) *env {
 	t.Cleanup(d.Close)
 
 	clk := clock.NewFake(epoch)
-	return &env{t: t, db: d, dsn: dsn, admin: dbtest.AdminPool(t, dsn), clock: clk, users: user.NewService(clk), orgs: org.NewService(clk, d)}
+	users := user.NewService(clk)
+	return &env{t: t, db: d, dsn: dsn, admin: dbtest.AdminPool(t, dsn), clock: clk, users: users, orgs: org.NewService(clk, d, users)}
 }
 
 // newUser inserts a user and returns it.

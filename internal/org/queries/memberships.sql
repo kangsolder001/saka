@@ -12,3 +12,33 @@ JOIN organizations o ON o.id = m.organization_id
 WHERE m.organization_id = @organization_id
   AND m.user_id = @user_id
   AND o.deleted_at IS NULL;
+
+-- Keyset pagination on (created_at, id), oldest first: the owner leads.
+-- name: ListMemberships :many
+SELECT id, organization_id, user_id, role, created_at
+FROM memberships
+WHERE organization_id = @organization_id
+  AND (
+    sqlc.narg(after_created_at)::timestamptz IS NULL
+    OR (created_at, id) > (sqlc.narg(after_created_at)::timestamptz, sqlc.narg(after_id)::uuid)
+  )
+ORDER BY created_at, id
+LIMIT @row_limit;
+
+-- Row-locks the target so two concurrent role changes or removals serialize.
+-- name: GetMembershipForUpdate :one
+SELECT id, organization_id, user_id, role, created_at
+FROM memberships
+WHERE organization_id = @organization_id AND user_id = @user_id
+FOR UPDATE;
+
+-- The owner is never touched here: ownership moves only by transfer.
+-- name: UpdateMembershipRole :one
+UPDATE memberships
+SET role = @role
+WHERE organization_id = @organization_id AND user_id = @user_id AND role <> 'owner'
+RETURNING id, organization_id, user_id, role, created_at;
+
+-- name: DeleteMembership :execrows
+DELETE FROM memberships
+WHERE organization_id = @organization_id AND user_id = @user_id AND role <> 'owner';

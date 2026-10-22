@@ -92,6 +92,43 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 	return i, err
 }
 
+const listUsersByIDs = `-- name: ListUsersByIDs :many
+SELECT id, email, password_hash, name, avatar_url, email_verified_at, status, created_at, updated_at, deleted_at FROM users WHERE id = ANY($1::uuid[]) AND deleted_at IS NULL
+`
+
+// Bulk read for listings that join users to another module's rows (the
+// organization member list), so that module never queries the users table.
+func (q *Queries) ListUsersByIDs(ctx context.Context, ids []uuid.UUID) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsersByIDs, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Email,
+			&i.PasswordHash,
+			&i.Name,
+			&i.AvatarUrl,
+			&i.EmailVerifiedAt,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.DeletedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markEmailVerified = `-- name: MarkEmailVerified :execrows
 UPDATE users
 SET email_verified_at = $1::timestamptz, updated_at = $1::timestamptz

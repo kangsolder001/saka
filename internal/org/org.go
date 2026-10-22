@@ -13,6 +13,7 @@ import (
 	"github.com/kangsolder001/saka/internal/org/orgdb"
 	"github.com/kangsolder001/saka/internal/platform/clock"
 	"github.com/kangsolder001/saka/internal/platform/db"
+	"github.com/kangsolder001/saka/internal/user"
 )
 
 // Role is a member's role inside one organization (memberships.role).
@@ -54,16 +55,25 @@ type Transactor interface {
 
 var _ Transactor = (*db.DB)(nil)
 
+// UserDirectory is what the organization module needs from the user module
+// (*user.Service implements it); org never queries the users table itself.
+type UserDirectory interface {
+	GetSummaries(ctx context.Context, q db.DBTX, ids []uuid.UUID) (map[uuid.UUID]user.Summary, error)
+}
+
+var _ UserDirectory = (*user.Service)(nil)
+
 // Service is the public API of the organization module.
 type Service struct {
-	clk clock.Clock
-	tx  Transactor
+	clk   clock.Clock
+	tx    Transactor
+	users UserDirectory
 }
 
 // NewService creates a Service. tx runs the transactions of methods that open
 // their own (those that do not take a db.DBTX).
-func NewService(clk clock.Clock, tx Transactor) *Service {
-	return &Service{clk: clk, tx: tx}
+func NewService(clk clock.Clock, tx Transactor, users UserDirectory) *Service {
+	return &Service{clk: clk, tx: tx, users: users}
 }
 
 func organizationFromRow(r orgdb.Organization) Organization {

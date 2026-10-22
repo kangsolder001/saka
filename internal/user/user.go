@@ -109,6 +109,24 @@ func (s *Service) GetByEmail(ctx context.Context, q db.DBTX, email string) (User
 	return one(row, err, "get by email")
 }
 
+// GetSummaries returns the summaries of the given users keyed by ID, read
+// straight from the database (listings are not the hot path the cache serves).
+// Unknown and deleted users are simply absent from the result.
+func (s *Service) GetSummaries(ctx context.Context, q db.DBTX, ids []uuid.UUID) (map[uuid.UUID]Summary, error) {
+	out := make(map[uuid.UUID]Summary, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	rows, err := userdb.New(q).ListUsersByIDs(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("user: list by ids: %w", err)
+	}
+	for _, r := range rows {
+		out[r.ID] = fromRow(r).Summary()
+	}
+	return out, nil
+}
+
 // MarkEmailVerified records that the user confirmed their email. It is
 // idempotent: verifying twice keeps the first timestamp.
 func (s *Service) MarkEmailVerified(ctx context.Context, q db.DBTX, id uuid.UUID) error {

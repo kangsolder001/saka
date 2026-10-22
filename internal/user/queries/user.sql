@@ -45,3 +45,8 @@ SET status     = 'deleted',
     deleted_at = @now::timestamptz,
     updated_at = @now::timestamptz
 WHERE id = @id AND deleted_at IS NULL;
+
+-- Bulk read for listings that join users to another module's rows (the
+-- organization member list), so that module never queries the users table.
+-- name: ListUsersByIDs :many
+SELECT * FROM users WHERE id = ANY(@ids::uuid[]) AND deleted_at IS NULL;
