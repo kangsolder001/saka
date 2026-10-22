@@ -68,7 +68,7 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 	if orgs == nil {
 		orgs = auth.NoOrganizations{} // TODO(phase-4): wire the organization module
 	}
-	organizations := org.NewService(clk)
+	organizations := org.NewService(clk, database)
 	users := user.NewService(clk, user.WithCache(redis.Namespace("user"), cfg.Redis.UserCacheTTL.Std(), log))
 	authService := auth.NewService(auth.Dependencies{
 		Tx:          database,

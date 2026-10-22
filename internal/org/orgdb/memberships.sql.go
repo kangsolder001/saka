@@ -12,6 +12,35 @@ import (
 	"github.com/google/uuid"
 )
 
+const getMembership = `-- name: GetMembership :one
+SELECT m.id, m.organization_id, m.user_id, m.role, m.created_at
+FROM memberships m
+JOIN organizations o ON o.id = m.organization_id
+WHERE m.organization_id = $1
+  AND m.user_id = $2
+  AND o.deleted_at IS NULL
+`
+
+type GetMembershipParams struct {
+	OrganizationID uuid.UUID
+	UserID         uuid.UUID
+}
+
+// The tenant lookup. Joining organizations hides memberships of a deleted
+// organization, so a deleted tenant is indistinguishable from an unknown one.
+func (q *Queries) GetMembership(ctx context.Context, arg GetMembershipParams) (Membership, error) {
+	row := q.db.QueryRow(ctx, getMembership, arg.OrganizationID, arg.UserID)
+	var i Membership
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.UserID,
+		&i.Role,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const insertMembership = `-- name: InsertMembership :one
 INSERT INTO memberships (organization_id, user_id, role, created_at)
 VALUES ($1, $2, $3, $4::timestamptz)
