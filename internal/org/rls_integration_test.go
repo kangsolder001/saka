@@ -58,7 +58,7 @@ func rowCount(ctx context.Context, t *testing.T, q interface {
 	return n
 }
 
-var tenantTables = []string{"organizations", "memberships", "invitations"}
+var tenantTables = []string{"organizations", "memberships", "invitations", "subscriptions"}
 
 func TestRLS_TheApplicationRunsAsTheRestrictedRole(t *testing.T) {
 	e := newEnv(t)
@@ -124,6 +124,9 @@ func TestRLS_ATenantCannotWriteToAnotherTenant(t *testing.T) {
 		tag, err = tx.Exec(ctx, "DELETE FROM memberships WHERE organization_id = $1", b["id"])
 		require.NoError(t, err)
 		assert.Zero(t, tag.RowsAffected(), "and to DELETE")
+		tag, err = tx.Exec(ctx, "UPDATE subscriptions SET status = 'canceled' WHERE organization_id = $1", b["id"])
+		require.NoError(t, err)
+		assert.Zero(t, tag.RowsAffected(), "a subscription cannot be touched from another tenant either")
 	})
 	var name string
 	require.NoError(t, e.admin.QueryRow(ctx, "SELECT name FROM organizations WHERE id = $1", b["id"]).Scan(&name))

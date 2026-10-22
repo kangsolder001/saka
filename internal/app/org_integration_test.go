@@ -269,3 +269,36 @@ func TestDeleteOrg_OnlyTheOwnerMayAndItEndsEveryonesAccess(t *testing.T) {
 	require.NoError(t, s.queryRow(`SELECT count(*) FROM organizations WHERE id = $1 AND deleted_at IS NOT NULL`, tm.orgID).Scan(&slugKept))
 	assert.Equal(t, 1, slugKept, "soft delete: the row and its slug are kept")
 }
+
+// subscriptionOf returns the plan code and status stored for an organization.
+func (s *stack) subscriptionOf(orgID string) (plan, status string) {
+	s.t.Helper()
+	require.NoError(s.t, s.queryRow(`
+		SELECT p.code, s.status FROM subscriptions s JOIN plans p ON p.id = s.plan_id
+		WHERE s.organization_id = $1`, orgID).Scan(&plan, &status))
+	return plan, status
+}
+
+func TestRegister_GivesTheNewOrganizationAFreeSubscription(t *testing.T) {
+	s := newStack(t)
+	s.registered("ann@example.com")
+
+	plan, status := s.subscriptionOf(s.firstOrg("ann@example.com"))
+
+	assert.Equal(t, "free", plan)
+	assert.Equal(t, "active", status)
+}
+
+func TestCreateOrg_GivesTheNewOrganizationAFreeSubscription(t *testing.T) {
+	s := newStack(t)
+	s.registered("ann@example.com")
+	access := s.loggedIn("ann@example.com")
+
+	res := s.post(orgsPath, `{"name":"Second"}`, bearer(access))
+
+	require.Equal(t, http.StatusCreated, res.Code, res.Body.String())
+	id := res.json()["organization"].(map[string]any)["id"].(string)
+	plan, status := s.subscriptionOf(id)
+	assert.Equal(t, "free", plan)
+	assert.Equal(t, "active", status)
+}

@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kangsolder001/saka/internal/billing"
 	"github.com/kangsolder001/saka/internal/mail"
 	"github.com/kangsolder001/saka/internal/org"
 	"github.com/kangsolder001/saka/internal/platform/apperr"
@@ -55,7 +56,9 @@ func newEnv(t *testing.T) *env {
 	mailer := &recordingMailer{}
 	return &env{
 		t: t, db: d, dsn: dsn, admin: dbtest.AdminPool(t, dsn), clock: clk, users: users, passwords: passwords, mail: mailer,
-		orgs: org.NewService(org.Dependencies{Clock: clk, Tx: d, Users: users, Passwords: passwords, Mail: mailer, FrontendURL: "https://app.example.com/"}),
+		orgs: org.NewService(org.Dependencies{
+			Clock: clk, Tx: d, Users: users, Passwords: passwords, Subscriptions: billing.NewService(clk), Mail: mailer, FrontendURL: "https://app.example.com/",
+		}),
 	}
 }
 

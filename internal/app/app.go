@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/kangsolder001/saka/internal/auth"
+	"github.com/kangsolder001/saka/internal/billing"
 	"github.com/kangsolder001/saka/internal/mail"
 	"github.com/kangsolder001/saka/internal/org"
 	"github.com/kangsolder001/saka/internal/platform/clock"
@@ -80,7 +81,10 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 	// ownership transfer confirms a password), each through an interface the
 	// consumer declares. The composition root closes the loop: org is built
 	// first and receives auth once it exists.
-	organizations := org.NewService(org.Dependencies{Clock: clk, Tx: database, Users: users, Mail: mailer, FrontendURL: cfg.App.FrontendURL})
+	billingService := billing.NewService(clk)
+	organizations := org.NewService(org.Dependencies{
+		Clock: clk, Tx: database, Users: users, Subscriptions: billingService, Mail: mailer, FrontendURL: cfg.App.FrontendURL,
+	})
 	authService := auth.NewService(auth.Dependencies{
 		Tx:          database,
 		Pool:        database.Pool(),

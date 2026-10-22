@@ -35,6 +35,39 @@ func TestCreateWithOwner_CreatesOrganizationAndOwnerMembershipTogether(t *testin
 	assert.Equal(t, "owner", role)
 }
 
+func TestCreateWithOwner_StartsAnActiveFreeSubscriptionInTheSameTransaction(t *testing.T) {
+	e := newEnv(t)
+	ann := e.newUser("ann@example.com")
+
+	got, err := e.create(ann.ID, "Acme", "")
+
+	require.NoError(t, err)
+	var plan, status string
+	var start time.Time
+	var end *time.Time
+	require.NoError(t, e.admin.QueryRow(context.Background(), `
+		SELECT p.code, s.status, s.current_period_start, s.current_period_end
+		FROM subscriptions s JOIN plans p ON p.id = s.plan_id WHERE s.organization_id = $1`, got.ID).Scan(&plan, &status, &start, &end))
+	assert.Equal(t, "free", plan)
+	assert.Equal(t, "active", status)
+	assert.True(t, epoch.Equal(start), "the period starts now, on the injected clock")
+	assert.Nil(t, end, "Free has no end")
+}
+
+func TestCreateWithOwner_WithoutAFreePlanNothingIsCreated(t *testing.T) {
+	e := newEnv(t)
+	ann := e.newUser("ann@example.com")
+	_, err := e.admin.Exec(context.Background(), "DELETE FROM plans WHERE code = 'free'")
+	require.NoError(t, err)
+
+	_, err = e.create(ann.ID, "Acme", "")
+
+	require.Error(t, err)
+	assert.False(t, apperr.IsCode(err, apperr.CodeConflict))
+	assert.Zero(t, e.count("SELECT count(*) FROM organizations"), "an organization never exists without its subscription")
+	assert.Zero(t, e.count("SELECT count(*) FROM memberships"))
+}
+
 func TestCreateWithOwner_ATakenDerivedSlugGetsASuffix(t *testing.T) {
 	e := newEnv(t)
 	ann, bob := e.newUser("ann@example.com"), e.newUser("bob@example.com")

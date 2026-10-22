@@ -582,6 +582,13 @@ type Entitlements interface {
 
 Angka hanya contoh. Plan disimpan di database lewat seed migration, bukan di-hardcode.
 
+### 9.4 Keputusan implementasi
+
+Hal-hal yang tidak ditentukan §9.1–9.3 dan sudah diputuskan di Fase 5:
+
+- **Pembagian modul.** `internal/billing` memiliki `plans` dan `subscriptions` (nanti invoice dan provider pembayaran di Fase 6) beserta paket sqlc `billingdb`. `internal/entitlement` hanya lapisan kebijakan tipis di atasnya. Modul `org` tidak mengimpor `billing` dan sebaliknya; `org` mendeklarasikan `SubscriptionStarter` yang dipenuhi `billing.Service`.
+- **Subscription Free.** `org.CreateWithOwner` (jalur registrasi dan `POST /orgs`) memanggil `StartFree` tepat setelah baris owner dimasukkan, di transaksi yang sama dan sudah terpaku ke tenant baru: organisasi tidak pernah ada tanpa subscription-nya, dan bila katalog tidak punya plan `free` seluruh pembuatan organisasi dibatalkan. Subscription Free berstatus `active`, `current_period_end` `NULL` (§4.8), `current_period_start` = waktu pembuatan.
+
 ---
 
 ## 10. Modul Email Transaksional

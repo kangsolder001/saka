@@ -33,8 +33,8 @@ var slugProblem = fmt.Sprintf("must be %d-%d lowercase letters, digits or hyphen
 // maxSlugAttempts bounds the search for a free slug when none was requested.
 const maxSlugAttempts = 8
 
-// CreateWithOwner inserts an organization and the owner membership of ownerID
-// using the caller's transaction, so it commits or rolls back together with
+// CreateWithOwner inserts an organization, the owner membership of ownerID and
+// the organization's Free subscription using the caller's transaction, so it commits or rolls back together with
 // whatever else the caller does (registration, POST /orgs). q must be a
 // transaction: the organization's owner foreign key is deferred to commit, so
 // outside one the first insert would fail. When slug is empty
@@ -74,6 +74,9 @@ func (s *Service) CreateWithOwner(ctx context.Context, q db.DBTX, ownerID uuid.U
 		Now:            s.clk.Now(),
 	}); err != nil {
 		return Organization{}, fmt.Errorf("org: insert owner membership: %w", err)
+	}
+	if err := s.Subscriptions.StartFree(ctx, q, row.ID); err != nil {
+		return Organization{}, fmt.Errorf("org: %w", err)
 	}
 	return organizationFromRow(row), nil
 }

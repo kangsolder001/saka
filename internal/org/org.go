@@ -76,6 +76,16 @@ type PasswordConfirmer interface {
 	ConfirmPassword(ctx context.Context, userID uuid.UUID, password string) error
 }
 
+// SubscriptionStarter gives a new organization its subscription. It runs in the
+// transaction that creates the organization, so the two exist together or not
+// at all. billing.Service implements it; org declares it so the modules stay
+// decoupled.
+type SubscriptionStarter interface {
+	// StartFree starts the Free subscription of orgID using q, a transaction
+	// already pinned to that organization.
+	StartFree(ctx context.Context, q db.DBTX, orgID uuid.UUID) error
+}
+
 // Dependencies are the collaborators of Service, injected by the composition root.
 type Dependencies struct {
 	Clock clock.Clock
@@ -84,6 +94,8 @@ type Dependencies struct {
 	Tx        Transactor
 	Users     UserDirectory
 	Passwords PasswordConfirmer
+	// Subscriptions starts the Free subscription of every new organization.
+	Subscriptions SubscriptionStarter
 	// Mail queues invitation emails in the caller's transaction.
 	Mail mail.Sender
 	// FrontendURL is the base of links in emails, e.g. https://app.example.com.
