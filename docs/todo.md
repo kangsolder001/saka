@@ -150,7 +150,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Middleware `RequireFeature(...)` + error `PLAN_LIMIT_REACHED` / `PLAN_FEATURE_UNAVAILABLE` berisi detail upgrade (0.3). Diuji lewat rute khusus test (`app.Options.TenantRoutes`)
 - [x] `GET /plans`, `GET /orgs/{orgId}/subscription` (status + usage vs limit) (0.3). Handler di `internal/billing`; rute ditambahkan ke inventaris `TestTenantIsolation_*`
 - [x] Perintah seed dev: plan default + akun demo (0.3). `make seed` → `cmd/seed` (`internal/seed`); plan berasal dari migrasi, seed memeriksanya
-- [ ] Test: limit terlampaui, org `expired` kembali ke limit Free (0.3)
+- [x] Test: limit terlampaui, org `expired` kembali ke limit Free (0.3). `internal/app/entitlement_integration_test.go`, `require_feature_integration_test.go`, `subscription_integration_test.go`; unit di `internal/entitlement`, `internal/billing`
 
 **Selesai bila:** AC Entitlement + "daftar otomatis punya org & plan Free" lulus.
 

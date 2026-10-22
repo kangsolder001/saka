@@ -557,11 +557,15 @@ Semua job harus aman dijalankan ulang (idempoten) dan aman dijalankan bersamaan 
 
 ```go
 type Entitlements interface {
-    HasFeature(ctx context.Context, orgID uuid.UUID, feature string) (bool, error)
-    CheckLimit(ctx context.Context, orgID uuid.UUID, limit string, delta int) error // PLAN_LIMIT_REACHED jika melebihi
-    Usage(ctx context.Context, orgID uuid.UUID) (map[string]LimitUsage, error)
+    HasFeature(ctx context.Context, q db.DBTX, orgID uuid.UUID, feature string) (bool, error)
+    CheckLimit(ctx context.Context, q db.DBTX, orgID uuid.UUID, limit string, delta int) error // PLAN_LIMIT_REACHED jika melebihi
+    Usage(ctx context.Context, q db.DBTX, orgID uuid.UUID) (map[string]LimitUsage, error)
 }
+
+type LimitUsage struct{ Used, Max int } // Max -1 = tak terbatas
 ```
+
+`q` adalah handle DB pemanggil (transaksi yang terpaku ke tenant), supaya pengecekan ikut transaksi pembuatan resource (lihat §9.4).
 
 ### 9.2 Aturan
 
@@ -663,7 +667,7 @@ Tujuan: satu `trace_id` bisa dipakai untuk menelusuri request HTTP sampai job ou
 ## 12. Kriteria Selesai (Acceptance Criteria)
 
 ### Auth
-- [ ] User bisa daftar, otomatis punya organisasi dan plan Free — *pendaftaran dan organisasi owner sudah teruji (`TestRegister_EndToEnd`, `TestRegister_CreatesTheUsersOwnOrganizationAsOwner`); plan Free menunggu Fase 5*
+- [x] User bisa daftar, otomatis punya organisasi dan plan Free — `TestRegister_EndToEnd`, `TestRegister_CreatesTheUsersOwnOrganizationAsOwner`, `TestRegister_GivesTheNewOrganizationAFreeSubscription`, `TestCreateOrg_GivesTheNewOrganizationAFreeSubscription` (`internal/app`), `TestCreateWithOwner_StartsAnActiveFreeSubscriptionInTheSameTransaction`, `TestCreateWithOwner_WithoutAFreePlanNothingIsCreated` (`internal/org`)
 - [x] Verifikasi email, lupa password, dan reset password berjalan end-to-end — `TestVerifyEmail_EndToEnd`, `TestPasswordReset_EndToEnd` (`internal/app`)
 - [x] Refresh token dirotasi; pemakaian ulang token lama mencabut seluruh family — `TestRefresh_ReusingARotatedTokenKillsTheWholeSession` (`internal/app`), `TestRotate_*` (`internal/auth`)
 - [x] Rate limit login aktif — `TestLoginRateLimit_*` (`internal/app`)
@@ -688,8 +692,8 @@ Tujuan: satu `trace_id` bisa dipakai untuk menelusuri request HTTP sampai job ou
 - [ ] Cron reconcile memperbaiki invoice yang webhook-nya hilang
 
 ### Entitlement
-- [ ] Menambah anggota melebihi limit menghasilkan `PLAN_LIMIT_REACHED`
-- [ ] Organisasi `expired` otomatis kembali ke limit Free
+- [x] Menambah anggota melebihi limit menghasilkan `PLAN_LIMIT_REACHED` — `TestInvite_BeyondTheFreeLimitIsRefusedWithUpgradeDetails`, `TestInvite_MembersAndPendingInvitationsShareTheLimit`, `TestInvite_ParallelInvitationsAtTheLastSeatLetExactlyOneThrough`, `TestInvite_AnExpiredInvitationTakesASeatAgainWhenRefreshedOrResent` (`internal/app`), `TestCheckLimit_*` (`internal/entitlement`), `TestCountSeats_*` (`internal/org`)
+- [x] Organisasi `expired` otomatis kembali ke limit Free — `TestInvite_ASubscriptionThatNoLongerGrantsAccessFallsBackToTheFreeLimit`, `TestInvite_PastDueKeepsThePlanOnlyDuringTheGracePeriod`, `TestRequireFeature_*` (`internal/app`), `TestEffectivePlan_*`, `TestGrantsAccess_*` (`internal/billing`)
 
 ### Email
 - [ ] Semua email dikirim lewat outbox, tidak ada pengiriman sinkron di request
