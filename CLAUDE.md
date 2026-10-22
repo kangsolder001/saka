@@ -12,7 +12,7 @@ Perintah (semua lewat `Makefile`; `make help` menampilkan daftarnya):
 - `make run` (API), `make run-worker` (worker outbox/email), `make build`.
 - `make sqlc` dan `make mocks`: generate kode. **Hasilnya di-commit**; CI gagal bila ada drift (`make tidy mocks sqlc` lalu `git diff --exit-code`). Jalankan keduanya setelah mengubah `queries/*.sql`, `sqlc.yaml`, interface yang ada di `.mockery.yml`, atau menambah interface baru ke file itu.
 - `make test` (unit, tanpa Docker), `make test-integration` (tag `integration`, butuh Docker untuk `testcontainers-go`), `make lint` (`golangci-lint` v2, dijalankan dengan dan tanpa tag `integration`).
-- Belum ada target `seed`; ditambahkan bersama perintah seed (lihat `docs/todo.md`).
+- `make seed`: memeriksa plan default dan membuat akun demo terverifikasi (`demo@example.com`, password dicetak di output) beserta organisasinya, idempoten dan menolak `app.env=production` (`cmd/seed`, logika di `internal/seed`).
 
 Dokumen sumber, dibaca dalam urutan ini:
 - `docs/spec.md`: spesifikasi Tier 1 (sumber kebenaran: model data, endpoint, aturan bisnis, acceptance criteria §12).

@@ -48,7 +48,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Endpoint `/healthz` dan `/readyz` (0.1)
 - [x] Migrasi pertama: ekstensi `citext`, tabel `users` (§4.1) (0.1)
 - [x] Setup CI (lint, unit test, integration test via `testcontainers-go`) (0.25). Workflow di `.github/workflows/ci.yml`; sudah hijau di GitHub (4 job: lint, unit, integration, drift generate)
-- [x] Makefile / task runner: up/down, run, build, migrate*, sqlc, mocks, test, test-integration, lint (0.1). Target `seed` ditambahkan saat perintah seed dibuat (Fase 7), bukan sekarang
+- [x] Makefile / task runner: up/down, run, build, migrate*, sqlc, mocks, test, test-integration, lint (0.1). Target `seed` ditambahkan di Fase 5 bersama perintah seed
 
 **Selesai bila:** API jalan, health check hijau, CI hijau.
 
@@ -149,7 +149,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Limit `members` = anggota + undangan aktif; pasang di alur undangan (§7.4) (0.3). `org.CountSeats`; `Invite` dan `resend` mengunci org lalu `CheckLimit`; test paralel
 - [x] Middleware `RequireFeature(...)` + error `PLAN_LIMIT_REACHED` / `PLAN_FEATURE_UNAVAILABLE` berisi detail upgrade (0.3). Diuji lewat rute khusus test (`app.Options.TenantRoutes`)
 - [x] `GET /plans`, `GET /orgs/{orgId}/subscription` (status + usage vs limit) (0.3). Handler di `internal/billing`; rute ditambahkan ke inventaris `TestTenantIsolation_*`
-- [ ] Perintah seed dev: plan default + akun demo (0.3)
+- [x] Perintah seed dev: plan default + akun demo (0.3). `make seed` → `cmd/seed` (`internal/seed`); plan berasal dari migrasi, seed memeriksanya
 - [ ] Test: limit terlampaui, org `expired` kembali ke limit Free (0.3)
 
 **Selesai bila:** AC Entitlement + "daftar otomatis punya org & plan Free" lulus.

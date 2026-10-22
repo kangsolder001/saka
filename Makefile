@@ -59,6 +59,10 @@ migrate-new: ## Create a migration: make migrate-new name=create_orgs
 	@test -n "$(name)" || (echo "usage: make migrate-new name=<snake_case_name>" && exit 1)
 	$(GOOSE) -dir $(MIGRATIONS_DIR) create -s $(name) sql
 
+.PHONY: seed
+seed: ## Check the default plans and create the demo account (dev only, idempotent)
+	go run ./cmd/seed
+
 ##@ Code generation
 
 .PHONY: sqlc
