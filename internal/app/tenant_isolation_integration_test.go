@@ -86,6 +86,7 @@ func TestTenantIsolation_TheOrganizationRouteInventory(t *testing.T) {
 		"GET /api/v1/orgs/:orgId",
 		"GET /api/v1/orgs/:orgId/invitations",
 		"GET /api/v1/orgs/:orgId/members",
+		"GET /api/v1/orgs/:orgId/subscription",
 		"PATCH /api/v1/orgs/:orgId",
 		"PATCH /api/v1/orgs/:orgId/members/:userId",
 		"POST /api/v1/orgs/:orgId/invitations",

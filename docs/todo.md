@@ -148,7 +148,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Interface `Entitlements`: `HasFeature`, `CheckLimit`, `Usage` (hitung dari data aktual) (0.6). Counter terdaftar per limit; detail error di spec §9.4
 - [x] Limit `members` = anggota + undangan aktif; pasang di alur undangan (§7.4) (0.3). `org.CountSeats`; `Invite` dan `resend` mengunci org lalu `CheckLimit`; test paralel
 - [x] Middleware `RequireFeature(...)` + error `PLAN_LIMIT_REACHED` / `PLAN_FEATURE_UNAVAILABLE` berisi detail upgrade (0.3). Diuji lewat rute khusus test (`app.Options.TenantRoutes`)
-- [ ] `GET /plans`, `GET /orgs/{orgId}/subscription` (status + usage vs limit) (0.3)
+- [x] `GET /plans`, `GET /orgs/{orgId}/subscription` (status + usage vs limit) (0.3). Handler di `internal/billing`; rute ditambahkan ke inventaris `TestTenantIsolation_*`
 - [ ] Perintah seed dev: plan default + akun demo (0.3)
 - [ ] Test: limit terlampaui, org `expired` kembali ke limit Free (0.3)
 

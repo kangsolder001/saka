@@ -120,8 +120,13 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 	user.NewHandler(user.Dependencies{Profiles: users, Security: authService, Pool: database.Pool(), Organizations: organizations}).
 		Routes(v1, authMiddleware.Authenticate())
 	org.NewHandler(organizations).Routes(v1, authMiddleware.Authenticate(), authMiddleware.RequireVerifiedEmail())
+	// Modules that own per-organization resources mount them here: the group
+	// has already passed authentication and the tenant middleware.
+	tenant := org.TenantRoutes(v1, authMiddleware.Authenticate(), organizations)
+	billing.NewHandler(billing.HandlerDependencies{Service: billingService, Usage: entitlements, Tx: database, Pool: database.Pool()}).
+		Routes(v1, tenant)
 	if opts.TenantRoutes != nil {
-		opts.TenantRoutes(org.TenantRoutes(v1, authMiddleware.Authenticate(), organizations), entitlements)
+		opts.TenantRoutes(tenant, entitlements)
 	}
 	return router, nil
 }
