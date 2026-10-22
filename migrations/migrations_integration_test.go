@@ -6,6 +6,7 @@ import (
 	"context"
 	"database/sql"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -478,7 +479,7 @@ func TestTenantTables_AllHaveRowLevelSecurityAndAPolicy(t *testing.T) {
 		assert.True(t, hasPolicy, "%s: no policy defined", name)
 	}
 	require.NoError(t, rows.Err())
-	assert.Subset(t, seen, []string{"organizations", "memberships", "invitations"})
+	assert.Subset(t, seen, []string{"organizations", "memberships", "invitations", "subscriptions"})
 }
 
 // Every index on a tenant table that is meant for lookups starts with
@@ -488,7 +489,7 @@ func TestTenantTables_AllHaveRowLevelSecurityAndAPolicy(t *testing.T) {
 func TestTenantTables_HaveAnIndexLedByOrganizationID(t *testing.T) {
 	conn, _ := newConn(t)
 
-	for table, column := range map[string]string{"memberships": "organization_id", "invitations": "organization_id"} {
+	for table, column := range map[string]string{"memberships": "organization_id", "invitations": "organization_id", "subscriptions": "organization_id"} {
 		var n int
 		err := conn.QueryRow(context.Background(), `
 			SELECT count(*)
@@ -559,4 +560,96 @@ func TestPlans_ConstraintsRejectNonsense(t *testing.T) {
 	assert.Error(t, insert(`, features) VALUES ('f', 'F', 1, '{"a":1}')`), "features is an array")
 	assert.Error(t, insert(`, limits) VALUES ('l', 'L', 1, '[1]')`), "limits is an object")
 	assert.NoError(t, insert(`) VALUES ('ok', 'Fine', 1)`))
+}
+
+func planID(t *testing.T, conn *pgx.Conn, code string) string {
+	t.Helper()
+	var id string
+	require.NoError(t, conn.QueryRow(context.Background(), "SELECT id FROM plans WHERE code = $1", code).Scan(&id))
+	return id
+}
+
+func insertSubscription(conn *pgx.Conn, orgID, planID, status, extraColumns, extraValues string) error {
+	_, err := conn.Exec(context.Background(),
+		"INSERT INTO subscriptions (organization_id, plan_id, status, current_period_start"+extraColumns+") VALUES ($1, $2, $3, now()"+extraValues+")",
+		orgID, planID, status)
+	return err
+}
+
+func TestSubscriptions_Constraints(t *testing.T) {
+	conn, _ := newConn(t)
+	owner := createUser(t, conn, "owner@example.com")
+	orgID := createOrg(t, conn, "acme", owner)
+	other := createOrg(t, conn, "other", createUser(t, conn, "other@example.com"))
+	free, pro := planID(t, conn, "free"), planID(t, conn, "pro")
+
+	assert.NoError(t, insertSubscription(conn, orgID, free, "active", "", ""), "an open-ended Free period has no end")
+	requirePgCode(t, insertSubscription(conn, orgID, pro, "active", "", ""), "23505", "one subscription per organization")
+	requirePgCode(t, insertSubscription(conn, other, pro, "paused", "", ""), "23514", "unknown status")
+	requirePgCode(t, insertSubscription(conn, other, pro, "trialing", "", ""), "23514", "a trial needs an end")
+	assert.NoError(t, insertSubscription(conn, other, pro, "trialing", ", trial_ends_at", ", now() + interval '14 days'"))
+}
+
+func TestSubscriptions_PlansAreReferencedNotDeleted(t *testing.T) {
+	conn, _ := newConn(t)
+	orgID := createOrg(t, conn, "acme", createUser(t, conn, "owner@example.com"))
+	free := planID(t, conn, "free")
+	require.NoError(t, insertSubscription(conn, orgID, free, "active", "", ""))
+
+	_, err := conn.Exec(context.Background(), "DELETE FROM plans WHERE id = $1", free)
+
+	requirePgCode(t, err, "23001", "a plan in use is deactivated, not deleted")
+}
+
+func TestSubscriptions_AreRemovedWithTheirOrganization(t *testing.T) {
+	conn, _ := newConn(t)
+	orgID := createOrg(t, conn, "acme", createUser(t, conn, "owner@example.com"))
+	require.NoError(t, insertSubscription(conn, orgID, planID(t, conn, "free"), "active", "", ""))
+
+	_, err := conn.Exec(context.Background(), "DELETE FROM organizations WHERE id = $1", orgID)
+
+	require.NoError(t, err)
+	var n int
+	require.NoError(t, conn.QueryRow(context.Background(), "SELECT count(*) FROM subscriptions").Scan(&n))
+	assert.Zero(t, n)
+}
+
+// Organizations created before the migration (Fase 4) must not be left without
+// a subscription; deleted ones are not worth one.
+func TestSubscriptions_ExistingOrganizationsAreBackfilledWithFree(t *testing.T) {
+	dsn := dbtest.NewDatabase(t)
+	sqlDB, err := sql.Open("pgx", dsn)
+	require.NoError(t, err)
+	defer func() { _ = sqlDB.Close() }()
+	provider, err := goose.NewProvider(goose.DialectPostgres, sqlDB, migrations.FS)
+	require.NoError(t, err)
+	ctx := context.Background()
+	_, err = provider.UpTo(ctx, 8)
+	require.NoError(t, err)
+	conn, err := pgx.Connect(ctx, dsn)
+	require.NoError(t, err)
+	defer func() { _ = conn.Close(ctx) }()
+	live := createOrg(t, conn, "live", createUser(t, conn, "live@example.com"))
+	gone := createOrg(t, conn, "gone", createUser(t, conn, "gone@example.com"))
+	_, err = conn.Exec(ctx, "UPDATE organizations SET deleted_at = now() WHERE id = $1", gone)
+	require.NoError(t, err)
+
+	_, err = provider.Up(ctx)
+	require.NoError(t, err)
+
+	var plan, status string
+	var start time.Time
+	var end *time.Time
+	require.NoError(t, conn.QueryRow(ctx, `
+		SELECT p.code, s.status, s.current_period_start, s.current_period_end
+		FROM subscriptions s JOIN plans p ON p.id = s.plan_id WHERE s.organization_id = $1`, live).Scan(&plan, &status, &start, &end))
+	assert.Equal(t, "free", plan)
+	assert.Equal(t, "active", status)
+	assert.Nil(t, end, "Free never ends")
+	var created time.Time
+	require.NoError(t, conn.QueryRow(ctx, "SELECT created_at FROM organizations WHERE id = $1", live).Scan(&created))
+	assert.True(t, created.Equal(start), "the period starts when the organization did")
+	var n int
+	require.NoError(t, conn.QueryRow(ctx, "SELECT count(*) FROM subscriptions WHERE organization_id = $1", gone).Scan(&n))
+	assert.Zero(t, n)
 }

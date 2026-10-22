@@ -208,11 +208,13 @@ Constraint: hanya satu undangan aktif per `(organization_id, email)`.
 | status | text | lihat state machine §8.2 |
 | trial_ends_at | timestamptz NULL | |
 | current_period_start | timestamptz | |
-| current_period_end | timestamptz | |
+| current_period_end | timestamptz NULL | `NULL` = periode tak berakhir (plan Free, tidak pernah ditagih) |
 | cancel_at_period_end | bool | |
 | pending_plan_id | uuid NULL | untuk downgrade terjadwal |
 | grace_until | timestamptz NULL | |
 | created_at, updated_at | timestamptz | |
+
+Catatan implementasi (Fase 5): `current_period_end` boleh `NULL` supaya subscription Free tidak berpura-pura punya periode; job billing (Fase 6) hanya memilih baris dengan `current_period_end IS NOT NULL`. Subscription Free berstatus `active` dengan plan `free`. `status` dibatasi CHECK pada lima nilai §8.2, dan `trialing` mewajibkan `trial_ends_at`. Tabel ini ber-RLS (`tenant_isolation`) seperti tabel org-scoped lain; migrasi mengisi subscription Free untuk setiap organisasi yang belum dihapus.
 
 ### 4.9 `invoices`
 
