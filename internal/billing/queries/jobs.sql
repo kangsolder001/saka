@@ -62,3 +62,41 @@ WHERE status IN ('draft', 'open')
     (kind = 'checkout' AND due_at <= @now::timestamptz)
     OR (kind = 'renewal' AND due_at <= @renewal_cutoff::timestamptz)
   );
+
+-- Open invoices that are inside a reminder window and have not had that
+-- reminder yet (3 days, 1 day before they fall due).
+-- name: ListReminderCandidates :many
+SELECT id FROM invoices
+WHERE status = 'open'
+  AND due_at > @now::timestamptz
+  AND id > @after_id
+  AND (
+    (reminder_1d_sent_at IS NULL AND due_at <= @horizon_1d::timestamptz)
+    OR (reminder_3d_sent_at IS NULL AND due_at <= @horizon_3d::timestamptz)
+  )
+ORDER BY id
+LIMIT @row_limit;
+
+-- name: LockInvoiceSkipLocked :one
+SELECT * FROM invoices WHERE id = @id FOR UPDATE SKIP LOCKED;
+
+-- Marks a reminder as sent, in the transaction that queues its email. The
+-- last reminder (final) also covers the earlier one: a worker that was down
+-- sends one email, not two.
+-- name: MarkReminderSent :exec
+UPDATE invoices
+SET reminder_3d_sent_at = COALESCE(reminder_3d_sent_at, @now::timestamptz),
+    reminder_1d_sent_at = CASE WHEN @final::boolean THEN COALESCE(reminder_1d_sent_at, @now::timestamptz) ELSE reminder_1d_sent_at END,
+    updated_at = @now::timestamptz
+WHERE id = @id;
+
+-- name: GetSubscriptionByID :one
+SELECT * FROM subscriptions WHERE id = @id;
+
+-- Open invoices old enough that a webhook should have arrived by now.
+-- name: ListInvoicesToReconcile :many
+SELECT id, number, provider
+FROM invoices
+WHERE status = 'open' AND created_at <= @created_before::timestamptz AND id > @after_id
+ORDER BY id
+LIMIT @row_limit;

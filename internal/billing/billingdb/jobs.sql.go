@@ -101,6 +101,30 @@ func (q *Queries) GetRenewalInvoice(ctx context.Context, arg GetRenewalInvoicePa
 	return i, err
 }
 
+const getSubscriptionByID = `-- name: GetSubscriptionByID :one
+SELECT id, organization_id, plan_id, status, trial_ends_at, current_period_start, current_period_end, cancel_at_period_end, pending_plan_id, grace_until, created_at, updated_at FROM subscriptions WHERE id = $1
+`
+
+func (q *Queries) GetSubscriptionByID(ctx context.Context, id uuid.UUID) (Subscription, error) {
+	row := q.db.QueryRow(ctx, getSubscriptionByID, id)
+	var i Subscription
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.PlanID,
+		&i.Status,
+		&i.TrialEndsAt,
+		&i.CurrentPeriodStart,
+		&i.CurrentPeriodEnd,
+		&i.CancelAtPeriodEnd,
+		&i.PendingPlanID,
+		&i.GraceUntil,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const listDueSubscriptions = `-- name: ListDueSubscriptions :many
 SELECT s.id
 FROM subscriptions s
@@ -125,6 +149,96 @@ type ListDueSubscriptionsParams struct {
 // both read this list; the state machine decides which of them acts on each.
 func (q *Queries) ListDueSubscriptions(ctx context.Context, arg ListDueSubscriptionsParams) ([]uuid.UUID, error) {
 	rows, err := q.db.Query(ctx, listDueSubscriptions, arg.AfterID, arg.Now, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInvoicesToReconcile = `-- name: ListInvoicesToReconcile :many
+SELECT id, number, provider
+FROM invoices
+WHERE status = 'open' AND created_at <= $1::timestamptz AND id > $2
+ORDER BY id
+LIMIT $3
+`
+
+type ListInvoicesToReconcileParams struct {
+	CreatedBefore time.Time
+	AfterID       uuid.UUID
+	RowLimit      int32
+}
+
+type ListInvoicesToReconcileRow struct {
+	ID       uuid.UUID
+	Number   string
+	Provider string
+}
+
+// Open invoices old enough that a webhook should have arrived by now.
+func (q *Queries) ListInvoicesToReconcile(ctx context.Context, arg ListInvoicesToReconcileParams) ([]ListInvoicesToReconcileRow, error) {
+	rows, err := q.db.Query(ctx, listInvoicesToReconcile, arg.CreatedBefore, arg.AfterID, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListInvoicesToReconcileRow
+	for rows.Next() {
+		var i ListInvoicesToReconcileRow
+		if err := rows.Scan(&i.ID, &i.Number, &i.Provider); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listReminderCandidates = `-- name: ListReminderCandidates :many
+SELECT id FROM invoices
+WHERE status = 'open'
+  AND due_at > $1::timestamptz
+  AND id > $2
+  AND (
+    (reminder_1d_sent_at IS NULL AND due_at <= $3::timestamptz)
+    OR (reminder_3d_sent_at IS NULL AND due_at <= $4::timestamptz)
+  )
+ORDER BY id
+LIMIT $5
+`
+
+type ListReminderCandidatesParams struct {
+	Now       time.Time
+	AfterID   uuid.UUID
+	Horizon1d time.Time
+	Horizon3d time.Time
+	RowLimit  int32
+}
+
+// Open invoices that are inside a reminder window and have not had that
+// reminder yet (3 days, 1 day before they fall due).
+func (q *Queries) ListReminderCandidates(ctx context.Context, arg ListReminderCandidatesParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listReminderCandidates,
+		arg.Now,
+		arg.AfterID,
+		arg.Horizon1d,
+		arg.Horizon3d,
+		arg.RowLimit,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +305,38 @@ func (q *Queries) ListRenewalCandidates(ctx context.Context, arg ListRenewalCand
 	return items, nil
 }
 
+const lockInvoiceSkipLocked = `-- name: LockInvoiceSkipLocked :one
+SELECT id, organization_id, subscription_id, number, kind, plan_id, amount, currency, status, period_start, period_end, due_at, paid_at, provider, provider_ref, payment_url, reminder_3d_sent_at, reminder_1d_sent_at, created_at, updated_at FROM invoices WHERE id = $1 FOR UPDATE SKIP LOCKED
+`
+
+func (q *Queries) LockInvoiceSkipLocked(ctx context.Context, id uuid.UUID) (Invoice, error) {
+	row := q.db.QueryRow(ctx, lockInvoiceSkipLocked, id)
+	var i Invoice
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.SubscriptionID,
+		&i.Number,
+		&i.Kind,
+		&i.PlanID,
+		&i.Amount,
+		&i.Currency,
+		&i.Status,
+		&i.PeriodStart,
+		&i.PeriodEnd,
+		&i.DueAt,
+		&i.PaidAt,
+		&i.Provider,
+		&i.ProviderRef,
+		&i.PaymentUrl,
+		&i.Reminder3dSentAt,
+		&i.Reminder1dSentAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const lockSubscriptionSkipLocked = `-- name: LockSubscriptionSkipLocked :one
 SELECT id, organization_id, plan_id, status, trial_ends_at, current_period_start, current_period_end, cancel_at_period_end, pending_plan_id, grace_until, created_at, updated_at FROM subscriptions WHERE id = $1 FOR UPDATE SKIP LOCKED
 `
@@ -213,4 +359,26 @@ func (q *Queries) LockSubscriptionSkipLocked(ctx context.Context, id uuid.UUID) 
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const markReminderSent = `-- name: MarkReminderSent :exec
+UPDATE invoices
+SET reminder_3d_sent_at = COALESCE(reminder_3d_sent_at, $1::timestamptz),
+    reminder_1d_sent_at = CASE WHEN $2::boolean THEN COALESCE(reminder_1d_sent_at, $1::timestamptz) ELSE reminder_1d_sent_at END,
+    updated_at = $1::timestamptz
+WHERE id = $3
+`
+
+type MarkReminderSentParams struct {
+	Now   time.Time
+	Final bool
+	ID    uuid.UUID
+}
+
+// Marks a reminder as sent, in the transaction that queues its email. The
+// last reminder (final) also covers the earlier one: a worker that was down
+// sends one email, not two.
+func (q *Queries) MarkReminderSent(ctx context.Context, arg MarkReminderSentParams) error {
+	_, err := q.db.Exec(ctx, markReminderSent, arg.Now, arg.Final, arg.ID)
+	return err
 }

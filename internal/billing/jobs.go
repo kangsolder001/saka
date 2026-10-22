@@ -50,10 +50,12 @@ func (s *Service) RegisterJobs(sched *scheduler.Scheduler) error {
 	if err != nil {
 		return err
 	}
-	hourly := pay.Settings.HourlyInterval
+	hourly, daily := pay.Settings.HourlyInterval, pay.Settings.DailyInterval
 	sched.Register(scheduler.Job{Name: JobRenewals, Interval: hourly, Run: s.IssueRenewals})
 	sched.Register(scheduler.Job{Name: JobApplyScheduled, Interval: hourly, Run: s.ApplyScheduled})
 	sched.Register(scheduler.Job{Name: JobExpire, Interval: hourly, Run: s.ExpireSubscriptions})
+	sched.Register(scheduler.Job{Name: JobReminders, Interval: daily, Run: s.SendReminders})
+	sched.Register(scheduler.Job{Name: JobReconcile, Interval: daily, Run: s.Reconcile})
 	return nil
 }
 
