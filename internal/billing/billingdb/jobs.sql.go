@@ -12,6 +12,56 @@ import (
 	"github.com/google/uuid"
 )
 
+const expireLiveInvoices = `-- name: ExpireLiveInvoices :execrows
+UPDATE invoices
+SET status = 'expired', updated_at = $1::timestamptz
+WHERE subscription_id = $2
+  AND status IN ('draft', 'open')
+  AND ($3::text IS NULL OR kind = $3::text)
+`
+
+type ExpireLiveInvoicesParams struct {
+	Now            time.Time
+	SubscriptionID uuid.UUID
+	Kind           *string
+}
+
+// Closes the live invoices of a subscription as expired (the time to pay ran
+// out), optionally one kind only.
+func (q *Queries) ExpireLiveInvoices(ctx context.Context, arg ExpireLiveInvoicesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, expireLiveInvoices, arg.Now, arg.SubscriptionID, arg.Kind)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const expireOverdueInvoices = `-- name: ExpireOverdueInvoices :execrows
+UPDATE invoices
+SET status = 'expired', updated_at = $1::timestamptz
+WHERE status IN ('draft', 'open')
+  AND (
+    (kind = 'checkout' AND due_at <= $1::timestamptz)
+    OR (kind = 'renewal' AND due_at <= $2::timestamptz)
+  )
+`
+
+type ExpireOverdueInvoicesParams struct {
+	Now           time.Time
+	RenewalCutoff time.Time
+}
+
+// Invoices nobody can pay any more: a checkout past its due date, a renewal
+// past its due date plus the grace period (the cutoff). Their payment links
+// expire at the same moments, so a late payment is not expected.
+func (q *Queries) ExpireOverdueInvoices(ctx context.Context, arg ExpireOverdueInvoicesParams) (int64, error) {
+	result, err := q.db.Exec(ctx, expireOverdueInvoices, arg.Now, arg.RenewalCutoff)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getRenewalInvoice = `-- name: GetRenewalInvoice :one
 SELECT id, organization_id, subscription_id, number, kind, plan_id, amount, currency, status, period_start, period_end, due_at, paid_at, provider, provider_ref, payment_url, reminder_3d_sent_at, reminder_1d_sent_at, created_at, updated_at FROM invoices
 WHERE subscription_id = $1 AND kind = 'renewal' AND period_start = $2 AND status <> 'void'
@@ -49,6 +99,48 @@ func (q *Queries) GetRenewalInvoice(ctx context.Context, arg GetRenewalInvoicePa
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const listDueSubscriptions = `-- name: ListDueSubscriptions :many
+SELECT s.id
+FROM subscriptions s
+WHERE s.id > $1
+  AND (
+    (s.status = 'trialing' AND s.trial_ends_at <= $2::timestamptz)
+    OR (s.status = 'active' AND s.current_period_end IS NOT NULL AND s.current_period_end <= $2::timestamptz)
+    OR (s.status = 'past_due' AND s.grace_until <= $2::timestamptz)
+  )
+ORDER BY s.id
+LIMIT $3
+`
+
+type ListDueSubscriptionsParams struct {
+	AfterID  uuid.UUID
+	Now      time.Time
+	RowLimit int32
+}
+
+// Subscriptions with a time-driven event due: a trial that ended, a period that
+// ended, a grace period that ended. billing.expire and billing.apply_scheduled
+// both read this list; the state machine decides which of them acts on each.
+func (q *Queries) ListDueSubscriptions(ctx context.Context, arg ListDueSubscriptionsParams) ([]uuid.UUID, error) {
+	rows, err := q.db.Query(ctx, listDueSubscriptions, arg.AfterID, arg.Now, arg.RowLimit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		items = append(items, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listRenewalCandidates = `-- name: ListRenewalCandidates :many

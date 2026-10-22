@@ -26,3 +26,39 @@ SELECT * FROM subscriptions WHERE id = @id FOR UPDATE SKIP LOCKED;
 -- name: GetRenewalInvoice :one
 SELECT * FROM invoices
 WHERE subscription_id = @subscription_id AND kind = 'renewal' AND period_start = @period_start AND status <> 'void';
+
+-- Subscriptions with a time-driven event due: a trial that ended, a period that
+-- ended, a grace period that ended. billing.expire and billing.apply_scheduled
+-- both read this list; the state machine decides which of them acts on each.
+-- name: ListDueSubscriptions :many
+SELECT s.id
+FROM subscriptions s
+WHERE s.id > @after_id
+  AND (
+    (s.status = 'trialing' AND s.trial_ends_at <= @now::timestamptz)
+    OR (s.status = 'active' AND s.current_period_end IS NOT NULL AND s.current_period_end <= @now::timestamptz)
+    OR (s.status = 'past_due' AND s.grace_until <= @now::timestamptz)
+  )
+ORDER BY s.id
+LIMIT @row_limit;
+
+-- Closes the live invoices of a subscription as expired (the time to pay ran
+-- out), optionally one kind only.
+-- name: ExpireLiveInvoices :execrows
+UPDATE invoices
+SET status = 'expired', updated_at = @now::timestamptz
+WHERE subscription_id = @subscription_id
+  AND status IN ('draft', 'open')
+  AND (sqlc.narg(kind)::text IS NULL OR kind = sqlc.narg(kind)::text);
+
+-- Invoices nobody can pay any more: a checkout past its due date, a renewal
+-- past its due date plus the grace period (the cutoff). Their payment links
+-- expire at the same moments, so a late payment is not expected.
+-- name: ExpireOverdueInvoices :execrows
+UPDATE invoices
+SET status = 'expired', updated_at = @now::timestamptz
+WHERE status IN ('draft', 'open')
+  AND (
+    (kind = 'checkout' AND due_at <= @now::timestamptz)
+    OR (kind = 'renewal' AND due_at <= @renewal_cutoff::timestamptz)
+  );

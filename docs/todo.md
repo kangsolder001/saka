@@ -179,8 +179,8 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 **Bagian C: cron & notifikasi**
 - [x] Scheduler di worker + advisory lock (0.3). `internal/platform/scheduler`: satu loop di `cmd/worker` lewat `safego`, `pg_try_advisory_xact_lock` per nama job, interval dari config `billing.*_jobs_interval`; diuji dengan lock Postgres sungguhan (dua worker, panic, koneksi mati)
 - [x] `billing.renewals` (invoice H-3) (0.3). `Service.IssueRenewals`; pola semua job (halaman, `SKIP LOCKED`, cek ulang) di spec §8.7; worker membangun `billing.Service` dan mendaftarkan job
-- [ ] `billing.expire` (active→past_due→expired, trial→expired, `grace_until` 3 hari) (0.5)
-- [ ] `billing.apply_scheduled` (pending plan & cancel_at_period_end) (0.3)
+- [x] `billing.expire` (active→past_due→expired, trial→expired, `grace_until` 3 hari) (0.5). `Service.ExpireSubscriptions`, plus penyapuan invoice yang kedaluwarsa; detail di spec §8.7
+- [x] `billing.apply_scheduled` (pending plan & cancel_at_period_end) (0.3). `Service.ApplyScheduled`: pembatalan dan guliran ke periode renewal yang sudah dibayar (downgrade berlaku lewat renewal-nya)
 - [ ] `billing.reminders` (H-3, H-1) + `billing.reconcile` (cek status `open` ke gateway) (0.8)
 - [x] Template: `payment_reminder`, `subscription_past_due`, `subscription_expired`, `trial_ending` (0.4). `subscription_past_due` boleh tanpa tautan bayar (renewal belum terbit): ia mengarahkan ke pengaturan langganan
 - [ ] Test cron idempoten & aman bersamaan (jalan 2×, 2 worker) (0.5)

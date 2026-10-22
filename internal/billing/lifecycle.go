@@ -2,10 +2,12 @@ package billing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/kangsolder001/saka/internal/billing/billingdb"
 	"github.com/kangsolder001/saka/internal/mail"
@@ -63,6 +65,29 @@ func paidInvoiceOf(inv billingdb.Invoice, plan billingdb.Plan) PaidInvoice {
 		Kind: InvoiceKind(inv.Kind), PlanID: inv.PlanID, Interval: plan.Interval,
 		PeriodStart: inv.PeriodStart, PeriodEnd: inv.PeriodEnd,
 	}
+}
+
+// paidRenewalFor returns the paid renewal invoice for the period that follows
+// the subscription's current one, if any, in the shape the state machine reads.
+func (s *Service) paidRenewalFor(ctx context.Context, q db.DBTX, sub billingdb.Subscription) (*PaidInvoice, error) {
+	if sub.CurrentPeriodEnd == nil {
+		return nil, nil
+	}
+	row, err := queries(q).GetPaidRenewalForPeriod(ctx, billingdb.GetPaidRenewalForPeriodParams{
+		SubscriptionID: sub.ID, PeriodStart: *sub.CurrentPeriodEnd,
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("billing: find paid renewal: %w", err)
+	}
+	plan, err := queries(q).GetPlanByID(ctx, row.PlanID)
+	if err != nil {
+		return nil, fmt.Errorf("billing: get plan of paid renewal: %w", err)
+	}
+	inv := paidInvoiceOf(row, plan)
+	return &inv, nil
 }
 
 // contactOf finds whom to write to about an organization. A missing contact

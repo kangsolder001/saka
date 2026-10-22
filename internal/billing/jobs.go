@@ -52,6 +52,8 @@ func (s *Service) RegisterJobs(sched *scheduler.Scheduler) error {
 	}
 	hourly := pay.Settings.HourlyInterval
 	sched.Register(scheduler.Job{Name: JobRenewals, Interval: hourly, Run: s.IssueRenewals})
+	sched.Register(scheduler.Job{Name: JobApplyScheduled, Interval: hourly, Run: s.ApplyScheduled})
+	sched.Register(scheduler.Job{Name: JobExpire, Interval: hourly, Run: s.ExpireSubscriptions})
 	return nil
 }
 
