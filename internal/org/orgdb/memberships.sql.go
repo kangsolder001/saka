@@ -12,6 +12,23 @@ import (
 	"github.com/google/uuid"
 )
 
+const countOtherMembers = `-- name: CountOtherMembers :one
+SELECT count(*) FROM memberships
+WHERE organization_id = $1 AND user_id <> $2
+`
+
+type CountOtherMembersParams struct {
+	OrganizationID uuid.UUID
+	UserID         uuid.UUID
+}
+
+func (q *Queries) CountOtherMembers(ctx context.Context, arg CountOtherMembersParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countOtherMembers, arg.OrganizationID, arg.UserID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const deleteMembership = `-- name: DeleteMembership :execrows
 DELETE FROM memberships
 WHERE organization_id = $1 AND user_id = $2 AND role <> 'owner'
@@ -204,6 +221,40 @@ func (q *Queries) ListMemberships(ctx context.Context, arg ListMembershipsParams
 			&i.Role,
 			&i.CreatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUserMemberships = `-- name: ListUserMemberships :many
+SELECT m.organization_id, m.role
+FROM memberships m
+JOIN organizations o ON o.id = m.organization_id
+WHERE m.user_id = $1 AND o.deleted_at IS NULL
+ORDER BY m.organization_id
+`
+
+type ListUserMembershipsRow struct {
+	OrganizationID uuid.UUID
+	Role           string
+}
+
+// Every live organization the user belongs to, for account deletion.
+func (q *Queries) ListUserMemberships(ctx context.Context, userID uuid.UUID) ([]ListUserMembershipsRow, error) {
+	rows, err := q.db.Query(ctx, listUserMemberships, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUserMembershipsRow
+	for rows.Next() {
+		var i ListUserMembershipsRow
+		if err := rows.Scan(&i.OrganizationID, &i.Role); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

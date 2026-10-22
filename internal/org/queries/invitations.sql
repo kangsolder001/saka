@@ -71,7 +71,7 @@ SELECT i.id, i.organization_id, i.email, i.role, i.invited_by, i.expires_at,
 FROM invitations i
 JOIN organizations o ON o.id = i.organization_id
 WHERE i.token_hash = @token_hash
-FOR UPDATE OF i;
+FOR UPDATE OF i FOR SHARE OF o;
 
 -- name: MarkInvitationAccepted :execrows
 UPDATE invitations SET accepted_at = @now::timestamptz
@@ -95,7 +95,9 @@ SELECT EXISTS (
 ) AS live;
 
 -- The invitations an address can still redeem, locked so a concurrent accept by
--- link and a verification cannot both redeem the same one.
+-- link and a verification cannot both redeem the same one. The organization row
+-- is share-locked too: a user being deleted locks it exclusively while checking
+-- for other members, so nobody can join between that check and the cleanup.
 -- name: ListLiveInvitationsForEmailForUpdate :many
 SELECT i.id, i.organization_id, i.role
 FROM invitations i
@@ -105,4 +107,4 @@ WHERE i.email = @email
   AND i.expires_at > @now::timestamptz
   AND o.deleted_at IS NULL
 ORDER BY i.created_at, i.id
-FOR UPDATE OF i;
+FOR UPDATE OF i FOR SHARE OF o;

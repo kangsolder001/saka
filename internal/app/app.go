@@ -28,10 +28,17 @@ import (
 type Options struct {
 	// PasswordParams overrides the Argon2id cost. Tests lower it for speed.
 	PasswordParams *auth.Argon2Params
-	// Organizations takes part in account deletion. Nil means auth.NoOrganizations
-	// until the organization module exists (Phase 4); tests inject a guard to
-	// exercise the refusal path.
+	// Organizations takes part in account deletion. Nil means the organization
+	// module; tests inject a guard to exercise the refusal path.
 	Organizations auth.OrganizationGuard
+}
+
+// guardOrDefault returns the injected guard, or the organization module.
+func guardOrDefault(injected auth.OrganizationGuard, organizations *org.Service) auth.OrganizationGuard {
+	if injected != nil {
+		return injected
+	}
+	return organizations
 }
 
 // NewRouter builds the API: global middleware, health endpoints and every
@@ -64,11 +71,11 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 		return nil, fmt.Errorf("access token signer: %w", err)
 	}
 
-	orgs := opts.Organizations
-	if orgs == nil {
-		orgs = auth.NoOrganizations{} // TODO(phase-4): wire the organization module
-	}
 	users := user.NewService(clk, user.WithCache(redis.Namespace("user"), cfg.Redis.UserCacheTTL.Std(), log))
+	// Account deletion consults the organization module; tests may inject a
+	// guard to exercise the refusal path.
+	guard := opts.Organizations
+
 	// auth and org need each other (registration creates the organization; the
 	// ownership transfer confirms a password), each through an interface the
 	// consumer declares. The composition root closes the loop: org is built
@@ -78,7 +85,7 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 		Tx:          database,
 		Pool:        database.Pool(),
 		Users:       users,
-		Orgs:        orgs,
+		Orgs:        guardOrDefault(guard, organizations),
 		Provisioner: organizations,
 		Tokens:      auth.NewUserTokens(clk),
 		Sessions:    auth.NewRefreshTokens(clk, cfg.Auth.RefreshTokenTTL.Std()),

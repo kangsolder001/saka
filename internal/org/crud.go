@@ -197,21 +197,26 @@ func (s *Service) Delete(ctx context.Context) error {
 		return err
 	}
 	return s.tx.WithTx(ctx, func(tx pgx.Tx) error {
-		q := orgdb.New(tx)
-		n, err := q.SoftDeleteOrganization(ctx, orgdb.SoftDeleteOrganizationParams{ID: id, Now: s.clk.Now()})
-		if err != nil {
-			return fmt.Errorf("org: delete: %w", err)
-		}
-		if n == 0 {
-			return apperr.NotFound()
-		}
-		if _, err := q.RevokeOpenInvitationsForOrganization(ctx, orgdb.RevokeOpenInvitationsForOrganizationParams{
-			OrganizationID: id, Now: s.clk.Now(),
-		}); err != nil {
-			return fmt.Errorf("org: revoke invitations: %w", err)
-		}
-		return nil
+		return s.deleteOrganization(ctx, orgdb.New(tx), id)
 	})
+}
+
+// deleteOrganization soft-deletes an organization and revokes its open
+// invitations using q (a transaction). NOT_FOUND when it is already gone.
+func (s *Service) deleteOrganization(ctx context.Context, q *orgdb.Queries, id uuid.UUID) error {
+	n, err := q.SoftDeleteOrganization(ctx, orgdb.SoftDeleteOrganizationParams{ID: id, Now: s.clk.Now()})
+	if err != nil {
+		return fmt.Errorf("org: delete: %w", err)
+	}
+	if n == 0 {
+		return apperr.NotFound()
+	}
+	if _, err := q.RevokeOpenInvitationsForOrganization(ctx, orgdb.RevokeOpenInvitationsForOrganizationParams{
+		OrganizationID: id, Now: s.clk.Now(),
+	}); err != nil {
+		return fmt.Errorf("org: revoke invitations: %w", err)
+	}
+	return nil
 }
 
 // maxOrganizationsInProfile caps the list GET /me returns. A user belongs to a

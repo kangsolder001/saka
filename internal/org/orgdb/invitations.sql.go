@@ -70,7 +70,7 @@ SELECT i.id, i.organization_id, i.email, i.role, i.invited_by, i.expires_at,
 FROM invitations i
 JOIN organizations o ON o.id = i.organization_id
 WHERE i.token_hash = $1
-FOR UPDATE OF i
+FOR UPDATE OF i FOR SHARE OF o
 `
 
 type GetInvitationByTokenHashForUpdateRow struct {
@@ -226,7 +226,7 @@ WHERE i.email = $1
   AND i.expires_at > $2::timestamptz
   AND o.deleted_at IS NULL
 ORDER BY i.created_at, i.id
-FOR UPDATE OF i
+FOR UPDATE OF i FOR SHARE OF o
 `
 
 type ListLiveInvitationsForEmailForUpdateParams struct {
@@ -241,7 +241,9 @@ type ListLiveInvitationsForEmailForUpdateRow struct {
 }
 
 // The invitations an address can still redeem, locked so a concurrent accept by
-// link and a verification cannot both redeem the same one.
+// link and a verification cannot both redeem the same one. The organization row
+// is share-locked too: a user being deleted locks it exclusively while checking
+// for other members, so nobody can join between that check and the cleanup.
 func (q *Queries) ListLiveInvitationsForEmailForUpdate(ctx context.Context, arg ListLiveInvitationsForEmailForUpdateParams) ([]ListLiveInvitationsForEmailForUpdateRow, error) {
 	rows, err := q.db.Query(ctx, listLiveInvitationsForEmailForUpdate, arg.Email, arg.Now)
 	if err != nil {

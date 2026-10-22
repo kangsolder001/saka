@@ -47,3 +47,8 @@ WHERE id = @id AND deleted_at IS NULL;
 UPDATE organizations
 SET owner_id = @new_owner_id, updated_at = @now::timestamptz
 WHERE id = @id AND owner_id = @old_owner_id AND deleted_at IS NULL;
+
+-- Taken by the account-deletion guard before it counts members, so no one can
+-- join (invitation accept, verification) between the count and the cleanup.
+-- name: LockOrganizationForUpdate :one
+SELECT id FROM organizations WHERE id = @id AND deleted_at IS NULL FOR UPDATE;

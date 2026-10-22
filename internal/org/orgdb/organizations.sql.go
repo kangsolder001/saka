@@ -144,6 +144,19 @@ func (q *Queries) ListOrganizationsForUser(ctx context.Context, arg ListOrganiza
 	return items, nil
 }
 
+const lockOrganizationForUpdate = `-- name: LockOrganizationForUpdate :one
+SELECT id FROM organizations WHERE id = $1 AND deleted_at IS NULL FOR UPDATE
+`
+
+// Taken by the account-deletion guard before it counts members, so no one can
+// join (invitation accept, verification) between the count and the cleanup.
+func (q *Queries) LockOrganizationForUpdate(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, lockOrganizationForUpdate, id)
+	var id_2 uuid.UUID
+	err := row.Scan(&id_2)
+	return id_2, err
+}
+
 const setOrganizationOwner = `-- name: SetOrganizationOwner :execrows
 UPDATE organizations
 SET owner_id = $1, updated_at = $2::timestamptz

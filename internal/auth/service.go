@@ -75,8 +75,7 @@ type Dependencies struct {
 	Tx    Transactor
 	Pool  db.DBTX // used for reads outside a transaction
 	Users UserService
-	// Orgs is the organization module's part of account deletion; use
-	// NoOrganizations until that module exists.
+	// Orgs is the organization module's part of account deletion.
 	Orgs OrganizationGuard
 	// Provisioner creates the new user's organization during registration.
 	Provisioner OrganizationProvisioner

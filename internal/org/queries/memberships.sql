@@ -58,3 +58,15 @@ WHERE organization_id = @organization_id AND user_id = @user_id AND role <> 'own
 INSERT INTO memberships (organization_id, user_id, role, created_at)
 VALUES (@organization_id, @user_id, @role, @now::timestamptz)
 ON CONFLICT (organization_id, user_id) DO NOTHING;
+
+-- Every live organization the user belongs to, for account deletion.
+-- name: ListUserMemberships :many
+SELECT m.organization_id, m.role
+FROM memberships m
+JOIN organizations o ON o.id = m.organization_id
+WHERE m.user_id = @user_id AND o.deleted_at IS NULL
+ORDER BY m.organization_id;
+
+-- name: CountOtherMembers :one
+SELECT count(*) FROM memberships
+WHERE organization_id = @organization_id AND user_id <> @user_id;

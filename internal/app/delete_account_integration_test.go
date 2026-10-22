@@ -144,3 +144,64 @@ func TestDeleteAccount_RequiresAuthentication(t *testing.T) {
 	_, deleted, _ := s.userRow("ann@example.com")
 	assert.False(t, deleted)
 }
+
+func (s *stack) orgDeleted(orgID string) bool {
+	s.t.Helper()
+	var deleted bool
+	require.NoError(s.t, s.queryRow("SELECT deleted_at IS NOT NULL FROM organizations WHERE id = $1", orgID).Scan(&deleted))
+	return deleted
+}
+
+func TestDeleteAccount_RealOrganizations_OwnerOfASharedOneIsRefusedAndNothingChanges(t *testing.T) {
+	s := newStack(t)
+	tm := s.newTeam()
+
+	res := s.deleteMe(tm.owner, "correct-horse")
+
+	require.Equal(t, http.StatusConflict, res.Code, res.Body.String())
+	assert.Contains(t, res.Body.String(), "owns_shared_organization")
+	status, deleted, _ := s.userRow("owner@example.com")
+	assert.Equal(t, "active", status)
+	assert.False(t, deleted)
+	assert.False(t, s.orgDeleted(tm.orgID))
+	assert.True(t, s.accessWorks(tm.owner), "the session survives a refused deletion")
+	role, member := s.roleOf(tm.orgID, "owner@example.com")
+	assert.True(t, member)
+	assert.Equal(t, "owner", role)
+}
+
+func TestDeleteAccount_RealOrganizations_ASoleOwnerTakesTheirOrganizationAlong(t *testing.T) {
+	s := newStack(t)
+	s.registered("ann@example.com")
+	orgID := s.firstOrg("ann@example.com")
+	require.Equal(t, http.StatusNoContent, s.deleteMe(s.loggedIn("ann@example.com"), "correct-horse").Code)
+
+	assert.True(t, s.orgDeleted(orgID))
+}
+
+func TestDeleteAccount_RealOrganizations_AMemberLeavesQuietly(t *testing.T) {
+	s := newStack(t)
+	tm := s.newTeam()
+
+	require.Equal(t, http.StatusNoContent, s.deleteMe(tm.member, "correct-horse").Code)
+
+	assert.False(t, s.orgDeleted(tm.orgID))
+	_, member := s.roleOf(tm.orgID, "member@example.com")
+	assert.False(t, member)
+	assert.Equal(t, http.StatusOK, s.get(orgPath(tm.orgID), bearer(tm.owner)).Code, "the others are undisturbed")
+	assert.Len(t, s.get(tm.membersPath(), bearer(tm.owner)).json()["items"], 2)
+}
+
+func TestDeleteAccount_RealOrganizations_TransferringOwnershipUnblocksIt(t *testing.T) {
+	s := newStack(t)
+	tm := s.newTeam()
+	require.Equal(t, http.StatusConflict, s.deleteMe(tm.owner, "correct-horse").Code)
+	require.Equal(t, http.StatusNoContent,
+		s.post(tm.transferPath(), transferBody(s.userID("admin@example.com"), "correct-horse"), bearer(tm.owner)).Code)
+
+	res := s.deleteMe(tm.owner, "correct-horse")
+
+	require.Equal(t, http.StatusNoContent, res.Code, res.Body.String())
+	assert.False(t, s.orgDeleted(tm.orgID), "the organization lives on under its new owner")
+	assert.Equal(t, http.StatusOK, s.get(orgPath(tm.orgID), bearer(tm.admin)).Code)
+}

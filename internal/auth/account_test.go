@@ -467,7 +467,3 @@ func TestDeleteAccount_TooManyWrongGuessesAreRateLimited(t *testing.T) {
 
 	assert.True(t, apperr.IsCode(err, apperr.CodeRateLimited))
 }
-
-func TestNoOrganizations_NeverBlocksDeletion(t *testing.T) {
-	assert.NoError(t, auth.NoOrganizations{}.BeforeUserDeleted(context.Background(), stubDB{}, uuid.New()))
-}
