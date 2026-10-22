@@ -341,6 +341,62 @@ func endPeriod(s Snapshot, e Event, now time.Time) (Result, error) {
 	}
 }
 
+// ErrNotRenewing: the subscription is not a running paid one (Free, expired or
+// canceled), so there is nothing to cancel, resume or downgrade.
+var ErrNotRenewing = errors.New("billing: the subscription is not a running paid subscription")
+
+// renewing reports whether s is a paid subscription that is still running: it
+// has a period that ends, and has not expired or been canceled.
+func renewing(s Snapshot) bool {
+	switch s.Status {
+	case StatusTrialing, StatusActive, StatusPastDue:
+		return s.CurrentPeriodEnd != nil
+	}
+	return false
+}
+
+// RequestCancellation marks a running paid subscription to be canceled when
+// its period ends (spec §8.3 cancel). Access continues until then. Asking
+// twice changes nothing.
+func RequestCancellation(s Snapshot) (Snapshot, error) {
+	if !renewing(s) {
+		return s, ErrNotRenewing
+	}
+	s.CancelAtPeriodEnd = true
+	return s, nil
+}
+
+// RevokeCancellation takes back a pending cancellation (spec §8.3 resume).
+// With none pending it changes nothing.
+func RevokeCancellation(s Snapshot) (Snapshot, error) {
+	if !renewing(s) {
+		return s, ErrNotRenewing
+	}
+	s.CancelAtPeriodEnd = false
+	return s, nil
+}
+
+// ScheduleDowngrade schedules a move to a cheaper plan at the end of the
+// current period (spec §8.4); until then the current plan stays. Only an
+// active paid subscription can: a trial or a past due subscription has no
+// period to wait for and switches by paying for the new plan instead.
+func ScheduleDowngrade(s Snapshot, to uuid.UUID) (Snapshot, error) {
+	if s.Status != StatusActive || !renewing(s) {
+		return s, ErrNotRenewing
+	}
+	if to == s.PlanID {
+		return s, fmt.Errorf("%w: that is the current plan", ErrInvalidEvent)
+	}
+	s.PendingPlanID = &to
+	return s, nil
+}
+
+// CancelDowngrade drops a scheduled downgrade: the current plan continues.
+func CancelDowngrade(s Snapshot) Snapshot {
+	s.PendingPlanID = nil
+	return s
+}
+
 // DueEvent returns the time-driven event that is due for s at now, if any:
 // the trial that ran out, the period that ended, the grace that ran out. A
 // subscription with nothing due (including every Free one, which has no period

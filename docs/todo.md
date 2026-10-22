@@ -173,7 +173,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Idempotensi `payment_events` `(provider, event_id)` (0.3). Insert `ON CONFLICT DO NOTHING`; pengiriman ganda (juga bersamaan) tersimpan sekali
 - [x] Proses webhook transaksional: invoice → subscription → job email; `processed_at`/`error`, 500 jika gagal (0.8). Kunci event → subscription → invoice; nominal/mata uang dicek terhadap invoice; hasil yang perlu ditinjau manusia diproses `200` dengan catatan di `error` (spec §8.7)
 - [x] State machine subscription (`trialing/active/past_due/expired/canceled`) sebagai fungsi murni + tabel transisi (§8.2) (0.6). `billing.Next`/`DueEvent`/`AddInterval`; tes menelusuri setiap pasangan status×event (13 transisi sah, sisanya `ErrIllegalTransition`) dengan `now` yang dipilih sendiri; aturan rinci di spec §8.7
-- [ ] `change-plan` (upgrade via invoice; downgrade via `pending_plan_id`), `cancel`, `resume` (§8.4) (0.7)
+- [x] `change-plan` (upgrade via invoice; downgrade via `pending_plan_id`), `cancel`, `resume` (§8.4) (0.7). Downgrade menjadwalkan + peringatan limit; cancel/resume idempoten; keputusan di spec §8.7
 - [ ] Test: webhook ganda diproses sekali, signature salah ditolak, semua transisi dengan fake clock (0.7)
 
 **Bagian C: cron & notifikasi**

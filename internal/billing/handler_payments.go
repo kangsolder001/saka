@@ -1,6 +1,7 @@
 package billing
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -19,6 +20,9 @@ import (
 func (h *Handler) paymentRoutes(tenant *gin.RouterGroup, requireVerifiedEmail gin.HandlerFunc) {
 	owner := org.Require(org.ActionManageBilling)
 	tenant.POST("/subscription/checkout", owner, requireVerifiedEmail, h.checkout)
+	tenant.POST("/subscription/change-plan", owner, requireVerifiedEmail, h.changePlan)
+	tenant.POST("/subscription/cancel", owner, h.cancel)
+	tenant.POST("/subscription/resume", owner, h.resume)
 	tenant.GET("/invoices", owner, h.listInvoices)
 	tenant.GET("/invoices/:id", owner, h.getInvoice)
 }
@@ -77,6 +81,69 @@ func (h *Handler) checkout(c *gin.Context) {
 		status = http.StatusOK
 	}
 	c.JSON(status, gin.H{"invoice": invoiceJSON(res.Invoice), "subscription": sub, "trial_started": res.TrialStarted})
+}
+
+type limitWarningResponse struct {
+	Limit string `json:"limit"`
+	Used  int    `json:"used"`
+	Max   int    `json:"max"`
+}
+
+// changePlan answers what the change did: an invoice to pay (upgrade), a
+// downgrade booked for the end of the period (with warnings about limits the
+// smaller plan would exceed), or a scheduled downgrade taken back.
+func (h *Handler) changePlan(c *gin.Context) {
+	var req checkoutRequest
+	if !httpx.BindJSON(c, &req) {
+		return
+	}
+	ctx := c.Request.Context()
+	res, err := h.Service.ChangePlan(ctx, req.Plan)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	sub, err := h.subscriptionView(ctx)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	warnings := make([]limitWarningResponse, len(res.Warnings))
+	for i, w := range res.Warnings {
+		warnings[i] = limitWarningResponse(w)
+	}
+	status := http.StatusOK
+	body := gin.H{"subscription": sub, "invoice": nil, "scheduled": res.Scheduled, "cleared": res.Cleared, "trial_started": false, "warnings": warnings}
+	if res.Checkout != nil {
+		body["invoice"] = invoiceJSON(res.Checkout.Invoice)
+		body["trial_started"] = res.Checkout.TrialStarted
+		if !res.Checkout.Reused {
+			status = http.StatusCreated
+		}
+	}
+	c.JSON(status, body)
+}
+
+func (h *Handler) cancel(c *gin.Context) {
+	h.setCancellation(c, h.Service.CancelSubscription)
+}
+
+func (h *Handler) resume(c *gin.Context) {
+	h.setCancellation(c, h.Service.ResumeSubscription)
+}
+
+func (h *Handler) setCancellation(c *gin.Context, do func(context.Context) error) {
+	ctx := c.Request.Context()
+	if err := do(ctx); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	sub, err := h.subscriptionView(ctx)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"subscription": sub})
 }
 
 func (h *Handler) listInvoices(c *gin.Context) {

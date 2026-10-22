@@ -589,3 +589,73 @@ func TestAddInterval(t *testing.T) {
 	_, err := billing.AddInterval(t0, "week")
 	assert.Error(t, err)
 }
+
+// --- cancel, resume and downgrade rules ---
+
+func TestRequestCancellation_OnlyForARunningPaidSubscription(t *testing.T) {
+	for _, status := range []billing.Status{billing.StatusTrialing, billing.StatusActive, billing.StatusPastDue} {
+		t.Run(string(status), func(t *testing.T) {
+			s, _ := representative(status, billing.EventOrganizationDeleted)
+
+			got, err := billing.RequestCancellation(s)
+
+			require.NoError(t, err)
+			assert.True(t, got.CancelAtPeriodEnd)
+			assert.Equal(t, status, got.Status, "access continues until the period ends")
+			again, err := billing.RequestCancellation(got)
+			require.NoError(t, err)
+			assert.Equal(t, got, again, "asking twice changes nothing")
+		})
+	}
+	for name, s := range map[string]billing.Snapshot{
+		"free": freeSub(),
+		"expired": func() billing.Snapshot {
+			s, _ := representative(billing.StatusExpired, billing.EventOrganizationDeleted)
+			return s
+		}(),
+		"canceled": func() billing.Snapshot {
+			s, _ := representative(billing.StatusCanceled, billing.EventOrganizationDeleted)
+			return s
+		}(),
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, err := billing.RequestCancellation(s)
+			assert.ErrorIs(t, err, billing.ErrNotRenewing)
+			_, err = billing.RevokeCancellation(s)
+			assert.ErrorIs(t, err, billing.ErrNotRenewing)
+		})
+	}
+}
+
+func TestRevokeCancellation_TakesTheCancellationBack(t *testing.T) {
+	s := paidSub(t0.AddDate(0, 0, 5))
+	s.CancelAtPeriodEnd = true
+
+	got, err := billing.RevokeCancellation(s)
+
+	require.NoError(t, err)
+	assert.False(t, got.CancelAtPeriodEnd)
+	again, err := billing.RevokeCancellation(got)
+	require.NoError(t, err)
+	assert.Equal(t, got, again)
+}
+
+func TestScheduleDowngrade_OnlyForAnActivePaidSubscriptionAndAnotherPlan(t *testing.T) {
+	active := paidSub(t0.AddDate(0, 0, 5))
+
+	got, err := billing.ScheduleDowngrade(active, freeID)
+	require.NoError(t, err)
+	require.NotNil(t, got.PendingPlanID)
+	assert.Equal(t, freeID, *got.PendingPlanID)
+	assert.Equal(t, proID, got.PlanID, "nothing changes now")
+
+	_, err = billing.ScheduleDowngrade(active, proID)
+	assert.ErrorIs(t, err, billing.ErrInvalidEvent, "the plan it is already on")
+	for name, s := range map[string]billing.Snapshot{
+		"trialing": trialingSub(t0.AddDate(0, 0, 5)), "past_due": pastDueSub(t0), "free": freeSub(),
+	} {
+		_, err := billing.ScheduleDowngrade(s, freeID)
+		assert.ErrorIs(t, err, billing.ErrNotRenewing, name)
+	}
+	assert.Nil(t, billing.CancelDowngrade(got).PendingPlanID)
+}

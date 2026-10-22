@@ -15,8 +15,10 @@ import (
 	"github.com/kangsolder001/saka/internal/billing"
 	"github.com/kangsolder001/saka/internal/billing/payment"
 	"github.com/kangsolder001/saka/internal/billing/payment/fake"
+	"github.com/kangsolder001/saka/internal/entitlement"
 	"github.com/kangsolder001/saka/internal/mail"
 	"github.com/kangsolder001/saka/internal/org"
+	"github.com/kangsolder001/saka/internal/platform/db"
 	"github.com/kangsolder001/saka/internal/platform/logger"
 	"github.com/kangsolder001/saka/internal/platform/outbox"
 	"github.com/kangsolder001/saka/internal/platform/reqctx"
@@ -34,6 +36,16 @@ type payEnv struct {
 	gateway *fake.Provider
 	mail    *mail.Service
 	org     *org.Service
+	usage   *stubUsage
+}
+
+// stubUsage reports the usage a test sets, whatever the organization.
+type stubUsage struct {
+	byLimit map[string]entitlement.LimitUsage
+}
+
+func (u *stubUsage) Usage(context.Context, db.DBTX, uuid.UUID) (map[string]entitlement.LimitUsage, error) {
+	return u.byLimit, nil
 }
 
 var testSettings = billing.Settings{
@@ -50,10 +62,11 @@ func newPayEnv(t *testing.T) *payEnv {
 	renderer, err := mail.NewRenderer(emailtemplates.FS, mail.AppInfo{Name: "Saka"})
 	require.NoError(t, err)
 	mailer := mail.NewService(renderer, outbox.NewStore(e.db.Pool(), e.clock))
+	usage := &stubUsage{byLimit: map[string]entitlement.LimitUsage{}}
 	e.svc.EnablePayments(billing.PaymentDependencies{
-		Tx: e.db, Mail: mailer, Contacts: organizations, Providers: registry, Settings: testSettings, Log: logger.Nop(),
+		Tx: e.db, Mail: mailer, Contacts: organizations, Providers: registry, Usage: usage, Settings: testSettings, Log: logger.Nop(),
 	})
-	return &payEnv{env: e, gateway: gateway, mail: mailer, org: organizations}
+	return &payEnv{env: e, gateway: gateway, mail: mailer, org: organizations, usage: usage}
 }
 
 // newFreeOrg is an organization on the Free plan.
