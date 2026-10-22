@@ -40,6 +40,8 @@ var epoch = time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
 type stack struct {
 	t      *testing.T
 	router http.Handler
+	// engine is the same router, for tests that inspect the registered routes.
+	engine *gin.Engine
 	db     *db.DB // the API's own connection (restricted by row-level security)
 	// admin sees every tenant: tests arrange and assert through it.
 	admin *pgxpool.Pool
@@ -78,7 +80,7 @@ func newStack(t *testing.T, tweak ...func(*app.Options)) *stack {
 	router, err := app.NewRouter(cfg, logger.Nop(), clk, d, rdb, opts)
 	require.NoError(t, err)
 	users := user.NewService(clk, user.WithCache(rdb.Namespace("user"), cfg.Redis.UserCacheTTL.Std(), logger.Nop()))
-	return &stack{t: t, router: router, db: d, admin: dbtest.AdminPool(t, dsn), redis: rdb, clock: clk, users: users}
+	return &stack{t: t, router: router, engine: router, db: d, admin: dbtest.AdminPool(t, dsn), redis: rdb, clock: clk, users: users}
 }
 
 type response struct {

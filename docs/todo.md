@@ -133,7 +133,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Template `invitation`; guard `EMAIL_NOT_VERIFIED` untuk undang (0.3). Template dikerjakan lebih awal (mail menolak template yang belum ada saat enqueue); guard dipasang pada `POST /invitations` dan `.../resend`
 - [x] Hubungkan penolakan hapus akun owner ke modul org: implementasikan `auth.OrganizationGuard` (menolak bila owner org berisi anggota lain; hapus org yang hanya berisi dia + batalkan subscription) dan ganti `auth.NoOrganizations` di `internal/app` (0.3). Pembatalan subscription menyusul di Fase 6 (hook saat organisasi dihapus, baik lewat `DELETE /orgs/{orgId}` maupun hapus akun)
 - [ ] **Daftar akun sandbox Midtrans** (0.1) ⚠️ lakukan di fase ini, persetujuan bisa lama
-- [ ] Test: matriks izin lengkap, isolasi tenant A vs B, transfer atomik, siklus undangan (0.7)
+- [x] Test: matriks izin lengkap, isolasi tenant A vs B, transfer atomik, siklus undangan (0.7). Ditambah penjaga struktural: tes mengambil daftar rute `/orgs/{orgId}` dari router dan memastikan semuanya menjawab 404 untuk non-anggota, plus inventaris rute yang harus diperbarui bersama tes perannya
 
 **Selesai bila:** AC Multi-tenancy & Tim (§12) lulus; AC User hapus akun lulus.
 

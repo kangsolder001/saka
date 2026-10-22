@@ -653,7 +653,7 @@ Tujuan: satu `trace_id` bisa dipakai untuk menelusuri request HTTP sampai job ou
 ## 12. Kriteria Selesai (Acceptance Criteria)
 
 ### Auth
-- [ ] User bisa daftar, otomatis punya organisasi dan plan Free — *pendaftaran sudah teruji (`TestRegister_EndToEnd`); organisasi dan plan Free menunggu Fase 4–5*
+- [ ] User bisa daftar, otomatis punya organisasi dan plan Free — *pendaftaran dan organisasi owner sudah teruji (`TestRegister_EndToEnd`, `TestRegister_CreatesTheUsersOwnOrganizationAsOwner`); plan Free menunggu Fase 5*
 - [x] Verifikasi email, lupa password, dan reset password berjalan end-to-end — `TestVerifyEmail_EndToEnd`, `TestPasswordReset_EndToEnd` (`internal/app`)
 - [x] Refresh token dirotasi; pemakaian ulang token lama mencabut seluruh family — `TestRefresh_ReusingARotatedTokenKillsTheWholeSession` (`internal/app`), `TestRotate_*` (`internal/auth`)
 - [x] Rate limit login aktif — `TestLoginRateLimit_*` (`internal/app`)
@@ -662,13 +662,13 @@ Tujuan: satu `trace_id` bisa dipakai untuk menelusuri request HTTP sampai job ou
 ### User
 - [x] Ganti password mencabut sesi lain — `TestChangePassword_EndToEnd_KeepsThisSessionAndEndsTheOthers` (`internal/app`), `TestRevokeOtherSessions_*` (`internal/auth`)
 - [x] Ganti email butuh konfirmasi dari email baru — `TestChangeEmail_EndToEnd_NothingChangesUntilTheNewInboxConfirms` (`internal/app`)
-- [ ] Hapus akun ditolak jika masih owner organisasi dengan anggota lain — *jalur penolakan sudah teruji dengan guard suntikan (`TestDeleteAccount_RefusedByTheOrganizationModuleLeavesEverythingIntact`, `internal/app`); organisasi sungguhan menunggu Fase 4*
+- [x] Hapus akun ditolak jika masih owner organisasi dengan anggota lain — `TestDeleteAccount_RealOrganizations_*` (`internal/app`), `TestGuard_*` (`internal/org`)
 
 ### Multi-tenancy & Tim
-- [ ] User di organisasi A tidak bisa membaca atau mengubah data organisasi B (ada test-nya)
-- [ ] Undangan bisa dikirim, diterima, ditolak, dibatalkan, dan kedaluwarsa
-- [ ] Matriks izin §7.2 tercakup test
-- [ ] Transfer kepemilikan berjalan atomik
+- [x] User di organisasi A tidak bisa membaca atau mengubah data organisasi B (ada test-nya) — `TestTenantIsolation_*` (`internal/app`, seluruh rute `/orgs/{orgId}` diambil dari router), `TestRLS_*` (`internal/org`, tingkat database)
+- [x] Undangan bisa dikirim, diterima, ditolak, dibatalkan, dan kedaluwarsa — `TestInvite_*`, `TestAcceptInvitation_*`, `TestDeclineInvitation_*`, `TestRevokeInvitation_*`, `TestRegisterWithAnInvitedEmail_*` (`internal/app`)
+- [x] Matriks izin §7.2 tercakup test — `TestCan_MatchesThePermissionMatrixCellByCell` (`internal/org`) dan `TestChangeRole_*`, `TestRemoveMember_*`, `TestInvite_FollowsThePermissionMatrix`, `TestUpdateOrg_*`, `TestDeleteOrg_*` (`internal/app`)
+- [x] Transfer kepemilikan berjalan atomik — `TestTransferOwnership_IsAtomic`, `TestTransferOwnership_RacingTransfersCannotBothWin` (`internal/org`), `TestTransferOwnership_*` (`internal/app`)
 
 ### Billing
 - [ ] Checkout menghasilkan payment link yang valid di sandbox gateway
