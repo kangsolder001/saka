@@ -199,7 +199,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Uji beban ringan endpoint auth & webhook (0.3). `cmd/loadtest` (`make loadtest`), hasil dan batasannya di `docs/loadtest.md`: Argon2id mendominasi login/registrasi (~50 req/detik pada mesin dev 2 inti), webhook ~900 req/detik
 - [x] Putuskan provider email produksi (Resend/Brevo/SES) + implementasi `Mailer` + setup SPF/DKIM domain (0.5). **Resend direkomendasikan dan diimplementasikan** (`internal/mail/resend_mailer.go`, driver `resend`, diuji dengan `httptest`); panduan SPF/DKIM/DMARC di `docs/email.md`. *Menunggu pemilik repo:* konfirmasi provider, akun Resend, domain pengirim + record DNS, lalu satu email uji sungguhan (belum pernah memanggil API Resend)
 - [x] Dokumentasi: README (setup, `config.json`, jalankan API + worker), daftar endpoint/OpenAPI (0.6). `README.md` dan `docs/openapi.yaml` (OpenAPI 3.1, semua route); `TestOpenAPI_*` mencocokkan dokumen dengan router (method + path, dua arah), memeriksa `$ref`, kode error dan bahwa operasi bertanda bearer menjawab 401 tanpa token
-- [ ] Panduan "cara menambah modul domain baru" (tenant context + CheckLimit) (0.3)
+- [x] Panduan "cara menambah modul domain baru" (tenant context + CheckLimit) (0.3). `docs/panduan-modul-baru.md`, dibuktikan dengan modul contoh `projects` di `internal/app/example_module_integration_test.go` (isolasi, limit, balapan slot terakhir, role, fitur). Menambah `org.LockOrganization` (bentuk ekspor dari kunci yang dipakai `Invite`) supaya modul lain bisa menserialisasi pembuatan resource berlimit
 - [ ] Demo end-to-end skenario penuh (daftar → undang → upgrade → expired) (0.3)
 - [ ] Update spec ke v1.0 + catat backlog Tier 2 (0.2)
 

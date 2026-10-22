@@ -48,6 +48,16 @@ func (s *Service) reserveSeat(ctx context.Context, q db.DBTX, orgID uuid.UUID) e
 	return s.Limits.CheckLimit(ctx, q, orgID, MembersLimit, 1)
 }
 
+// LockOrganization is the exported form of lockOrganization for modules that
+// own a resource with a plan limit: call it first in the transaction that
+// checks the limit and creates the resource, so two requests racing for the
+// last slot take turns instead of both passing the check (the same way Invite
+// serializes seats). q must be the tenant-pinned transaction of the request;
+// the lock is released when it ends. A deleted or unknown organization is NOT_FOUND.
+func LockOrganization(ctx context.Context, q db.DBTX, orgID uuid.UUID) error {
+	return lockOrganization(ctx, q, orgID)
+}
+
 // lockOrganization serializes the seat-changing operations of one organization;
 // a deleted or unknown organization is NOT_FOUND.
 func lockOrganization(ctx context.Context, q db.DBTX, orgID uuid.UUID) error {
