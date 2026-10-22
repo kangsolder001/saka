@@ -1,0 +1,1396 @@
+openapi: 3.1.0
+info:
+  title: Saka API
+  version: 1.0.0
+  summary: Boilerplate SaaS multi-tenant (auth, user, organisasi, billing, feature gating).
+  description: |
+    Referensi API Tier 1. Sumber kebenaran perilaku ada di `docs/spec.md`; berkas ini ditulis tangan dan dijaga
+    oleh test (`TestOpenAPI_*` di `internal/app`): setiap route yang didaftarkan router harus ada di sini dengan
+    method yang sama, dan sebaliknya.
+
+    **Autentikasi.** `Authorization: Bearer <access_token>` (JWT 15 menit dari `POST /auth/login`). Refresh token
+    berupa cookie `refresh_token` (`HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth`) untuk klien web atau
+    ada di body untuk klien mobile (`token_delivery: body`). Role dan organisasi tidak ada di token: dicek ke
+    database tiap request.
+
+    **Organisasi.** Semua resource organisasi ada di `/orgs/{orgId}/...`. Bukan anggota, atau `orgId` yang
+    tidak dikenal/dihapus/bukan UUID, selalu `404` (keberadaan organisasi tidak bocor).
+
+    **Format error.** Semua error memakai `{"error": {"code", "message", "details"}}` (skema `Error`); kode dan
+    status HTTP-nya di skema `ErrorCode`. `message` boleh berbahasa Indonesia; `code` tetap Inggris dan stabil.
+
+    **Paginasi.** Daftar memakai cursor: `?limit=` (1-100, default 20) dan `?cursor=` (opaque, dari
+    `next_cursor` respons sebelumnya). Respons `{"items": [...], "next_cursor": "..."|null}`.
+
+    **Batas laju.** Beberapa endpoint dibatasi (spec §5.4); melebihi batas menjawab `429 RATE_LIMITED` dengan
+    header `Retry-After` (detik).
+
+    **Header respons.** Setiap respons membawa `X-Request-ID` dan `X-Trace-ID`; kirim `traceparent` (W3C)
+    untuk melanjutkan trace.
+
+    **Waktu dan uang.** Waktu RFC 3339 UTC. Uang berupa integer satuan terkecil (IDR: rupiah, tanpa desimal).
+servers:
+  - url: /api/v1
+tags:
+  - name: Auth
+  - name: Me
+  - name: Organizations
+  - name: Members
+  - name: Invitations
+  - name: Billing
+  - name: Webhooks
+  - name: Health
+security:
+  - bearerAuth: []
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      operationId: register
+      summary: Daftar user baru beserta organisasi pertamanya (plan Free)
+      description: |
+        Membuat user, organisasi, membership `owner`, subscription `free` dan job email verifikasi dalam satu
+        transaksi. Tidak mengembalikan token: lanjutkan ke `/auth/login`. Bila email punya undangan yang masih
+        berlaku, organisasi baru tidak dibuat dan keanggotaan diberikan saat email terverifikasi.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RegisterRequest' }
+      responses:
+        '201':
+          description: User dibuat.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: '#/components/schemas/AuthUser' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/verify-email:
+    post:
+      tags: [Auth]
+      operationId: verifyEmail
+      summary: Verifikasi email dengan token dari tautan
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TokenRequest' }
+      responses:
+        '200':
+          description: Email terverifikasi.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [email_verified]
+                properties:
+                  email_verified: { type: boolean, const: true }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Login, mendapat access token dan refresh token
+      description: |
+        Email tidak dikenal, password salah dan user dihapus/ditangguhkan memberi respons sama (`401`).
+        Dengan `token_delivery: cookie` (default) refresh token dikirim lewat cookie `refresh_token`; dengan
+        `body` ada di respons. Percobaan gagal dibatasi 5 per 15 menit per (email + IP).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/LoginRequest' }
+      responses:
+        '200':
+          description: Login berhasil.
+          headers:
+            Set-Cookie:
+              description: Cookie `refresh_token` (hanya bila `token_delivery` = `cookie`).
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshToken
+      summary: Tukar refresh token (rotasi)
+      description: |
+        Token dibaca dari cookie `refresh_token` atau dari body. Cara token datang menentukan cara token
+        baru dikembalikan. Memakai ulang token yang sudah dirotasi mencabut seluruh sesi (`401`).
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+      responses:
+        '200':
+          description: Token baru.
+          headers:
+            Set-Cookie:
+              description: Cookie `refresh_token` baru (bila token datang lewat cookie).
+              schema: { type: string }
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logout
+      summary: Akhiri sesi saat ini
+      responses:
+        '204': { description: Sesi dicabut dan cookie dihapus. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /auth/resend-verification:
+    post:
+      tags: [Auth]
+      operationId: resendVerification
+      summary: Kirim ulang email verifikasi
+      description: 3 per jam per user. Token verifikasi lama yang belum dipakai dibatalkan.
+      responses:
+        '200':
+          description: Email diantre.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: sent }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/forgot-password:
+    post:
+      tags: [Auth]
+      operationId: forgotPassword
+      summary: Minta email reset password
+      description: Selalu `200` dengan pesan yang sama, terdaftar atau tidak (mencegah user enumeration). 3 per jam per email.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              additionalProperties: false
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/reset-password:
+    post:
+      tags: [Auth]
+      operationId: resetPassword
+      summary: Atur password baru dengan token reset
+      description: Berhasil mencabut semua sesi user.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, password]
+              additionalProperties: false
+              properties:
+                token: { type: string, maxLength: 256 }
+                password: { type: string, minLength: 8, maxLength: 72 }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /me:
+    get:
+      tags: [Me]
+      operationId: getMe
+      summary: Profil dan daftar organisasi yang diikuti
+      responses:
+        '200':
+          description: Profil.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user, organizations]
+                properties:
+                  user: { $ref: '#/components/schemas/Profile' }
+                  organizations:
+                    type: array
+                    items: { $ref: '#/components/schemas/OrganizationRef' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    patch:
+      tags: [Me]
+      operationId: updateMe
+      summary: Ubah nama atau avatar
+      description: "Body tidak boleh kosong. `avatar_url: null` menghapus avatar. Upload file tidak ada di Tier 1."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                name: { type: string, minLength: 1, maxLength: 100 }
+                avatar_url: { type: [string, 'null'], format: uri, maxLength: 2048 }
+      responses:
+        '200':
+          description: Profil terbaru.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user]
+                properties:
+                  user: { $ref: '#/components/schemas/Profile' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    delete:
+      tags: [Me]
+      operationId: deleteMe
+      summary: Hapus akun (soft delete)
+      description: |
+        Butuh `current_password`. Ditolak `409` (`details.reason = owns_shared_organization`) bila user masih
+        owner organisasi yang punya anggota lain. Organisasi yang hanya berisi user ikut dihapus dan
+        subscription-nya dibatalkan. Email dianonimkan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PasswordConfirmation' }
+      responses:
+        '204': { description: Akun dihapus dan semua sesi dicabut. }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /me/password:
+    post:
+      tags: [Me]
+      operationId: changePassword
+      summary: Ganti password
+      description: Mencabut semua sesi lain kecuali sesi saat ini. Password lama yang salah `400` pada `current_password`; percobaan gagal 5 per 15 menit.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              additionalProperties: false
+              properties:
+                current_password: { type: string, maxLength: 1024 }
+                new_password: { type: string, minLength: 8, maxLength: 72 }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /me/email:
+    post:
+      tags: [Me]
+      operationId: requestEmailChange
+      summary: Minta ganti email (konfirmasi dikirim ke email baru)
+      description: Email akun tidak berubah sampai tautan di email baru dibuka. 3 per jam per user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_email, current_password]
+              additionalProperties: false
+              properties:
+                new_email: { type: string, format: email, maxLength: 254 }
+                current_password: { type: string, maxLength: 1024 }
+      responses:
+        '200': { $ref: '#/components/responses/Message' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /me/email/confirm:
+    post:
+      tags: [Me]
+      operationId: confirmEmailChange
+      summary: Konfirmasi email baru dengan token
+      description: "Tidak butuh login: tautan dibuka dari inbox baru, mungkin di perangkat lain."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TokenRequest' }
+      responses:
+        '200':
+          description: Email diganti dan terverifikasi.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [email, email_verified]
+                properties:
+                  email: { type: string, format: email }
+                  email_verified: { type: boolean }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /me/sessions:
+    get:
+      tags: [Me]
+      operationId: listSessions
+      summary: Daftar sesi aktif (maksimum 100)
+      responses:
+        '200':
+          description: Sesi, dari yang terakhir dipakai.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [sessions]
+                properties:
+                  sessions:
+                    type: array
+                    items: { $ref: '#/components/schemas/Session' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /me/sessions/{id}:
+    delete:
+      tags: [Me]
+      operationId: revokeSession
+      summary: Cabut satu sesi
+      description: ID yang bukan milik user, tidak ada, sudah berakhir atau bukan UUID semuanya `404`. Mencabut sesi saat ini berarti logout.
+      parameters:
+        - { $ref: '#/components/parameters/Id' }
+      responses:
+        '204': { description: Sesi dicabut. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /orgs:
+    get:
+      tags: [Organizations]
+      operationId: listOrganizations
+      summary: Organisasi milik user (berpaginasi)
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Satu halaman, dari keanggotaan tertua.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/MemberOrganization' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    post:
+      tags: [Organizations]
+      operationId: createOrganization
+      summary: Buat organisasi baru (pemanggil menjadi owner)
+      description: Mendapat subscription Free. 10 per jam per user.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              additionalProperties: false
+              properties:
+                name: { type: string, maxLength: 200 }
+                slug: { $ref: '#/components/schemas/Slug' }
+      responses:
+        '201':
+          description: Organisasi dibuat.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationEnvelope' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /orgs/{orgId}:
+    parameters:
+      - { $ref: '#/components/parameters/OrgId' }
+    get:
+      tags: [Organizations]
+      operationId: getOrganization
+      summary: Detail organisasi (semua anggota)
+      responses:
+        '200':
+          description: Organisasi beserta role pemanggil.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Organizations]
+      operationId: updateOrganization
+      summary: Ubah nama, slug atau logo (owner dan admin)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              minProperties: 1
+              properties:
+                name: { type: string, maxLength: 200 }
+                slug: { $ref: '#/components/schemas/Slug' }
+                logo_url: { type: [string, 'null'], format: uri, description: '`null` menghapus logo; hanya URL http(s) absolut.' }
+      responses:
+        '200':
+          description: Organisasi terbaru.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationEnvelope' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Organizations]
+      operationId: deleteOrganization
+      summary: Hapus organisasi (owner; soft delete)
+      description: Anggota langsung kehilangan akses, undangan terbuka dicabut, subscription dibatalkan dan invoice terbuka di-void dalam transaksi yang sama.
+      responses:
+        '204': { description: Organisasi dihapus. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /orgs/{orgId}/members:
+    parameters:
+      - { $ref: '#/components/parameters/OrgId' }
+    get:
+      tags: [Members]
+      operationId: listMembers
+      summary: Daftar anggota (berpaginasi, semua anggota)
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Satu halaman anggota, owner paling awal.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Member' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /orgs/{orgId}/members/{userId}:
+    parameters:
+      - { $ref: '#/components/parameters/OrgId' }
+      - { $ref: '#/components/parameters/UserId' }
+    patch:
+      tags: [Members]
+      operationId: changeMemberRole
+      summary: Ubah role anggota (matriks izin spec §7.2)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              additionalProperties: false
+              properties:
+                role: { type: string, enum: [admin, member], description: '`owner` ditolak `400`; kepemilikan pindah lewat transfer-ownership.' }
+      responses:
+        '200':
+          description: Anggota terbaru.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [member]
+                properties:
+                  member: { $ref: '#/components/schemas/Member' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Members]
+      operationId: removeMember
+      summary: Keluarkan anggota
+      responses:
+        '204': { description: Anggota dikeluarkan. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /orgs/{orgId}/leave:
+    parameters:
+      - { $ref: '#/components/parameters/OrgId' }
+    post:
+      tags: [Members]
+      operationId: leaveOrganization
+      summary: Keluar dari organisasi
+      description: Owner `403` (`details.reason = owner_must_transfer_ownership`).
+      responses:
+        '204': { description: Pemanggil tidak lagi anggota. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /orgs/{orgId}/transfer-ownership:
+    parameters:
+      - { $ref: '#/components/parameters/OrgId' }
+    post:
+      tags: [Members]
+      operationId: transferOwnership
+      summary: Pindahkan kepemilikan (owner; atomik, butuh password)
+      description: Target jadi `owner`, owner lama jadi `admin`. Target diri sendiri `400`; bukan anggota `404`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [user_id, current_password]
+              additionalProperties: false
+              properties:
+                user_id: { type: string, format: uuid }
+                current_password: { type: string, maxLength: 1024 }
+      responses:
+        '204': { description: Kepemilikan pindah. }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /orgs/{orgId}/invitations:
+    parameters:
+      - { $ref: '#/components/parameters/OrgId' }
+    get:
+      tags: [Invitations]
+      operationId: listInvitations
+      summary: Undangan aktif (owner dan admin; berpaginasi)
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Undangan yang terbuka dan belum kedaluwarsa.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Invitation' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      tags: [Invitations]
+      operationId: createInvitation
+      summary: Undang via email (owner dan admin; pengundang harus terverifikasi)
+      description: |
+        Mengundang email yang sudah punya undangan terbuka memperbarui undangan itu (`200`; token baru, 7 hari).
+        Dihitung terhadap limit `members` (anggota + undangan aktif): melebihi limit `402 PLAN_LIMIT_REACHED`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, role]
+              additionalProperties: false
+              properties:
+                email: { type: string, format: email, maxLength: 254 }
+                role: { type: string, enum: [admin, member] }
+      responses:
+        '200':
+          description: Undangan terbuka diperbarui.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitationEnvelope' }
+        '201':
+          description: Undangan baru.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitationEnvelope' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '402': { $ref: '#/components/responses/PlanLimitReached' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /orgs/{orgId}/invitations/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/OrgId' }
+      - { $ref: '#/components/parameters/Id' }
+    delete:
+      tags: [Invitations]
+      operationId: revokeInvitation
+      summary: Batalkan undangan
+      responses:
+        '204': { description: Tautan undangan mati. }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /orgs/{orgId}/invitations/{id}/resend:
+    parameters:
+      - { $ref: '#/components/parameters/OrgId' }
+      - { $ref: '#/components/parameters/Id' }
+    post:
+      tags: [Invitations]
+      operationId: resendInvitation
+      summary: Kirim ulang undangan (token dan masa berlaku baru)
+      description: Mengirim ulang undangan yang kedaluwarsa mengambil kursi lagi (limit `members`).
+      responses:
+        '200':
+          description: Undangan diperbarui.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InvitationEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '402': { $ref: '#/components/responses/PlanLimitReached' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /invitations/{token}:
+    get:
+      tags: [Invitations]
+      operationId: getInvitation
+      summary: Info undangan lewat token tautan (publik)
+      description: |
+        Tautan yang tidak lagi berlaku `404` dengan `details.reason` (`expired`, `revoked`, `accepted`,
+        `declined`, `organization_deleted`); token tidak dikenal `404` tanpa alasan.
+      security: []
+      parameters:
+        - { $ref: '#/components/parameters/InvitationToken' }
+      responses:
+        '200':
+          description: Isi undangan.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invitation]
+                properties:
+                  invitation: { $ref: '#/components/schemas/InvitationInfo' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /invitations/{token}/accept:
+    post:
+      tags: [Invitations]
+      operationId: acceptInvitation
+      summary: Terima undangan (login dan email terverifikasi; email harus sama dengan undangan)
+      description: Email berbeda `403` (`details.reason = invitation_email_mismatch`) dan undangan tidak terpakai.
+      parameters:
+        - { $ref: '#/components/parameters/InvitationToken' }
+      responses:
+        '200':
+          description: Pemanggil kini anggota.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/OrganizationEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /invitations/{token}/decline:
+    post:
+      tags: [Invitations]
+      operationId: declineInvitation
+      summary: Tolak undangan (publik)
+      security: []
+      parameters:
+        - { $ref: '#/components/parameters/InvitationToken' }
+      responses:
+        '204': { description: Undangan ditolak. }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /plans:
+    get:
+      tags: [Billing]
+      operationId: listPlans
+      summary: Katalog plan aktif (publik)
+      security: []
+      responses:
+        '200':
+          description: Plan berurutan `sort_order`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Plan' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /orgs/{orgId}/subscription:
+    parameters:
+      - { $ref: '#/components/parameters/OrgId' }
+    get:
+      tags: [Billing]
+      operationId: getSubscription
+      summary: Status langganan dan pemakaian vs limit (semua anggota)
+      responses:
+        '200':
+          description: Langganan.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubscriptionEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /orgs/{orgId}/subscription/checkout:
+    parameters:
+      - { $ref: '#/components/parameters/OrgId' }
+    post:
+      tags: [Billing]
+      operationId: checkout
+      summary: Buat invoice dan payment link untuk sebuah plan (owner, email terverifikasi)
+      description: |
+        Nominal dan periode selalu dari tabel `plans`. Organisasi Free yang belum pernah trial mendapat trial
+        plan yang punya `trial_days` (`trial_started: true`) tanpa pembayaran. Idempoten: memanggil lagi untuk
+        plan yang sama mengembalikan invoice yang masih bisa dibayar (`200`). Gateway gagal `502`, tidak ada
+        yang tersimpan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlanRequest' }
+      responses:
+        '200':
+          description: Invoice yang masih bisa dibayar untuk plan yang sama.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CheckoutResponse' }
+        '201':
+          description: Invoice baru.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CheckoutResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '502': { $ref: '#/components/responses/PaymentProviderError' }
+  /orgs/{orgId}/subscription/change-plan:
+    parameters:
+      - { $ref: '#/components/parameters/OrgId' }
+    post:
+      tags: [Billing]
+      operationId: changePlan
+      summary: Upgrade lewat invoice, downgrade dijadwalkan di akhir periode (owner)
+      description: |
+        Upgrade: seperti checkout (invoice, plan berganti setelah dibayar). Downgrade: dicatat di
+        `pending_plan` (`scheduled: true`) dengan `warnings` untuk limit yang akan terlampaui. Meminta plan
+        yang sedang dipakai membatalkan downgrade terjadwal (`cleared: true`). `expired`/`canceled`: `409`
+        (`details.reason = use_checkout`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PlanRequest' }
+      responses:
+        '200':
+          description: Perubahan dijadwalkan, dibatalkan, atau invoice yang ada dikembalikan.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangePlanResponse' }
+        '201':
+          description: Invoice baru untuk upgrade.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChangePlanResponse' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '502': { $ref: '#/components/responses/PaymentProviderError' }
+  /orgs/{orgId}/subscription/cancel:
+    parameters:
+      - { $ref: '#/components/parameters/OrgId' }
+    post:
+      tags: [Billing]
+      operationId: cancelSubscription
+      summary: Berhenti di akhir periode (owner; idempoten)
+      description: Akses berlanjut sampai periode habis, tanpa refund.
+      responses:
+        '200':
+          description: Langganan dengan `cancel_at_period_end = true`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubscriptionEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /orgs/{orgId}/subscription/resume:
+    parameters:
+      - { $ref: '#/components/parameters/OrgId' }
+    post:
+      tags: [Billing]
+      operationId: resumeSubscription
+      summary: Batalkan pembatalan (owner; idempoten)
+      responses:
+        '200':
+          description: Langganan dengan `cancel_at_period_end = false`.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SubscriptionEnvelope' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /orgs/{orgId}/invoices:
+    parameters:
+      - { $ref: '#/components/parameters/OrgId' }
+    get:
+      tags: [Billing]
+      operationId: listInvoices
+      summary: Riwayat invoice (owner; berpaginasi, terbaru dulu)
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+      responses:
+        '200':
+          description: Satu halaman invoice.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Page'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: { $ref: '#/components/schemas/Invoice' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /orgs/{orgId}/invoices/{id}:
+    parameters:
+      - { $ref: '#/components/parameters/OrgId' }
+      - { $ref: '#/components/parameters/Id' }
+    get:
+      tags: [Billing]
+      operationId: getInvoice
+      summary: Detail invoice (owner)
+      description: Invoice organisasi lain `404`. `payment_url` hanya berisi tautan selama invoice `open`.
+      responses:
+        '200':
+          description: Invoice.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [invoice]
+                properties:
+                  invoice: { $ref: '#/components/schemas/Invoice' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /webhooks/{provider}:
+    post:
+      tags: [Webhooks]
+      operationId: paymentWebhook
+      summary: Notifikasi pembayaran dari gateway (publik; signature adalah kredensialnya)
+      description: |
+        Signature diperiksa kode gateway sebelum apa pun (`401` bila salah, tidak ada yang disimpan). Body
+        maksimum 1 MiB, provider tidak terdaftar `404`. Event diproses idempoten (`UNIQUE(provider, event_id)`);
+        pengiriman ulang dijawab `200`. Gagal diproses `500` supaya gateway mengirim ulang. 600 per menit per IP.
+        Format body dan header signature ditentukan gateway (Midtrans: JSON dengan `signature_key`).
+      security: []
+      parameters:
+        - name: provider
+          in: path
+          required: true
+          schema: { type: string, examples: [midtrans, fake] }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, additionalProperties: true }
+      responses:
+        '200':
+          description: Diterima (juga untuk pengiriman ulang).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: ok }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '500': { $ref: '#/components/responses/InternalError' }
+  /healthz:
+    get:
+      tags: [Health]
+      operationId: healthz
+      summary: Liveness (di luar /api/v1)
+      security: []
+      servers:
+        - url: /
+      responses:
+        '200':
+          description: Proses hidup.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, const: ok }
+  /readyz:
+    get:
+      tags: [Health]
+      operationId: readyz
+      summary: "Readiness: memeriksa PostgreSQL dan Redis (di luar /api/v1)"
+      security: []
+      servers:
+        - url: /
+      responses:
+        '200':
+          description: Semua dependensi sehat.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Readiness' }
+        '503':
+          description: Ada dependensi yang mati (penyebab hanya di log).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Readiness' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Access token dari `POST /auth/login` atau `/auth/refresh`. Kedaluwarsa menjawab `401 TOKEN_EXPIRED`.
+  parameters:
+    OrgId:
+      name: orgId
+      in: path
+      required: true
+      description: ID organisasi (UUID). Bukan anggota atau tidak dikenal `404`.
+      schema: { type: string, format: uuid }
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    Id:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    InvitationToken:
+      name: token
+      in: path
+      required: true
+      description: Token mentah dari tautan email undangan.
+      schema: { type: string }
+    Limit:
+      name: limit
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Cursor:
+      name: cursor
+      in: query
+      description: Nilai `next_cursor` dari halaman sebelumnya (opaque).
+      schema: { type: string }
+  responses:
+    Message:
+      description: Pesan konfirmasi.
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [message]
+            properties:
+              message: { type: string }
+    ValidationError:
+      description: "`400 VALIDATION_ERROR`; `details` memetakan field ke pesan."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthenticated:
+      description: "`401 UNAUTHENTICATED` atau `TOKEN_EXPIRED`."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    PlanLimitReached:
+      description: "`402 PLAN_LIMIT_REACHED`; `details`: `limit`, `max`, `used`, `plan`, `upgrade_to`."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: "`403 FORBIDDEN`, `EMAIL_NOT_VERIFIED` atau `PLAN_FEATURE_UNAVAILABLE`."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: "`404 NOT_FOUND` (juga untuk bukan anggota organisasi)."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: "`409 CONFLICT`; `details.reason` menyebut sebabnya bila ada."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: "`429 RATE_LIMITED`."
+      headers:
+        Retry-After:
+          description: Detik sampai boleh mencoba lagi.
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    PaymentProviderError:
+      description: "`502 PAYMENT_PROVIDER_ERROR`: gateway tidak terjangkau atau menolak; tidak ada yang tersimpan, boleh dicoba lagi."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    InternalError:
+      description: "`500 INTERNAL_ERROR`: pesan generik, penyebab hanya di log."
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { $ref: '#/components/schemas/ErrorCode' }
+            message: { type: string }
+            details:
+              type: object
+              additionalProperties: true
+              description: Bergantung kode; mis. peta field ke pesan untuk `VALIDATION_ERROR`, `retry_after_seconds` untuk `RATE_LIMITED`.
+    ErrorCode:
+      type: string
+      description: |
+        Kode stabil dan status HTTP-nya: `VALIDATION_ERROR` 400; `UNAUTHENTICATED` 401; `TOKEN_EXPIRED` 401;
+        `FORBIDDEN` 403; `EMAIL_NOT_VERIFIED` 403; `PLAN_FEATURE_UNAVAILABLE` 403; `PLAN_LIMIT_REACHED` 402;
+        `SUBSCRIPTION_INACTIVE` 402; `NOT_FOUND` 404; `CONFLICT` 409; `RATE_LIMITED` 429;
+        `PAYMENT_PROVIDER_ERROR` 502; `INTERNAL_ERROR` 500.
+      enum:
+        - VALIDATION_ERROR
+        - UNAUTHENTICATED
+        - TOKEN_EXPIRED
+        - FORBIDDEN
+        - EMAIL_NOT_VERIFIED
+        - PLAN_FEATURE_UNAVAILABLE
+        - PLAN_LIMIT_REACHED
+        - SUBSCRIPTION_INACTIVE
+        - NOT_FOUND
+        - CONFLICT
+        - RATE_LIMITED
+        - PAYMENT_PROVIDER_ERROR
+        - INTERNAL_ERROR
+    Page:
+      type: object
+      required: [items, next_cursor]
+      properties:
+        items: { type: array, items: {} }
+        next_cursor: { type: [string, 'null'], description: '`null` pada halaman terakhir.' }
+    Slug:
+      type: string
+      minLength: 3
+      maxLength: 48
+      description: Huruf kecil, angka dan tanda hubung tunggal; unik tanpa peka huruf besar-kecil. Kosong pada pembuatan berarti diturunkan dari nama.
+    RegisterRequest:
+      type: object
+      required: [email, password, name, organization_name]
+      additionalProperties: false
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 8, maxLength: 72, description: Tidak boleh sama dengan email. }
+        name: { type: string, maxLength: 100 }
+        organization_name: { type: string, maxLength: 100 }
+    TokenRequest:
+      type: object
+      required: [token]
+      additionalProperties: false
+      properties:
+        token: { type: string, maxLength: 256 }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      additionalProperties: false
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, maxLength: 1024 }
+        token_delivery: { type: string, enum: [cookie, body], default: cookie }
+    RefreshRequest:
+      type: object
+      required: [refresh_token]
+      additionalProperties: false
+      properties:
+        refresh_token: { type: string, maxLength: 256 }
+    PasswordConfirmation:
+      type: object
+      required: [current_password]
+      additionalProperties: false
+      properties:
+        current_password: { type: string, maxLength: 1024 }
+    AuthUser:
+      type: object
+      required: [id, email, name, email_verified]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        email_verified: { type: boolean }
+    TokenResponse:
+      type: object
+      required: [access_token, token_type, expires_in]
+      properties:
+        access_token: { type: string }
+        token_type: { type: string, const: Bearer }
+        expires_in: { type: integer, description: Detik. }
+        refresh_token: { type: string, description: Hanya bila token dikirim lewat body. }
+        user: { $ref: '#/components/schemas/AuthUser' }
+    Profile:
+      type: object
+      required: [id, email, name, avatar_url, email_verified]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        avatar_url: { type: [string, 'null'] }
+        email_verified: { type: boolean }
+    OrganizationRef:
+      type: object
+      required: [id, name, slug, role]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        role: { $ref: '#/components/schemas/Role' }
+    Role:
+      type: string
+      enum: [owner, admin, member]
+    Session:
+      type: object
+      required: [id, user_agent, ip, created_at, last_used_at, expires_at, current]
+      properties:
+        id: { type: string, format: uuid }
+        user_agent: { type: string }
+        ip: { type: string }
+        created_at: { type: string, format: date-time }
+        last_used_at: { type: string, format: date-time }
+        expires_at: { type: string, format: date-time }
+        current: { type: boolean, description: Sesi yang membuat request ini. }
+    Organization:
+      type: object
+      required: [id, name, slug, logo_url, owner_id, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        logo_url: { type: [string, 'null'] }
+        owner_id: { type: string, format: uuid }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    MemberOrganization:
+      allOf:
+        - $ref: '#/components/schemas/Organization'
+        - type: object
+          required: [role]
+          properties:
+            role: { $ref: '#/components/schemas/Role' }
+    OrganizationEnvelope:
+      type: object
+      required: [organization]
+      properties:
+        organization: { $ref: '#/components/schemas/MemberOrganization' }
+    Member:
+      type: object
+      required: [user_id, email, name, avatar_url, role, joined_at]
+      properties:
+        user_id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        name: { type: string }
+        avatar_url: { type: [string, 'null'] }
+        role: { $ref: '#/components/schemas/Role' }
+        joined_at: { type: string, format: date-time }
+    Invitation:
+      type: object
+      required: [id, email, role, invited_by, expires_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        email: { type: string, format: email }
+        role: { type: string, enum: [admin, member] }
+        invited_by: { type: string, format: uuid }
+        expires_at: { type: string, format: date-time }
+        created_at: { type: string, format: date-time }
+    InvitationEnvelope:
+      type: object
+      required: [invitation]
+      properties:
+        invitation: { $ref: '#/components/schemas/Invitation' }
+    InvitationInfo:
+      type: object
+      required: [email, role, organization, inviter_name, expires_at, account_exists]
+      properties:
+        email: { type: string, format: email }
+        role: { type: string, enum: [admin, member] }
+        organization:
+          type: object
+          required: [name, logo_url]
+          properties:
+            name: { type: string }
+            logo_url: { type: [string, 'null'] }
+        inviter_name: { type: string }
+        expires_at: { type: string, format: date-time }
+        account_exists: { type: boolean, description: Frontend memilih login atau registrasi. }
+    Plan:
+      type: object
+      required: [code, name, price_amount, currency, interval, trial_days, features, limits]
+      properties:
+        code: { type: string, examples: [free, pro, business] }
+        name: { type: string }
+        price_amount: { type: integer, format: int64, description: Satuan terkecil (rupiah). }
+        currency: { type: string, examples: [IDR] }
+        interval: { type: string, enum: [month, year] }
+        trial_days: { type: integer }
+        features: { type: array, items: { type: string } }
+        limits:
+          type: object
+          additionalProperties: { type: integer }
+          description: '`-1` = tak terbatas.'
+    LimitUsage:
+      type: object
+      required: [used, max]
+      properties:
+        used: { type: integer }
+        max: { type: integer, description: '`-1` = tak terbatas.' }
+    SubscriptionStatus:
+      type: string
+      enum: [trialing, active, past_due, expired, canceled]
+    Subscription:
+      type: object
+      required: [plan, status, trial_ends_at, current_period_start, current_period_end, cancel_at_period_end, pending_plan, grace_until, effective_plan, usage]
+      properties:
+        plan: { type: string, description: Kode plan subscription itu sendiri. }
+        status: { $ref: '#/components/schemas/SubscriptionStatus' }
+        trial_ends_at: { type: [string, 'null'], format: date-time }
+        current_period_start: { type: string, format: date-time }
+        current_period_end: { type: [string, 'null'], format: date-time, description: '`null` untuk Free.' }
+        cancel_at_period_end: { type: boolean }
+        pending_plan: { type: [string, 'null'], description: Downgrade terjadwal. }
+        grace_until: { type: [string, 'null'], format: date-time }
+        effective_plan: { type: string, description: Plan yang sedang boleh dipakai; `free` bila akses sudah berakhir. }
+        usage:
+          type: object
+          additionalProperties: { $ref: '#/components/schemas/LimitUsage' }
+    SubscriptionEnvelope:
+      type: object
+      required: [subscription]
+      properties:
+        subscription: { $ref: '#/components/schemas/Subscription' }
+    PlanRequest:
+      type: object
+      required: [plan]
+      additionalProperties: false
+      properties:
+        plan: { type: string, maxLength: 64, description: Kode plan. Nominal tidak pernah dari klien. }
+    Invoice:
+      type: object
+      required: [id, number, kind, plan, plan_name, amount, currency, status, period_start, period_end, due_at, paid_at, payment_url, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string, examples: [INV-2026-000123], description: Nomor global. }
+        kind: { type: string, enum: [checkout, renewal] }
+        plan: { type: string }
+        plan_name: { type: string }
+        amount: { type: integer, format: int64 }
+        currency: { type: string }
+        status: { type: string, enum: [draft, open, paid, expired, void] }
+        period_start: { type: string, format: date-time }
+        period_end: { type: string, format: date-time }
+        due_at: { type: string, format: date-time }
+        paid_at: { type: [string, 'null'], format: date-time }
+        payment_url: { type: [string, 'null'], description: Tautan bayar; `null` bila tidak bisa dibayar lagi. }
+        created_at: { type: string, format: date-time }
+    CheckoutResponse:
+      type: object
+      required: [invoice, subscription, trial_started]
+      properties:
+        invoice: { $ref: '#/components/schemas/Invoice' }
+        subscription: { $ref: '#/components/schemas/Subscription' }
+        trial_started: { type: boolean }
+    ChangePlanResponse:
+      type: object
+      required: [subscription, invoice, scheduled, cleared, trial_started, warnings]
+      properties:
+        subscription: { $ref: '#/components/schemas/Subscription' }
+        invoice:
+          oneOf:
+            - $ref: '#/components/schemas/Invoice'
+            - type: 'null'
+        scheduled: { type: boolean, description: Downgrade dijadwalkan di akhir periode. }
+        cleared: { type: boolean, description: Downgrade terjadwal dibatalkan. }
+        trial_started: { type: boolean }
+        warnings:
+          type: array
+          items:
+            type: object
+            required: [limit, used, max]
+            properties:
+              limit: { type: string }
+              used: { type: integer }
+              max: { type: integer }
+    Readiness:
+      type: object
+      required: [status, checks]
+      properties:
+        status: { type: string, enum: [ok, unavailable] }
+        checks:
+          type: object
+          additionalProperties: { type: string, enum: [ok, down] }
