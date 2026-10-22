@@ -185,8 +185,8 @@ const maxWebhookBytes = 1 << 20
 // webhook receives a notification from a payment gateway. It is public: the
 // signature, checked by the gateway's own code, is the credential. A gateway
 // treats any 2xx as "received" and retries everything else, so the status code
-// is the protocol: 200 when the event is stored (and, from the next step on,
-// processed), 401 for a bad signature, 500 when processing failed and should
+// is the protocol: 200 when the event is stored and processed (or was already),
+// 401 for a bad signature, 500 when processing failed and should
 // be retried.
 func (h *Handler) webhook(c *gin.Context) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxWebhookBytes)

@@ -107,7 +107,7 @@ func TestPostgresLocker_LeavesNoConnectionBehind(t *testing.T) {
 
 	assert.Zero(t, pool.Stat().AcquiredConns(), "every lock transaction was ended, even after a panic")
 	var held int
-	require.NoError(t, pool.QueryRow(context.Background(), "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory'").Scan(&held))
+	require.NoError(t, pool.QueryRow(context.Background(), "SELECT count(*) FROM pg_locks WHERE locktype = 'advisory' AND database = (SELECT oid FROM pg_database WHERE datname = current_database())").Scan(&held))
 	assert.Zero(t, held)
 }
 
@@ -118,9 +118,10 @@ func TestPostgresLocker_ALockIsFreedWhenTheHoldingConnectionDies(t *testing.T) {
 	t.Cleanup(holder.Close)
 	locker := scheduler.NewPostgresLocker(holder)
 	key := scheduler.LockKey("billing.expire")
-	_, ok, err := locker.TryLock(context.Background(), key)
+	release, ok, err := locker.TryLock(context.Background(), key)
 	require.NoError(t, err)
 	require.True(t, ok)
+	t.Cleanup(release) // runs before holder.Close, which would wait for the held connection
 
 	// A second connection pool is another process: it cannot take the lock...
 	other, err := pgxpool.New(context.Background(), dsn)
@@ -133,7 +134,8 @@ func TestPostgresLocker_ALockIsFreedWhenTheHoldingConnectionDies(t *testing.T) {
 	// ...until the holder's backend is terminated, as when a worker crashes.
 	admin := dbtest.AdminPool(t, dsn)
 	_, err = admin.Exec(context.Background(), `
-		SELECT pg_terminate_backend(l.pid) FROM pg_locks l WHERE l.locktype = 'advisory' AND l.granted`)
+		SELECT pg_terminate_backend(l.pid) FROM pg_locks l
+		WHERE l.locktype = 'advisory' AND l.granted AND l.database = (SELECT oid FROM pg_database WHERE datname = current_database())`)
 	require.NoError(t, err)
 	require.Eventually(t, func() bool {
 		release, ok, err := scheduler.NewPostgresLocker(other).TryLock(context.Background(), key)

@@ -159,7 +159,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 ## Fase 6 — Billing (10 hari)
 
 **Bagian A: pondasi & checkout**
-- [ ] Spike Midtrans sandbox: buat payment, terima webhook, cek signature (0.5)
+- [ ] Spike Midtrans sandbox: buat payment, terima webhook, cek signature (0.5). *Belum bisa dikerjakan: butuh akun sandbox (tindakan manual di Fase 4). Digantikan sementara oleh implementasi terhadap dokumentasi + server palsu; daftar asumsi yang harus diverifikasi saat akun ada ada di spec §8.7*
 - [x] Migrasi `invoices`, `payment_events` (§4.9, §4.10) (0.3). `migrations/00010`: `invoices` ber-RLS (policy + index berawalan `organization_id`), kolom tambahan `kind` (`checkout`/`renewal`) dan penanda pengingat; indeks unik parsial mencegah dua checkout hidup atau dua invoice untuk periode renewal yang sama; `payment_events` global tanpa RLS; sequence `invoice_number_seq`
 - [x] Interface `PaymentProvider` + implementasi Midtrans + fake provider untuk test (§8.1) (1). `internal/billing/payment` (+ `midtrans`, `fake`), config `billing`; Midtrans ditulis terhadap dokumentasi dan diuji dengan server palsu + vektor signature, **belum ke sandbox sungguhan** (asumsi yang perlu diverifikasi ada di spec §8.7)
 - [x] Generator nomor invoice global `INV-YYYY-NNNNNN` (sequence) (0.15). `billing.NextInvoiceNumber`; sequence global yang tidak mulai ulang tiap tahun dan tidak ikut di-rollback (celah boleh, nomor ganda tidak)
@@ -174,7 +174,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Proses webhook transaksional: invoice → subscription → job email; `processed_at`/`error`, 500 jika gagal (0.8). Kunci event → subscription → invoice; nominal/mata uang dicek terhadap invoice; hasil yang perlu ditinjau manusia diproses `200` dengan catatan di `error` (spec §8.7)
 - [x] State machine subscription (`trialing/active/past_due/expired/canceled`) sebagai fungsi murni + tabel transisi (§8.2) (0.6). `billing.Next`/`DueEvent`/`AddInterval`; tes menelusuri setiap pasangan status×event (13 transisi sah, sisanya `ErrIllegalTransition`) dengan `now` yang dipilih sendiri; aturan rinci di spec §8.7
 - [x] `change-plan` (upgrade via invoice; downgrade via `pending_plan_id`), `cancel`, `resume` (§8.4) (0.7). Downgrade menjadwalkan + peringatan limit; cancel/resume idempoten; keputusan di spec §8.7
-- [ ] Test: webhook ganda diproses sekali, signature salah ditolak, semua transisi dengan fake clock (0.7)
+- [x] Test: webhook ganda diproses sekali, signature salah ditolak, semua transisi dengan fake clock (0.7). `webhook_*_test.go`, `statemachine_test.go` (tabel eksaustif), `lifecycle_integration_test.go` (setiap transisi §8.2 dengan fake clock lewat webhook + job)
 
 **Bagian C: cron & notifikasi**
 - [x] Scheduler di worker + advisory lock (0.3). `internal/platform/scheduler`: satu loop di `cmd/worker` lewat `safego`, `pg_try_advisory_xact_lock` per nama job, interval dari config `billing.*_jobs_interval`; diuji dengan lock Postgres sungguhan (dua worker, panic, koneksi mati)
@@ -183,10 +183,10 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] `billing.apply_scheduled` (pending plan & cancel_at_period_end) (0.3). `Service.ApplyScheduled`: pembatalan dan guliran ke periode renewal yang sudah dibayar (downgrade berlaku lewat renewal-nya)
 - [x] `billing.reminders` (H-3, H-1) + `billing.reconcile` (cek status `open` ke gateway) (0.8). `Service.SendReminders` dan `Service.Reconcile`; reconcile memakai jalur webhook yang sama; semua job terdaftar lewat `Service.RegisterJobs`
 - [x] Template: `payment_reminder`, `subscription_past_due`, `subscription_expired`, `trial_ending` (0.4). `subscription_past_due` boleh tanpa tautan bayar (renewal belum terbit): ia mengarahkan ke pengaturan langganan
-- [ ] Test cron idempoten & aman bersamaan (jalan 2×, 2 worker) (0.5)
-- [ ] Test reconcile memperbaiki invoice dengan webhook hilang (0.2)
+- [x] Test cron idempoten & aman bersamaan (jalan 2×, 2 worker) (0.5). Tiap job punya tes jalan ulang dan 5 goroutine bersamaan tanpa lock scheduler, ditambah `TestWorkers_*` (dua scheduler dengan advisory lock Postgres sungguhan) dan `TestPostgresLocker_*`
+- [x] Test reconcile memperbaiki invoice dengan webhook hilang (0.2). `TestReconcile_RepairsAnInvoiceWhoseWebhookWasLost`
 
-**Selesai bila:** AC Billing (§12) lulus di sandbox Midtrans.
+**Selesai bila:** AC Billing (§12) lulus di sandbox Midtrans. ✅ dengan fake provider dan server Midtrans palsu; **verifikasi di sandbox sungguhan menunggu akun** (spike di atas dan kriteria pertama §12 Billing tetap terbuka).
 *Jika terasa terlalu besar: geser `reminders` dan `trial_ending` ke Fase 7.*
 
 ---
