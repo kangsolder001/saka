@@ -63,6 +63,10 @@ migrate-new: ## Create a migration: make migrate-new name=create_orgs
 seed: ## Check the default plans and create the demo account (dev only, idempotent)
 	go run ./cmd/seed
 
+.PHONY: loadtest
+loadtest: ## Light load test of a running dev API: make loadtest ARGS="-scenario login -c 8 -n 400" (see docs/loadtest.md)
+	go run ./cmd/loadtest $(ARGS)
+
 ##@ Code generation
 
 .PHONY: sqlc
