@@ -234,7 +234,11 @@ Catatan implementasi (Fase 5): `current_period_end` boleh `NULL` supaya subscrip
 | provider | text | `midtrans` / `xendit` |
 | provider_ref | text NULL | ID transaksi di gateway |
 | payment_url | text NULL | |
+| kind | text | `checkout` (pembelian atas permintaan organisasi; periode berbayar mulai saat dibayar) atau `renewal` (periode berikutnya, dibuat job); tambahan Fase 6, lihat §8.7 |
+| reminder_3d_sent_at, reminder_1d_sent_at | timestamptz NULL | penanda pengingat yang sudah terkirim (§8.7) |
 | created_at, updated_at | timestamptz | |
+
+Catatan implementasi (Fase 6): tabel ini ber-RLS (`tenant_isolation`) seperti tabel org-scoped lain. Dua indeks unik parsial menjaga idempotensi: satu checkout hidup (`draft`/`open`) per subscription, dan satu invoice `renewal` bukan-`void` per `(subscription_id, period_start)`. Nomor diambil dari sequence PostgreSQL global `invoice_number_seq`; sequence tidak ikut di-rollback, jadi transaksi yang gagal bisa meninggalkan celah dalam penomoran (tidak apa-apa; yang tidak boleh adalah nomor yang dipakai dua kali).
 
 ### 4.10 `payment_events`
 
@@ -251,6 +255,8 @@ Untuk idempotensi webhook.
 | error | text NULL | |
 
 Constraint: `UNIQUE (provider, event_id)`.
+
+`processed_at` kosong berarti belum diproses atau gagal (`error` berisi sebabnya; kiriman ulang gateway memprosesnya lagi). `processed_at` terisi dengan `error` terisi berarti selesai diproses tetapi perlu dilihat manusia (mis. pembayaran untuk invoice yang sudah `void`). Tabel ini global (tanpa `organization_id`, tanpa RLS): webhook belum punya tenant sebelum dicocokkan dengan invoice.
 
 ### 4.11 `outbox_jobs`
 

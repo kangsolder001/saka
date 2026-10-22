@@ -5,6 +5,7 @@ package migrations_test
 import (
 	"context"
 	"database/sql"
+	"strconv"
 	"testing"
 	"time"
 
@@ -479,7 +480,7 @@ func TestTenantTables_AllHaveRowLevelSecurityAndAPolicy(t *testing.T) {
 		assert.True(t, hasPolicy, "%s: no policy defined", name)
 	}
 	require.NoError(t, rows.Err())
-	assert.Subset(t, seen, []string{"organizations", "memberships", "invitations", "subscriptions"})
+	assert.Subset(t, seen, []string{"organizations", "memberships", "invitations", "subscriptions", "invoices"})
 }
 
 // Every index on a tenant table that is meant for lookups starts with
@@ -489,7 +490,7 @@ func TestTenantTables_AllHaveRowLevelSecurityAndAPolicy(t *testing.T) {
 func TestTenantTables_HaveAnIndexLedByOrganizationID(t *testing.T) {
 	conn, _ := newConn(t)
 
-	for table, column := range map[string]string{"memberships": "organization_id", "invitations": "organization_id", "subscriptions": "organization_id"} {
+	for table, column := range map[string]string{"memberships": "organization_id", "invitations": "organization_id", "subscriptions": "organization_id", "invoices": "organization_id"} {
 		var n int
 		err := conn.QueryRow(context.Background(), `
 			SELECT count(*)
@@ -652,4 +653,137 @@ func TestSubscriptions_ExistingOrganizationsAreBackfilledWithFree(t *testing.T) 
 	var n int
 	require.NoError(t, conn.QueryRow(ctx, "SELECT count(*) FROM subscriptions WHERE organization_id = $1", gone).Scan(&n))
 	assert.Zero(t, n)
+}
+
+// insertInvoice inserts an invoice with sensible defaults; extra overrides
+// columns by name.
+func insertInvoice(conn *pgx.Conn, orgID, subID, planID, number string, extra map[string]any) error {
+	cols := map[string]any{
+		"organization_id": orgID, "subscription_id": subID, "number": number, "kind": "checkout", "plan_id": planID,
+		"amount": 99000, "currency": "IDR", "status": "open",
+		"period_start": time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC), "period_end": time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC),
+		"due_at": time.Date(2026, 6, 8, 0, 0, 0, 0, time.UTC), "provider": "fake",
+	}
+	for k, v := range extra {
+		cols[k] = v
+	}
+	names, holders, args := "", "", []any{}
+	for k, v := range cols {
+		if names != "" {
+			names, holders = names+", ", holders+", "
+		}
+		args = append(args, v)
+		names += k
+		holders += "$" + strconv.Itoa(len(args))
+	}
+	_, err := conn.Exec(context.Background(), "INSERT INTO invoices ("+names+") VALUES ("+holders+")", args...)
+	return err
+}
+
+func subscribedOrg(t *testing.T, conn *pgx.Conn, slug, planCode string) (orgID, subID, plan string) {
+	t.Helper()
+	orgID = createOrg(t, conn, slug, createUser(t, conn, slug+"@example.com"))
+	plan = planID(t, conn, planCode)
+	require.NoError(t, insertSubscription(conn, orgID, plan, "active", "", ""))
+	require.NoError(t, conn.QueryRow(context.Background(), "SELECT id FROM subscriptions WHERE organization_id = $1", orgID).Scan(&subID))
+	return orgID, subID, plan
+}
+
+func TestInvoices_Constraints(t *testing.T) {
+	conn, _ := newConn(t)
+	orgID, subID, pro := subscribedOrg(t, conn, "acme", "pro")
+
+	assert.NoError(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000001", nil))
+	requirePgCode(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000001", map[string]any{"status": "void"}), "23505", "numbers are unique")
+	requirePgCode(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000002", map[string]any{"status": "refunded"}), "23514", "unknown status")
+	requirePgCode(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000003", map[string]any{"kind": "other", "status": "void"}), "23514", "unknown kind")
+	requirePgCode(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000004", map[string]any{"amount": 0, "status": "void"}), "23514", "an invoice bills something")
+	requirePgCode(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000005", map[string]any{
+		"status": "void", "period_end": time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)}), "23514", "a period has a positive length")
+	requirePgCode(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000006", map[string]any{"status": "paid"}), "23514", "paid needs paid_at")
+	requirePgCode(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000007", map[string]any{"status": "void", "paid_at": time.Now()}), "23514", "only paid invoices have paid_at")
+	assert.NoError(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000008", map[string]any{"status": "paid", "paid_at": time.Now()}))
+}
+
+// A subscription has at most one live checkout and one invoice per renewal
+// period, so a request or a job that runs twice cannot bill twice.
+func TestInvoices_NoDuplicateLiveCheckoutOrRenewalPeriod(t *testing.T) {
+	conn, _ := newConn(t)
+	orgID, subID, pro := subscribedOrg(t, conn, "acme", "pro")
+
+	require.NoError(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000001", nil))
+	requirePgCode(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000002", map[string]any{"status": "draft"}), "23505", "second live checkout")
+	assert.NoError(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000003", map[string]any{"status": "void"}), "closed checkouts do not count")
+	assert.NoError(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000004", map[string]any{"status": "paid", "paid_at": time.Now()}))
+
+	require.NoError(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000005", map[string]any{"kind": "renewal"}))
+	requirePgCode(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000006", map[string]any{"kind": "renewal"}), "23505", "same renewal period twice")
+	requirePgCode(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000007", map[string]any{"kind": "renewal", "status": "expired"}), "23505", "an expired renewal is not issued again")
+	assert.NoError(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000008", map[string]any{"kind": "renewal", "status": "void"}))
+	assert.NoError(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000009", map[string]any{
+		"kind": "renewal", "period_start": time.Date(2026, 7, 1, 0, 0, 0, 0, time.UTC), "period_end": time.Date(2026, 8, 1, 0, 0, 0, 0, time.UTC)}), "the next period is another invoice")
+}
+
+func TestInvoices_AreRemovedWithTheirOrganization(t *testing.T) {
+	conn, _ := newConn(t)
+	orgID, subID, pro := subscribedOrg(t, conn, "acme", "pro")
+	require.NoError(t, insertInvoice(conn, orgID, subID, pro, "INV-2026-000001", nil))
+
+	_, err := conn.Exec(context.Background(), "DELETE FROM organizations WHERE id = $1", orgID)
+
+	require.NoError(t, err)
+	var n int
+	require.NoError(t, conn.QueryRow(context.Background(), "SELECT count(*) FROM invoices").Scan(&n))
+	assert.Zero(t, n)
+}
+
+func TestPaymentEvents_AGatewayEventIsStoredOnce(t *testing.T) {
+	conn, _ := newConn(t)
+	insert := func(provider, eventID string) error {
+		_, err := conn.Exec(context.Background(),
+			"INSERT INTO payment_events (provider, event_id, payload) VALUES ($1, $2, '{}'::jsonb)", provider, eventID)
+		return err
+	}
+
+	require.NoError(t, insert("midtrans", "evt-1"))
+
+	requirePgCode(t, insert("midtrans", "evt-1"), "23505", "the same delivery twice")
+	assert.NoError(t, insert("midtrans", "evt-2"))
+	assert.NoError(t, insert("xendit", "evt-1"), "event ids are per provider")
+}
+
+// The application connects as saka_app (SET ROLE), which must be able to take
+// invoice numbers: the sequence is created after the grants of migration 00007
+// and relies on its default privileges.
+func TestInvoiceNumberSequence_IsUsableByTheApplicationRole(t *testing.T) {
+	conn, _ := newConn(t)
+	ctx := context.Background()
+	_, err := conn.Exec(ctx, "SET ROLE saka_app")
+	require.NoError(t, err)
+
+	var first, second int64
+	require.NoError(t, conn.QueryRow(ctx, "SELECT nextval('invoice_number_seq')").Scan(&first))
+	require.NoError(t, conn.QueryRow(ctx, "SELECT nextval('invoice_number_seq')").Scan(&second))
+
+	assert.Equal(t, int64(1), first)
+	assert.Equal(t, int64(2), second)
+	var n int
+	require.NoError(t, conn.QueryRow(ctx, "SELECT count(*) FROM payment_events").Scan(&n), "the application role may use the webhook table")
+}
+
+// A rolled back transaction keeps the number it took: numbers are never
+// reused, and a failed checkout leaves a gap (documented in the migration).
+func TestInvoiceNumberSequence_NumbersAreNeverReusedAfterARollback(t *testing.T) {
+	conn, _ := newConn(t)
+	ctx := context.Background()
+	tx, err := conn.Begin(ctx)
+	require.NoError(t, err)
+	var taken int64
+	require.NoError(t, tx.QueryRow(ctx, "SELECT nextval('invoice_number_seq')").Scan(&taken))
+	require.NoError(t, tx.Rollback(ctx))
+
+	var next int64
+	require.NoError(t, conn.QueryRow(ctx, "SELECT nextval('invoice_number_seq')").Scan(&next))
+
+	assert.Greater(t, next, taken)
 }
