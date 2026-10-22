@@ -111,7 +111,7 @@ func (q *Queries) GetInvitationByTokenHashForUpdate(ctx context.Context, tokenHa
 }
 
 const getOpenInvitationByEmailForUpdate = `-- name: GetOpenInvitationByEmailForUpdate :one
-SELECT id FROM invitations
+SELECT id, expires_at FROM invitations
 WHERE organization_id = $1 AND email = $2
   AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL
 FOR UPDATE
@@ -122,13 +122,44 @@ type GetOpenInvitationByEmailForUpdateParams struct {
 	Email          string
 }
 
+type GetOpenInvitationByEmailForUpdateRow struct {
+	ID        uuid.UUID
+	ExpiresAt time.Time
+}
+
 // "Open" means not accepted, declined or revoked; expiry is checked separately
 // (the unique index ignores it, migration 00006).
-func (q *Queries) GetOpenInvitationByEmailForUpdate(ctx context.Context, arg GetOpenInvitationByEmailForUpdateParams) (uuid.UUID, error) {
+func (q *Queries) GetOpenInvitationByEmailForUpdate(ctx context.Context, arg GetOpenInvitationByEmailForUpdateParams) (GetOpenInvitationByEmailForUpdateRow, error) {
 	row := q.db.QueryRow(ctx, getOpenInvitationByEmailForUpdate, arg.OrganizationID, arg.Email)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
+	var i GetOpenInvitationByEmailForUpdateRow
+	err := row.Scan(&i.ID, &i.ExpiresAt)
+	return i, err
+}
+
+const getOpenInvitationForUpdate = `-- name: GetOpenInvitationForUpdate :one
+SELECT id, expires_at FROM invitations
+WHERE id = $1 AND organization_id = $2
+  AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL
+FOR UPDATE
+`
+
+type GetOpenInvitationForUpdateParams struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+}
+
+type GetOpenInvitationForUpdateRow struct {
+	ID        uuid.UUID
+	ExpiresAt time.Time
+}
+
+// An open invitation by ID, locked, with its expiry: resending an expired one
+// makes it count as a seat again, so the caller needs to know which it was.
+func (q *Queries) GetOpenInvitationForUpdate(ctx context.Context, arg GetOpenInvitationForUpdateParams) (GetOpenInvitationForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getOpenInvitationForUpdate, arg.ID, arg.OrganizationID)
+	var i GetOpenInvitationForUpdateRow
+	err := row.Scan(&i.ID, &i.ExpiresAt)
+	return i, err
 }
 
 const hasLiveInvitationForEmail = `-- name: HasLiveInvitationForEmail :one

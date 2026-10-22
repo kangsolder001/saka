@@ -58,7 +58,9 @@ func roleLabel(r Role) string {
 // admins only. Inviting an address that already has an open invitation
 // refreshes that invitation (new token, new expiry) rather than adding a
 // second; refreshed reports that case. Someone who is already a member is a
-// CONFLICT.
+// CONFLICT. An invitation holds a seat of the plan's "members"
+// limit, so a new one (or the refresh of an expired one) beyond the limit is
+// refused with PLAN_LIMIT_REACHED; refreshing a live one is not a new seat.
 func (s *Service) Invite(ctx context.Context, email string, role Role) (inv Invitation, refreshed bool, err error) {
 	if err := Authorize(ctx, ActionInvite); err != nil {
 		return Invitation{}, false, err
@@ -89,15 +91,27 @@ func (s *Service) Invite(ctx context.Context, email string, role Role) (inv Invi
 
 	err = s.tx.WithTx(ctx, func(tx pgx.Tx) error {
 		q := orgdb.New(tx)
+		if err := lockOrganization(ctx, tx, orgID); err != nil {
+			return err
+		}
 		if err := s.refuseExistingMember(ctx, tx, orgID, email); err != nil {
 			return err
 		}
-		_, lookup := q.GetOpenInvitationByEmailForUpdate(ctx, orgdb.GetOpenInvitationByEmailForUpdateParams{OrganizationID: orgID, Email: email})
+		open, lookup := q.GetOpenInvitationByEmailForUpdate(ctx, orgdb.GetOpenInvitationByEmailForUpdateParams{OrganizationID: orgID, Email: email})
+		takesASeat := true
 		switch {
 		case lookup == nil:
 			refreshed = true
+			// Refreshing an invitation that is still live keeps its seat; an
+			// expired one had given its seat up and takes one again.
+			takesASeat = !open.ExpiresAt.After(s.clk.Now())
 		case !isNoRows(lookup):
 			return fmt.Errorf("org: look up open invitation: %w", lookup)
+		}
+		if takesASeat {
+			if err := s.reserveSeat(ctx, tx, orgID); err != nil {
+				return err
+			}
 		}
 		row, err := q.UpsertInvitation(ctx, orgdb.UpsertInvitationParams{
 			OrganizationID: orgID, Email: email, Role: string(role), TokenHash: hash, InvitedBy: actorID,
@@ -239,6 +253,22 @@ func (s *Service) ResendInvitation(ctx context.Context, id uuid.UUID) (Invitatio
 
 	var inv Invitation
 	err = s.tx.WithTx(ctx, func(tx pgx.Tx) error {
+		if err := lockOrganization(ctx, tx, orgID); err != nil {
+			return err
+		}
+		// An expired invitation freed its seat; renewing it takes one again.
+		open, err := orgdb.New(tx).GetOpenInvitationForUpdate(ctx, orgdb.GetOpenInvitationForUpdateParams{ID: id, OrganizationID: orgID})
+		if err != nil {
+			if isNoRows(err) {
+				return apperr.NotFound()
+			}
+			return fmt.Errorf("org: look up invitation: %w", err)
+		}
+		if !open.ExpiresAt.After(s.clk.Now()) {
+			if err := s.reserveSeat(ctx, tx, orgID); err != nil {
+				return err
+			}
+		}
 		row, err := orgdb.New(tx).RenewInvitation(ctx, orgdb.RenewInvitationParams{
 			ID: id, OrganizationID: orgID, TokenHash: hash, ExpiresAt: s.clk.Now().Add(InvitationTTL),
 		})

@@ -29,6 +29,29 @@ func (q *Queries) CountOtherMembers(ctx context.Context, arg CountOtherMembersPa
 	return count, err
 }
 
+const countSeats = `-- name: CountSeats :one
+SELECT (SELECT count(*) FROM memberships m WHERE m.organization_id = $1)
+     + (SELECT count(*) FROM invitations i
+        WHERE i.organization_id = $1
+          AND i.accepted_at IS NULL AND i.declined_at IS NULL AND i.revoked_at IS NULL
+          AND i.expires_at > $2::timestamptz) AS seats
+`
+
+type CountSeatsParams struct {
+	OrganizationID uuid.UUID
+	Now            time.Time
+}
+
+// The seats of an organization: its members plus the invitations that can still
+// be redeemed (open and not expired), because an invitation is a promised seat
+// (spec §7.4). Expired invitations free their seat.
+func (q *Queries) CountSeats(ctx context.Context, arg CountSeatsParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countSeats, arg.OrganizationID, arg.Now)
+	var seats int32
+	err := row.Scan(&seats)
+	return seats, err
+}
+
 const deleteMembership = `-- name: DeleteMembership :execrows
 DELETE FROM memberships
 WHERE organization_id = $1 AND user_id = $2 AND role <> 'owner'

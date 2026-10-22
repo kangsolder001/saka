@@ -8,7 +8,7 @@ WHERE organization_id = @organization_id
 -- "Open" means not accepted, declined or revoked; expiry is checked separately
 -- (the unique index ignores it, migration 00006).
 -- name: GetOpenInvitationByEmailForUpdate :one
-SELECT id FROM invitations
+SELECT id, expires_at FROM invitations
 WHERE organization_id = @organization_id AND email = @email
   AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL
 FOR UPDATE;
@@ -42,6 +42,14 @@ LIMIT @row_limit;
 UPDATE invitations SET revoked_at = @now::timestamptz
 WHERE id = @id AND organization_id = @organization_id
   AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL;
+
+-- An open invitation by ID, locked, with its expiry: resending an expired one
+-- makes it count as a seat again, so the caller needs to know which it was.
+-- name: GetOpenInvitationForUpdate :one
+SELECT id, expires_at FROM invitations
+WHERE id = @id AND organization_id = @organization_id
+  AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL
+FOR UPDATE;
 
 -- Resend: a fresh token and expiry for an open invitation, expired or not.
 -- name: RenewInvitation :one

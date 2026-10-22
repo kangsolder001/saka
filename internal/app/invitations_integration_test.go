@@ -32,11 +32,15 @@ func (s *stack) verify(emails ...string) {
 	s.invalidateAllUsers()
 }
 
-// verifiedTeam is a team whose owner and admin have verified their email.
+// verifiedTeam is a team whose owner and admin have verified their email. It is
+// subscribed to Pro: its three members already fill Free's seats, and the
+// invitation tests are about invitations, not about the plan (see
+// entitlement_integration_test.go for that).
 func (s *stack) verifiedTeam() team {
 	s.t.Helper()
 	tm := s.newTeam()
 	s.verify("owner@example.com", "admin@example.com")
+	s.setPlan(tm.orgID, "pro", "active")
 	return tm
 }
 

@@ -70,3 +70,13 @@ ORDER BY m.organization_id;
 -- name: CountOtherMembers :one
 SELECT count(*) FROM memberships
 WHERE organization_id = @organization_id AND user_id <> @user_id;
+
+-- The seats of an organization: its members plus the invitations that can still
+-- be redeemed (open and not expired), because an invitation is a promised seat
+-- (spec §7.4). Expired invitations free their seat.
+-- name: CountSeats :one
+SELECT (SELECT count(*) FROM memberships m WHERE m.organization_id = @organization_id)
+     + (SELECT count(*) FROM invitations i
+        WHERE i.organization_id = @organization_id
+          AND i.accepted_at IS NULL AND i.declined_at IS NULL AND i.revoked_at IS NULL
+          AND i.expires_at > @now::timestamptz) AS seats;

@@ -11,6 +11,7 @@ import (
 
 	"github.com/kangsolder001/saka/internal/auth"
 	"github.com/kangsolder001/saka/internal/billing"
+	"github.com/kangsolder001/saka/internal/entitlement"
 	"github.com/kangsolder001/saka/internal/mail"
 	"github.com/kangsolder001/saka/internal/org"
 	"github.com/kangsolder001/saka/internal/platform/clock"
@@ -102,6 +103,11 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 	}, auth.Config{FrontendURL: cfg.App.FrontendURL})
 
 	organizations.Passwords = authService
+	// entitlement counts seats through org and org enforces the limit through
+	// entitlement: the loop is closed here, like the one with auth above.
+	entitlements := entitlement.NewService(billingService)
+	entitlements.RegisterCounter(org.MembersLimit, organizations.CountSeats)
+	organizations.Limits = entitlements
 	authMiddleware := auth.NewMiddleware(authService)
 
 	v1 := router.Group("/api/v1")

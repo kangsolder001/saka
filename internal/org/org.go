@@ -94,6 +94,10 @@ type Dependencies struct {
 	Tx        Transactor
 	Users     UserDirectory
 	Passwords PasswordConfirmer
+	// Limits enforces the plan's limit on seats when inviting. It is wired
+	// after construction because entitlement counts seats through this very
+	// service (set by the composition root, like Passwords).
+	Limits LimitChecker
 	// Subscriptions starts the Free subscription of every new organization.
 	Subscriptions SubscriptionStarter
 	// Mail queues invitation emails in the caller's transaction.

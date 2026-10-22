@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kangsolder001/saka/internal/billing"
+	"github.com/kangsolder001/saka/internal/entitlement"
 	"github.com/kangsolder001/saka/internal/mail"
 	"github.com/kangsolder001/saka/internal/org"
 	"github.com/kangsolder001/saka/internal/platform/apperr"
@@ -54,11 +55,16 @@ func newEnv(t *testing.T) *env {
 	users := user.NewService(clk)
 	passwords := &fakePasswords{}
 	mailer := &recordingMailer{}
+	billingService := billing.NewService(clk)
+	orgs := org.NewService(org.Dependencies{
+		Clock: clk, Tx: d, Users: users, Passwords: passwords, Subscriptions: billingService, Mail: mailer, FrontendURL: "https://app.example.com/",
+	})
+	entitlements := entitlement.NewService(billingService)
+	entitlements.RegisterCounter(org.MembersLimit, orgs.CountSeats)
+	orgs.Limits = entitlements
 	return &env{
 		t: t, db: d, dsn: dsn, admin: dbtest.AdminPool(t, dsn), clock: clk, users: users, passwords: passwords, mail: mailer,
-		orgs: org.NewService(org.Dependencies{
-			Clock: clk, Tx: d, Users: users, Passwords: passwords, Subscriptions: billing.NewService(clk), Mail: mailer, FrontendURL: "https://app.example.com/",
-		}),
+		orgs: orgs,
 	}
 }
 

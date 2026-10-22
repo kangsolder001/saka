@@ -302,3 +302,14 @@ func TestCreateOrg_GivesTheNewOrganizationAFreeSubscription(t *testing.T) {
 	assert.Equal(t, "free", plan)
 	assert.Equal(t, "active", status)
 }
+
+// setPlan puts the organization's subscription on the plan with the status,
+// the way billing will once payments exist (Phase 6).
+func (s *stack) setPlan(orgID, planCode, status string) {
+	s.t.Helper()
+	_, err := s.admin.Exec(s.ctx(), `
+		UPDATE subscriptions SET plan_id = (SELECT id FROM plans WHERE code = $2), status = $3,
+		                         trial_ends_at = CASE WHEN $3 = 'trialing' THEN now() + interval '14 days' END
+		WHERE organization_id = $1`, orgID, planCode, status)
+	require.NoError(s.t, err)
+}
