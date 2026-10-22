@@ -163,6 +163,7 @@ func TestParse_Validation(t *testing.T) {
 		{"app role with uppercase", with("", `{"url": "`+validDBURL+`", "app_role": "Saka App"}`, "", ""), "database.app_role"},
 		{"no app role in production", with(`{"env": "production"}`, `{"url": "`+validDBURL+`", "app_role": ""}`, `{"driver": "smtp"}`, ""), "database.app_role must be set in production"},
 		{"zero max conns", with("", `{"url": "`+validDBURL+`", "max_conns": 0}`, "", ""), "database.max_conns"},
+		{"wildcard cors in development", with(`{"cors_allowed_origins": ["*"]}`, "", "", ""), "must not contain *"},
 		{"wildcard cors in production", with(`{"env": "production", "cors_allowed_origins": ["*"]}`, "", `{"driver": "smtp"}`, ""), "must not contain *"},
 		{"missing jwt secret", `{"database": {"url": "` + validDBURL + `"}}`, "auth.jwt_secret is required"},
 		{"short jwt secret", `{"database": {"url": "` + validDBURL + `"}, "auth": {"jwt_secret": "short"}}`, "at least 32 characters"},

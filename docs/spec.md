@@ -317,6 +317,19 @@ Job dimasukkan dalam **transaksi yang sama** dengan perubahan data, supaya tidak
 | `/auth/resend-verification` | 3 / jam per user |
 | `/auth/register` | 10 / jam per IP |
 
+Batas per akun di atas dilengkapi batas per IP di tepi API (§11.3), memakai Redis dan `platform/ratelimit` yang sama:
+
+| Endpoint | Batas | Catatan |
+|---|---|---|
+| `POST /auth/login` | 60 / menit per IP | semua percobaan, berhasil atau gagal (menahan Argon2id dari email yang berganti-ganti) |
+| `POST /auth/verify-email`, `/auth/reset-password`, `/auth/refresh`, `/me/email/confirm` | 60 / menit per IP | satu hitungan bersama |
+| `GET /invitations/{token}`, `POST /invitations/{token}/accept`, `.../decline` | 60 / menit per IP | satu hitungan bersama |
+| `POST /webhooks/{provider}` | 600 / menit per IP | gagal terbuka bila Redis mati (signature adalah kredensialnya) |
+| `GET /plans` | 120 / menit per IP | publik, membaca DB |
+| `POST /orgs` | 10 / jam per user | tiap panggilan menulis organisasi, membership, subscription |
+
+Angka sengaja longgar: kantor di balik satu NAT atau gateway yang mengirim ulang notifikasi tidak boleh terkena. Bila di belakang reverse proxy, isi `app.trusted_proxies` supaya IP klien yang dihitung adalah IP asli, bukan IP proxy.
+
 ### 5.5 Klaim JWT
 
 ```json
@@ -720,6 +733,44 @@ Tujuan: satu `trace_id` bisa dipakai untuk menelusuri request HTTP sampai job ou
 - **Mencegah goroutine leak.** `recover` hanya mencegah crash; kebocoran dicegah dengan aturan berikut: setiap goroutine menerima `ctx` dan **wajib berhenti saat `ctx` dibatalkan**; setiap goroutine punya pemilik yang menunggunya (`Wait()` atau WaitGroup milik runner); channel tidak dibiarkan menggantung (selalu ada jalur keluar lewat `ctx.Done()`); server dan worker menunggu goroutine selesai (dengan timeout) saat shutdown.
 - **Transaksi tidak boleh dipakai paralel.** `pgx.Tx` tidak aman untuk akses bersamaan, jadi operasi di dalam satu transaksi (`WithTx`) berjalan berurutan. Paralelisme hanya untuk operasi di luar transaksi atau yang memakai koneksi/transaksi sendiri.
 - **Test.** Unit test `safego`: panic tertangkap dan dilog, error `Group` merambat, batas konkurensi dihormati, context batal menghentikan goroutine, tidak ada goroutine tersisa setelah `Wait()` (mis. dengan `goleak`).
+
+### 11.3 Hasil review keamanan
+
+Review Fase 7 atas semua endpoint, dengan test otomatis untuk yang ditandai. Semua temuan di bawah sudah dikerjakan kecuali yang tertulis "tidak diubah".
+
+**Yang sudah benar dan kini dijaga test**
+
+| Area | Kondisi | Test |
+|---|---|---|
+| Header keamanan | `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, CSP `default-src 'none'`, `Cache-Control: no-store` di semua respons (juga 404, 401, validasi); HSTS di production; tanpa banner `Server`/`X-Powered-By` | `TestSecurity_EveryResponseCarriesTheSecurityHeaders`, `TestSecurityHeaders_*` (`httpx`) |
+| CORS | Hanya origin dalam daftar `app.cors_allowed_origins`; `*` ditolak konfigurasi di **semua** environment (temuan 1) | `TestCORS_*`, `TestParse_Validation` |
+| Validasi input | Semua body lewat `httpx.BindJSON`: maksimum 1 MiB, field tak dikenal dan data sisa ditolak, tiap string punya `max=`, enum lewat `oneof`/validasi service. Satu-satunya body yang tidak lewat `BindJSON` adalah webhook, dibatasi 1 MiB sendiri | `TestSecurity_RequestBodiesAreBoundedAndStrict`, `TestBindJSON_*` |
+| Identifier | `orgId`, `userId`, `id` (sesi, undangan, invoice) diparse sebagai UUID; yang tidak valid menjawab `404`, bukan `500`. Query `limit` dibatasi 1-100, `cursor` yang rusak `400` | `TestSecurity_MalformedIdentifiersAreNotFoundNeverServerErrors` |
+| SQL | Seluruh statement adalah literal/konstanta (hasil `sqlc` atau teks tetap); satu-satunya penyambungan string adalah `SET ROLE` dengan identifier yang di-`Sanitize` dan divalidasi regex di config | `TestSQL_NoStatementIsBuiltFromStrings` (membaca seluruh kode non-test dan gagal bila ada statement yang dirakit saat runtime) |
+| Secret | `config.json` ada di `.gitignore` dan tidak pernah ada di riwayat repositori; `config.example.json` hanya berisi placeholder; production menolak placeholder `change-me` pada `auth.jwt_secret` dan `billing.midtrans.server_key`, kunci sandbox `SB-`, host sandbox, provider `fake`, driver mail `log`; kunci Midtrans dan URL database tidak pernah ikut di pesan error config. Pencarian pola kunci (AWS, RSA, Slack, Midtrans) di seluruh riwayat hanya menemukan kunci palsu di test (`SB-Mid-server-TESTKEY`) dan kredensial dev `saka:saka` di berkas contoh | `TestParse_*`, `TestExampleFileIsValid` |
+| JWT | HS256 dipaku (`WithValidMethods`: `alg=none` dan algorithm confusion ditolak), kedaluwarsa wajib, secret minimal 32 karakter, role/org tidak ada di token, sesi dicek ke DB tiap request sehingga logout/reset password langsung berlaku | `TestJWT_*`, `TestAuthenticate_*` |
+| Cookie refresh | `HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth`, `Secure` di production | `TestSecurity_TheRefreshCookieIsHttpOnlyStrictAndScopedToTheAuthPath`, `TestLogin_EndToEnd_*` |
+| CSRF | Endpoint yang memakai cookie hanya `/auth/refresh` dan `/auth/logout`. `SameSite=Strict` mencegah browser mengirim cookie pada request lintas-site; endpoint lain memakai header `Authorization` (tidak otomatis dikirim browser). Tidak ada token CSRF terpisah | (desain) |
+| Perbandingan rahasia | Hash password `subtle.ConstantTimeCompare`, signature Midtrans `subtle.ConstantTimeCompare`, signature fake `hmac.Equal`; token sekali pakai dan refresh token dicari lewat hash SHA-256 di index DB (tidak ada pembandingan string rahasia di aplikasi) | `TestVerifyWebhook_*`, `TestVerify*` |
+| Kebocoran internal | Error tak terduga dan panic menjawab `500 INTERNAL_ERROR` dengan pesan generik; penyebab dan stack hanya di log; server tetap melayani setelah panic | `TestSecurity_AnUnexpectedErrorOrPanicNeverLeaksInternals`, `TestRecover_*` |
+| User enumeration | Login dan forgot-password memberi respons dan waktu yang sama untuk email tak dikenal | `TestLogin_NoUserEnumeration`, `TestForgotPassword_DoesNotRevealWhichEmailsAreRegistered` |
+| Isolasi tenant | 404 untuk bukan anggota, RLS PostgreSQL sebagai lapis kedua | `TestTenantIsolation_*`, `TestRLS_*` |
+
+**Temuan yang diperbaiki**
+
+1. **CORS tanpa credentials.** Cookie refresh tidak akan dikirim browser dari origin frontend yang berbeda dengan API (mis. `app.example.com` ke `api.example.com`) bila respons tidak mengizinkan credentials. Sekarang `Access-Control-Allow-Credentials: true`, aman karena origin berupa daftar eksplisit; sebagai konsekuensinya konfigurasi menolak `*` di semua environment, bukan hanya production (`TestCORS_AllowsCredentialsOnlyForListedOrigins`).
+2. **Endpoint anonim yang murah disalahgunakan tanpa batas.** Hanya login (gagal per email+IP), register, forgot-password dan resend yang dibatasi. Ditambahkan batas per IP (tabel di §5.4) untuk webhook, tautan undangan, endpoint pertukaran token, login (semua percobaan: tanpa ini penyerang bisa membuat server menghitung Argon2id untuk email tak terbatas), `GET /plans`, serta batas per user untuk `POST /orgs`. Diimplementasikan sebagai middleware tabel-rute di `internal/app/ratelimits.go` (`httpx.RateLimitByIP`/`RateLimitByUser`), jadi modul tidak berubah. Redis mati: gagal tertutup (500) kecuali webhook yang gagal terbuka, karena menjatuhkan notifikasi pembayaran sungguhan lebih mahal daripada membiarkan lonjakan yang toh ditolak signature (`TestEdgeRateLimit_*`, `TestRateLimitBy*`).
+3. **Header HTTP tanpa batas ukuran.** `http.Server` memakai default 1 MiB; kini `MaxHeaderBytes` 64 KiB.
+
+**Tidak diubah (dengan alasan)**
+
+- **Kerentanan pustaka standar Go** (`govulncheck`, dijalankan online tanpa mengubah `go.mod`): toolchain lokal go1.26.6 terdampak 12 advisori di `net/http`, `crypto/tls`, `crypto/x509`, `html/template`, `net/textproto`, `os` (semua diperbaiki di go1.26.9 / go1.26.10). Bukan kode proyek; perbaikannya adalah membangun dan men-deploy dengan **Go >= 1.26.10**. CI memakai `go-version-file: go.mod` (`go 1.26.0`) sehingga `setup-go` memilih patch terbaru, tetapi image/produksi harus dipastikan oleh pemilik. Baris `go`/`toolchain` di `go.mod` tidak diubah karena itu memaksa semua kontributor memakai toolchain tertentu.
+- **`golang.org/x/crypto@v0.58.0` GO-2026-5932** (belum ada versi perbaikan): dimuat tetapi simbolnya tidak dipanggil dari kode kita (hanya `argon2`). Dipantau; jalankan ulang `govulncheck` sebelum rilis.
+- **Kata sandi default DB (`saka:saka`) di production** tidak ditolak konfigurasi; itu tanggung jawab operator (sama seperti password Redis kosong). Dicatat di README.
+- **JWT tanpa `iss`/`aud`**: hanya satu penerbit dan satu penerima, dan secret berbeda per deployment, jadi tidak ada risiko token tertukar; ditambahkan bila ada lebih dari satu layanan penerima.
+- **Cookie dan subdomain**: `SameSite` adalah batas *site*, bukan origin; subdomain yang dikuasai penyerang di domain yang sama bisa memicu `POST /auth/refresh`. Dampaknya hanya merotasi token milik korban dan hasilnya tidak terbaca lintas origin (CORS), jadi tidak ada tambahan token CSRF.
+- **`/healthz` dan `/readyz`** tidak dibatasi (`/readyz` mem-ping DB dan Redis). Dimaksudkan untuk jaringan internal/load balancer; batasi di reverse proxy bila terbuka ke internet.
+- **Log panic** memuat nilai panic dan stack apa adanya; tidak pernah dikirim ke klien. Audit kebocoran log ada di §11.4.
 
 ---
 

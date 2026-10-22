@@ -221,6 +221,19 @@ func TestCORS_AllowsListedOriginOnly(t *testing.T) {
 	assert.Empty(t, denied.Header().Get("Access-Control-Allow-Origin"))
 }
 
+func TestCORS_AllowsCredentialsOnlyForListedOrigins(t *testing.T) {
+	r, _ := newEngine(t, false, "https://app.example")
+	r.POST("/x", func(c *gin.Context) { c.Status(http.StatusNoContent) })
+
+	allowed := do(r, http.MethodPost, "/x", map[string]string{"Origin": "https://app.example"})
+	denied := do(r, http.MethodPost, "/x", map[string]string{"Origin": "https://evil.example"})
+
+	assert.Equal(t, "true", allowed.Header().Get("Access-Control-Allow-Credentials"),
+		"the browser needs this to send the refresh cookie from the frontend origin")
+	assert.Empty(t, denied.Header().Get("Access-Control-Allow-Credentials"))
+	assert.Empty(t, denied.Header().Get("Access-Control-Allow-Origin"))
+}
+
 func TestCORS_Preflight(t *testing.T) {
 	r, _ := newEngine(t, false, "https://app.example")
 	r.POST("/x", func(c *gin.Context) { c.Status(http.StatusNoContent) })

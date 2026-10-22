@@ -25,11 +25,20 @@ func TenantRoutes(rg *gin.RouterGroup, authenticate gin.HandlerFunc, members Mem
 // Handler exposes the organization endpoints (spec §7.1).
 type Handler struct {
 	svc *Service
+	// createLimit runs before POST /orgs (after authentication); nil means none.
+	createLimit gin.HandlerFunc
 }
 
 // NewHandler creates the organization handler.
 func NewHandler(svc *Service) *Handler {
 	return &Handler{svc: svc}
+}
+
+// WithCreateLimit makes POST /orgs run mw after authentication, for example a
+// per-user rate limit. It returns the handler for chaining.
+func (h *Handler) WithCreateLimit(mw gin.HandlerFunc) *Handler {
+	h.createLimit = mw
+	return h
 }
 
 // Routes registers the organization endpoints under rg (expected to be
@@ -39,7 +48,11 @@ func NewHandler(svc *Service) *Handler {
 func (h *Handler) Routes(rg *gin.RouterGroup, authenticate, requireVerifiedEmail gin.HandlerFunc) {
 	orgs := rg.Group("/orgs", authenticate)
 	orgs.GET("", h.list)
-	orgs.POST("", h.create)
+	if h.createLimit != nil {
+		orgs.POST("", h.createLimit, h.create)
+	} else {
+		orgs.POST("", h.create)
+	}
 
 	one := TenantRoutes(rg, authenticate, h.svc)
 	one.GET("", h.get)

@@ -194,7 +194,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 ## Fase 7 — Hardening & Acceptance (4 hari)
 
 - [x] Telusuri seluruh checklist §12 ↔ test otomatis; tutup celah (0.6). Setiap `[x]` di §12 menyebut test yang ada, dijaga `TestAcceptanceCriteria_EveryNamedTestExists`; dua kriteria Email kini bertest (`TestMailer_*` membaca kode sumber: hanya `cmd/worker` yang boleh memakai `Mailer`). Satu kriteria tetap terbuka: checkout di **sandbox Midtrans sungguhan** (butuh akun; `TestSandbox_*` siap dan dilewati tanpa kunci di `config.json`)
-- [ ] Review keamanan: header, CORS, validasi input, secret hanya di `config.json` (tidak di git), query parametrized, rate limit (0.6)
+- [x] Review keamanan: header, CORS, validasi input, secret hanya di `config.json` (tidak di repositori), query parametrized, rate limit (0.6). Hasil dan keputusan "tidak diubah" di spec §11.3; diperbaiki: CORS credentials untuk cookie refresh, rate limit per IP/user di tepi API, `MaxHeaderBytes`; catatan `govulncheck`: pakai toolchain Go >= 1.26.10
 - [ ] Observability: audit bahwa `user_id` & `org_id` & `trace_id` muncul di log lintas modul, log job gagal, token/password tidak bocor ke log (0.3)
 - [ ] Uji beban ringan endpoint auth & webhook (0.3)
 - [ ] Putuskan provider email produksi (Resend/Brevo/SES) + implementasi `Mailer` + setup SPF/DKIM domain (0.5)

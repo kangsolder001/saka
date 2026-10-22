@@ -68,6 +68,10 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 	}
 	mailer := mail.NewService(renderer, outbox.NewStore(database.Pool(), clk))
 
+	// One limiter for the whole API: the auth module's per-account rules and
+	// the per-IP edge limits (ratelimits.go) share the Redis connection.
+	limiter := ratelimit.New(redis, clk)
+
 	params := auth.DefaultArgon2Params()
 	if opts.PasswordParams != nil {
 		params = *opts.PasswordParams
@@ -106,7 +110,7 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 		JWT:         jwt,
 		Mail:        mailer,
 		Hasher:      hasher,
-		Limiter:     ratelimit.New(redis, clk),
+		Limiter:     limiter,
 		Clock:       clk,
 		Log:         log,
 	}, auth.Config{FrontendURL: cfg.App.FrontendURL})
@@ -133,11 +137,18 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 	})
 	authMiddleware := auth.NewMiddleware(authService)
 
+	// Per-IP limits for the cheap-to-abuse public endpoints (spec §11.3). Added
+	// before any module route is registered so the middleware is part of every
+	// route's chain.
+	router.Use(httpx.RateLimitByIP(limiter, log, publicRouteLimits()))
+
 	v1 := router.Group("/api/v1")
 	auth.NewHandler(authService, authMiddleware, auth.HandlerConfig{SecureCookie: cfg.IsProduction()}).Routes(v1)
 	user.NewHandler(user.Dependencies{Profiles: users, Security: authService, Pool: database.Pool(), Organizations: organizations}).
 		Routes(v1, authMiddleware.Authenticate())
-	org.NewHandler(organizations).Routes(v1, authMiddleware.Authenticate(), authMiddleware.RequireVerifiedEmail())
+	org.NewHandler(organizations).
+		WithCreateLimit(httpx.RateLimitByUser(limiter, RuleCreateOrganization)).
+		Routes(v1, authMiddleware.Authenticate(), authMiddleware.RequireVerifiedEmail())
 	// Modules that own per-organization resources mount them here: the group
 	// has already passed authentication and the tenant middleware.
 	tenant := org.TenantRoutes(v1, authMiddleware.Authenticate(), organizations)

@@ -304,11 +304,12 @@ func (c Config) Validate() error {
 	default:
 		add("app.log_level must be one of debug, info, warn, error (got %q)", c.App.LogLevel)
 	}
-	if c.IsProduction() {
-		for _, origin := range c.App.CORSAllowedOrigins {
-			if origin == "*" {
-				add("app.cors_allowed_origins must not contain * in production")
-			}
+	// The API answers CORS requests with credentials (the refresh cookie), and
+	// browsers refuse a wildcard origin together with credentials, so every
+	// origin must be listed explicitly in every environment.
+	for _, origin := range c.App.CORSAllowedOrigins {
+		if origin == "*" {
+			add("app.cors_allowed_origins must not contain *: list each origin explicitly")
 		}
 	}
 

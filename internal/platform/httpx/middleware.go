@@ -128,10 +128,15 @@ func CORS(allowedOrigins []string) gin.HandlerFunc {
 		return func(c *gin.Context) { c.Next() }
 	}
 	return cors.New(cors.Config{
-		AllowOrigins:  allowedOrigins,
-		AllowMethods:  []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodPut, http.MethodDelete, http.MethodOptions},
-		AllowHeaders:  []string{"Authorization", "Content-Type", HeaderTraceparent},
-		ExposeHeaders: []string{HeaderRequestID, HeaderTraceID},
-		MaxAge:        12 * time.Hour,
+		AllowOrigins: allowedOrigins,
+		// The refresh token travels in an HttpOnly cookie, which a browser only
+		// sends cross-origin (frontend and API on different sub-domains) when the
+		// response allows credentials. Safe because origins are an explicit list
+		// (config rejects "*") and the cookie is SameSite=Strict.
+		AllowCredentials: true,
+		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodPut, http.MethodDelete, http.MethodOptions},
+		AllowHeaders:     []string{"Authorization", "Content-Type", HeaderTraceparent},
+		ExposeHeaders:    []string{HeaderRequestID, HeaderTraceID},
+		MaxAge:           12 * time.Hour,
 	})
 }
