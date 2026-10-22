@@ -14,6 +14,7 @@ import (
 	"github.com/kangsolder001/saka/internal/billing/billingdb"
 	"github.com/kangsolder001/saka/internal/billing/payment"
 	"github.com/kangsolder001/saka/internal/platform/apperr"
+	"github.com/kangsolder001/saka/internal/platform/reqctx"
 )
 
 // HandleWebhook handles a payment notification from a gateway (spec §8.5).
@@ -274,7 +275,8 @@ func (s *Service) applyPaid(ctx context.Context, tx pgx.Tx, pay *payments, sub b
 	if err := pay.sendEmail(ctx, tx, contact.OwnerEmail, "payment_succeeded", data); err != nil {
 		return "", err
 	}
-	zl := pay.Log.FromContext(ctx)
+	// The webhook and the jobs have no tenant on the context: add it for the log line.
+	zl := pay.Log.FromContext(reqctx.WithOrgID(ctx, inv.OrganizationID))
 	zl.Info().Str("invoice_number", inv.Number).Str("outcome", string(res.Outcome)).Str("plan", plan.Code).Msg("invoice paid")
 	return "", nil
 }

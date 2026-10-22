@@ -772,6 +772,25 @@ Review Fase 7 atas semua endpoint, dengan test otomatis untuk yang ditandai. Sem
 - **`/healthz` dan `/readyz`** tidak dibatasi (`/readyz` mem-ping DB dan Redis). Dimaksudkan untuk jaringan internal/load balancer; batasi di reverse proxy bila terbuka ke internet.
 - **Log panic** memuat nilai panic dan stack apa adanya; tidak pernah dikirim ke klien. Audit kebocoran log ada di §11.4.
 
+### 11.4 Hasil audit observability
+
+Audit Fase 7 atas §11.1, dengan test lewat router asli, worker outbox, scheduler dan logger penangkap (`internal/app/observability_integration_test.go`; `newStack` kini menangkap semua log API pada level debug).
+
+| Pertanyaan | Hasil | Test |
+|---|---|---|
+| `trace_id`, `request_id`, `user_id`, `org_id` ada di log request HTTP | Ya. `user_id` setelah autentikasi, `org_id` pada rute `/orgs/{orgId}`; request anonim hanya `trace_id` dan `request_id`; yang dicatat route template, tidak pernah URL mentah atau query | `TestObservability_HTTPLogsCarryTraceRequestUserAndOrgIDs` |
+| Log service ikut `trace_id` request | Ya (mis. deteksi pemakaian ulang refresh token) | `TestObservability_ServiceLogsShareTheTraceOfTheRequestThatCausedThem` |
+| Log billing (checkout, webhook) | Ya, **dengan perbaikan**: log `invoice issued`, `invoice paid` dan kegagalan gateway tidak memuat `org_id` bila konteksnya tidak punya tenant (webhook dan job tidak lewat tenant middleware). Kini `org_id` diambil dari invoice dan dipasang lewat `reqctx.WithOrgID` sebelum logger dibuat, jadi tidak ada field ganda | `TestObservability_BillingLogsCarryTheOrganizationFromCheckoutThroughTheWebhook` |
+| Log worker outbox | `trace_id` request asal dipulihkan; tiap baris memuat `job_id`, `job_type`, `attempt`, `request_id` baru. Kegagalan sementara: `will retry` (warn) dengan error dan `next_attempt_at`; permanen atau habis percobaan: `failed permanently` (error) dengan `permanent`; pengiriman sukses: `email sent` hanya berisi nama template | `TestObservability_OutboxJobLogsRestoreTheRequestTraceAndFailuresCarryContext` |
+| Log scheduler/job billing | Tiap run punya `trace_id` sendiri yang dipakai bersama oleh log di dalam job dan baris ringkasan `job finished` (nama job, hitungan, durasi, error) | `TestObservability_SchedulerRunsGetTheirOwnTraceAndLogTheirOutcome` |
+| Secret tidak masuk log | Tidak ada. Seluruh alur sensitif dijalankan lewat router dan worker (daftar, verifikasi, login cookie dan body, refresh, replay token, salah password, ganti password dan email, lupa/reset password, tautan undangan, checkout ke gateway yang menolak, webhook sah dan palsu, pengiriman semua email), lalu seluruh keluaran log dicari untuk: JWT secret, Server Key Midtrans dan Basic auth-nya, semua password, hash Argon2, access token, refresh token (cookie dan body, termasuk yang dirotasi/palsu), semua token email, token undangan, signature webhook (sah dan palsu), secret fake | `TestObservability_NoSecretEverReachesTheLogs` |
+
+Pengecualian yang diterima dan disengaja:
+
+- **`LogMailer`** (driver `log`, hanya dev, ditolak di production) mencatat alamat tujuan dan subjek pada level info serta **isi email pada level debug**, supaya developer bisa menyalin tautan verifikasi tanpa Mailpit. Di production driver itu tidak bisa dipakai; di dev jangan naikkan ke debug bila log dibagikan.
+- **Tabel `outbox_jobs` menyimpan payload email apa adanya**, termasuk tautan dengan token mentah (worker membutuhkannya untuk mengirim). Token itu sekali pakai dan berumur pendek (1-24 jam, undangan 7 hari), dan baris `done` tidak dipakai lagi; akses ke database tetap harus diperlakukan sebagai akses ke token yang belum kedaluwarsa. Pembersihan baris `done` lama adalah item backlog.
+- Nilai panic dan stack trace dicatat apa adanya oleh `Recover` (hanya ke log, tidak ke klien). Kode proyek tidak memanggil `panic` dengan data pengguna.
+
 ---
 
 ## 12. Kriteria Selesai (Acceptance Criteria)

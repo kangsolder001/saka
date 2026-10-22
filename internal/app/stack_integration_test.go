@@ -3,11 +3,13 @@
 package app_test
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -55,6 +57,43 @@ type stack struct {
 	// gateway is the fake payment gateway the API creates payments with; tests
 	// drive payments by posting webhooks signed for it.
 	gateway *fake.Provider
+	// logs holds every line the API logged; log is the logger that writes to it
+	// (tests build workers and jobs with it to capture their output too).
+	logs *logBuffer
+	log  *logger.Logger
+}
+
+// logBuffer is a concurrency-safe buffer for captured log output.
+type logBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *logBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *logBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// entries parses the captured JSON lines.
+func (b *logBuffer) entries(t *testing.T) []map[string]any {
+	t.Helper()
+	var out []map[string]any
+	for _, line := range strings.Split(strings.TrimSpace(b.String()), "\n") {
+		if line == "" {
+			continue
+		}
+		var m map[string]any
+		require.NoError(t, json.Unmarshal([]byte(line), &m), "every log line is one JSON object: %q", line)
+		out = append(out, m)
+	}
+	return out
 }
 
 // newStack builds the API; tweak adjusts the wiring (see app.Options) when a test needs to.
@@ -85,10 +124,14 @@ func newStack(t *testing.T, tweak ...func(*app.Options)) *stack {
 	for _, f := range tweak {
 		f(&opts)
 	}
-	router, err := app.NewRouter(cfg, logger.Nop(), clk, d, rdb, opts)
+	// Everything the API logs is captured (debug level) so tests can inspect it.
+	logs := &logBuffer{}
+	log, err := logger.New(logs, "debug")
+	require.NoError(t, err)
+	router, err := app.NewRouter(cfg, log, clk, d, rdb, opts)
 	require.NoError(t, err)
 	users := user.NewService(clk, user.WithCache(rdb.Namespace("user"), cfg.Redis.UserCacheTTL.Std(), logger.Nop()))
-	return &stack{t: t, router: router, engine: router, db: d, admin: dbtest.AdminPool(t, dsn), redis: rdb, clock: clk, users: users, gateway: gateway}
+	return &stack{t: t, router: router, engine: router, db: d, admin: dbtest.AdminPool(t, dsn), redis: rdb, clock: clk, users: users, gateway: gateway, logs: logs, log: log}
 }
 
 type response struct {

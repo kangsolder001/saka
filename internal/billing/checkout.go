@@ -14,6 +14,7 @@ import (
 	"github.com/kangsolder001/saka/internal/billing/payment"
 	"github.com/kangsolder001/saka/internal/platform/apperr"
 	"github.com/kangsolder001/saka/internal/platform/db"
+	"github.com/kangsolder001/saka/internal/platform/reqctx"
 )
 
 // CheckoutResult is what a checkout (or an upgrade) produced.
@@ -203,7 +204,7 @@ func (s *Service) issueInvoice(ctx context.Context, tx pgx.Tx, pay *payments, in
 	if err != nil {
 		var gw *payment.GatewayError
 		if errors.As(err, &gw) {
-			zl := pay.Log.FromContext(ctx)
+			zl := pay.Log.FromContext(reqctx.WithOrgID(ctx, in.OrganizationID))
 			zl.Error().Str("provider", provider.Name()).Str("invoice_number", number).Err(err).Msg("payment gateway refused to create a payment")
 			return billingdb.Invoice{}, apperr.PaymentProviderError(err)
 		}
@@ -226,7 +227,8 @@ func (s *Service) issueInvoice(ctx context.Context, tx pgx.Tx, pay *payments, in
 	if err := pay.sendEmail(ctx, tx, contact.OwnerEmail, "invoice_created", data); err != nil {
 		return billingdb.Invoice{}, err
 	}
-	zl := pay.Log.FromContext(ctx)
+	// Renewals are issued by a job, which has no tenant on the context: add it for the log line.
+	zl := pay.Log.FromContext(reqctx.WithOrgID(ctx, in.OrganizationID))
 	zl.Info().Str("invoice_number", number).Str("kind", string(in.Kind)).Str("plan", in.Plan.Code).Int64("amount", row.Amount).Msg("invoice issued")
 	return row, nil
 }
