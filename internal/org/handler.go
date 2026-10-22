@@ -33,8 +33,10 @@ func NewHandler(svc *Service) *Handler {
 }
 
 // Routes registers the organization endpoints under rg (expected to be
-// /api/v1). authenticate must put the caller's user ID on the request context.
-func (h *Handler) Routes(rg *gin.RouterGroup, authenticate gin.HandlerFunc) {
+// /api/v1). authenticate must put the caller's user ID on the request context;
+// requireVerifiedEmail rejects callers whose email is not verified, and guards
+// the routes that make the service send email.
+func (h *Handler) Routes(rg *gin.RouterGroup, authenticate, requireVerifiedEmail gin.HandlerFunc) {
 	orgs := rg.Group("/orgs", authenticate)
 	orgs.GET("", h.list)
 	orgs.POST("", h.create)
@@ -44,6 +46,7 @@ func (h *Handler) Routes(rg *gin.RouterGroup, authenticate gin.HandlerFunc) {
 	one.PATCH("", h.update)
 	one.DELETE("", h.delete)
 	h.memberRoutes(one)
+	h.invitationRoutes(one, requireVerifiedEmail)
 }
 
 type organizationResponse struct {

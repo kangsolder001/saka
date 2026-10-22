@@ -18,13 +18,14 @@ var cacheWriters = []string{"ChangeEmail", "Delete", "MarkEmailVerified", "Updat
 // notCacheWriters are the other exported methods, each with the reason it
 // does not need to invalidate.
 var notCacheWriters = map[string]string{
-	"Create":          "inserts a new user: nothing can be cached for an ID that did not exist",
-	"SetPasswordHash": "the cached summary holds no password data (TestSetPasswordHash_LeavesTheSummaryCacheAlone)",
-	"GetByID":         "read",
-	"GetByEmail":      "read",
-	"GetSummary":      "read (fills the cache)",
-	"GetSummaries":    "read",
-	"InvalidateCache": "cache control itself",
+	"Create":            "inserts a new user: nothing can be cached for an ID that did not exist",
+	"SetPasswordHash":   "the cached summary holds no password data (TestSetPasswordHash_LeavesTheSummaryCacheAlone)",
+	"GetByID":           "read",
+	"GetByEmail":        "read",
+	"GetSummary":        "read (fills the cache)",
+	"GetSummaries":      "read",
+	"GetSummaryByEmail": "read",
+	"InvalidateCache":   "cache control itself",
 }
 
 // TestServiceMethods_AreAllClassified fails when someone adds an exported

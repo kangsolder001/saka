@@ -12,6 +12,147 @@ import (
 	"github.com/google/uuid"
 )
 
+const getOpenInvitationByEmailForUpdate = `-- name: GetOpenInvitationByEmailForUpdate :one
+SELECT id FROM invitations
+WHERE organization_id = $1 AND email = $2
+  AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL
+FOR UPDATE
+`
+
+type GetOpenInvitationByEmailForUpdateParams struct {
+	OrganizationID uuid.UUID
+	Email          string
+}
+
+// "Open" means not accepted, declined or revoked; expiry is checked separately
+// (the unique index ignores it, migration 00006).
+func (q *Queries) GetOpenInvitationByEmailForUpdate(ctx context.Context, arg GetOpenInvitationByEmailForUpdateParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getOpenInvitationByEmailForUpdate, arg.OrganizationID, arg.Email)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
+const listActiveInvitations = `-- name: ListActiveInvitations :many
+SELECT id, organization_id, email, role, token_hash, invited_by, expires_at, accepted_at, declined_at, revoked_at, created_at FROM invitations
+WHERE organization_id = $1
+  AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL
+  AND expires_at > $2::timestamptz
+  AND (
+    $3::timestamptz IS NULL
+    OR (created_at, id) > ($3::timestamptz, $4::uuid)
+  )
+ORDER BY created_at, id
+LIMIT $5
+`
+
+type ListActiveInvitationsParams struct {
+	OrganizationID uuid.UUID
+	Now            time.Time
+	AfterCreatedAt *time.Time
+	AfterID        *uuid.UUID
+	RowLimit       int32
+}
+
+// Active = open and not expired. Keyset pagination on (created_at, id).
+func (q *Queries) ListActiveInvitations(ctx context.Context, arg ListActiveInvitationsParams) ([]Invitation, error) {
+	rows, err := q.db.Query(ctx, listActiveInvitations,
+		arg.OrganizationID,
+		arg.Now,
+		arg.AfterCreatedAt,
+		arg.AfterID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Invitation
+	for rows.Next() {
+		var i Invitation
+		if err := rows.Scan(
+			&i.ID,
+			&i.OrganizationID,
+			&i.Email,
+			&i.Role,
+			&i.TokenHash,
+			&i.InvitedBy,
+			&i.ExpiresAt,
+			&i.AcceptedAt,
+			&i.DeclinedAt,
+			&i.RevokedAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const renewInvitation = `-- name: RenewInvitation :one
+UPDATE invitations
+SET token_hash = $1, expires_at = $2::timestamptz
+WHERE id = $3 AND organization_id = $4
+  AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL
+RETURNING id, organization_id, email, role, token_hash, invited_by, expires_at, accepted_at, declined_at, revoked_at, created_at
+`
+
+type RenewInvitationParams struct {
+	TokenHash      string
+	ExpiresAt      time.Time
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+}
+
+// Resend: a fresh token and expiry for an open invitation, expired or not.
+func (q *Queries) RenewInvitation(ctx context.Context, arg RenewInvitationParams) (Invitation, error) {
+	row := q.db.QueryRow(ctx, renewInvitation,
+		arg.TokenHash,
+		arg.ExpiresAt,
+		arg.ID,
+		arg.OrganizationID,
+	)
+	var i Invitation
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.Email,
+		&i.Role,
+		&i.TokenHash,
+		&i.InvitedBy,
+		&i.ExpiresAt,
+		&i.AcceptedAt,
+		&i.DeclinedAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const revokeInvitation = `-- name: RevokeInvitation :execrows
+UPDATE invitations SET revoked_at = $1::timestamptz
+WHERE id = $2 AND organization_id = $3
+  AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL
+`
+
+type RevokeInvitationParams struct {
+	Now            time.Time
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+}
+
+func (q *Queries) RevokeInvitation(ctx context.Context, arg RevokeInvitationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, revokeInvitation, arg.Now, arg.ID, arg.OrganizationID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const revokeOpenInvitationsForOrganization = `-- name: RevokeOpenInvitationsForOrganization :execrows
 UPDATE invitations
 SET revoked_at = $1::timestamptz
@@ -31,4 +172,54 @@ func (q *Queries) RevokeOpenInvitationsForOrganization(ctx context.Context, arg 
 		return 0, err
 	}
 	return result.RowsAffected(), nil
+}
+
+const upsertInvitation = `-- name: UpsertInvitation :one
+INSERT INTO invitations (organization_id, email, role, token_hash, invited_by, expires_at, created_at)
+VALUES ($1, $2, $3, $4, $5, $6::timestamptz, $7::timestamptz)
+ON CONFLICT (organization_id, email) WHERE accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL
+DO UPDATE SET role = EXCLUDED.role,
+              token_hash = EXCLUDED.token_hash,
+              invited_by = EXCLUDED.invited_by,
+              expires_at = EXCLUDED.expires_at
+RETURNING id, organization_id, email, role, token_hash, invited_by, expires_at, accepted_at, declined_at, revoked_at, created_at
+`
+
+type UpsertInvitationParams struct {
+	OrganizationID uuid.UUID
+	Email          string
+	Role           string
+	TokenHash      string
+	InvitedBy      uuid.UUID
+	ExpiresAt      time.Time
+	Now            time.Time
+}
+
+// Inviting an email that already has an open invitation refreshes that row in
+// place (new token, new expiry, spec §7.4) instead of creating a second one.
+func (q *Queries) UpsertInvitation(ctx context.Context, arg UpsertInvitationParams) (Invitation, error) {
+	row := q.db.QueryRow(ctx, upsertInvitation,
+		arg.OrganizationID,
+		arg.Email,
+		arg.Role,
+		arg.TokenHash,
+		arg.InvitedBy,
+		arg.ExpiresAt,
+		arg.Now,
+	)
+	var i Invitation
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.Email,
+		&i.Role,
+		&i.TokenHash,
+		&i.InvitedBy,
+		&i.ExpiresAt,
+		&i.AcceptedAt,
+		&i.DeclinedAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+	)
+	return i, err
 }

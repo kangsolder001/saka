@@ -4,6 +4,7 @@ package org_test
 
 import (
 	"context"
+	"sync"
 	"sync/atomic"
 	"testing"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 
+	"github.com/kangsolder001/saka/internal/mail"
 	"github.com/kangsolder001/saka/internal/org"
 	"github.com/kangsolder001/saka/internal/platform/apperr"
 	"github.com/kangsolder001/saka/internal/platform/clock"
@@ -29,9 +31,11 @@ type env struct {
 	dsn   string
 	// passwords stands in for auth's password check.
 	passwords *fakePasswords
-	clock     *clock.Fake
-	users     *user.Service
-	orgs      *org.Service
+	// mail records what the service queued, per recipient.
+	mail  *recordingMailer
+	clock *clock.Fake
+	users *user.Service
+	orgs  *org.Service
 }
 
 func newEnv(t *testing.T) *env {
@@ -48,9 +52,10 @@ func newEnv(t *testing.T) *env {
 	clk := clock.NewFake(epoch)
 	users := user.NewService(clk)
 	passwords := &fakePasswords{}
+	mailer := &recordingMailer{}
 	return &env{
-		t: t, db: d, dsn: dsn, admin: dbtest.AdminPool(t, dsn), clock: clk, users: users, passwords: passwords,
-		orgs: org.NewService(org.Dependencies{Clock: clk, Tx: d, Users: users, Passwords: passwords}),
+		t: t, db: d, dsn: dsn, admin: dbtest.AdminPool(t, dsn), clock: clk, users: users, passwords: passwords, mail: mailer,
+		orgs: org.NewService(org.Dependencies{Clock: clk, Tx: d, Users: users, Passwords: passwords, Mail: mailer, FrontendURL: "https://app.example.com/"}),
 	}
 }
 
@@ -97,5 +102,19 @@ func (f *fakePasswords) ConfirmPassword(_ context.Context, _ uuid.UUID, password
 	if password != "correct-horse" {
 		return apperr.Validation(map[string]string{"current_password": "is incorrect"})
 	}
+	return nil
+}
+
+// recordingMailer is a mail.Sender that remembers every email it was asked to
+// send; whether the caller's transaction commits is the database's business.
+type recordingMailer struct {
+	mu   sync.Mutex
+	sent []mail.Email
+}
+
+func (r *recordingMailer) Send(_ context.Context, _ db.DBTX, email mail.Email) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.sent = append(r.sent, email)
 	return nil
 }

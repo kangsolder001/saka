@@ -5,11 +5,13 @@ package org
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/kangsolder001/saka/internal/mail"
 	"github.com/kangsolder001/saka/internal/org/orgdb"
 	"github.com/kangsolder001/saka/internal/platform/clock"
 	"github.com/kangsolder001/saka/internal/platform/db"
@@ -59,6 +61,8 @@ var _ Transactor = (*db.DB)(nil)
 // (*user.Service implements it); org never queries the users table itself.
 type UserDirectory interface {
 	GetSummaries(ctx context.Context, q db.DBTX, ids []uuid.UUID) (map[uuid.UUID]user.Summary, error)
+	// GetSummaryByEmail returns NOT_FOUND when no active account has the email.
+	GetSummaryByEmail(ctx context.Context, q db.DBTX, email string) (user.Summary, error)
 }
 
 var _ UserDirectory = (*user.Service)(nil)
@@ -80,6 +84,10 @@ type Dependencies struct {
 	Tx        Transactor
 	Users     UserDirectory
 	Passwords PasswordConfirmer
+	// Mail queues invitation emails in the caller's transaction.
+	Mail mail.Sender
+	// FrontendURL is the base of links in emails, e.g. https://app.example.com.
+	FrontendURL string
 }
 
 // Service is the public API of the organization module.
@@ -91,6 +99,7 @@ type Service struct {
 
 // NewService creates a Service.
 func NewService(deps Dependencies) *Service {
+	deps.FrontendURL = strings.TrimRight(deps.FrontendURL, "/")
 	return &Service{Dependencies: deps, clk: deps.Clock, tx: deps.Tx}
 }
 

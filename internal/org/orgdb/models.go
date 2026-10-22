@@ -10,6 +10,20 @@ import (
 	"github.com/google/uuid"
 )
 
+type Invitation struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	Email          string
+	Role           string
+	TokenHash      string
+	InvitedBy      uuid.UUID
+	ExpiresAt      time.Time
+	AcceptedAt     *time.Time
+	DeclinedAt     *time.Time
+	RevokedAt      *time.Time
+	CreatedAt      time.Time
+}
+
 type Membership struct {
 	ID             uuid.UUID
 	OrganizationID uuid.UUID

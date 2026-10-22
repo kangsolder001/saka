@@ -127,6 +127,17 @@ func (s *Service) GetSummaries(ctx context.Context, q db.DBTX, ids []uuid.UUID) 
 	return out, nil
 }
 
+// GetSummaryByEmail returns the summary of the active user with this email, or
+// apperr NOT_FOUND. It reads the database directly (no cache) and, unlike
+// GetByEmail, never loads the password hash into the caller.
+func (s *Service) GetSummaryByEmail(ctx context.Context, q db.DBTX, email string) (Summary, error) {
+	u, err := s.GetByEmail(ctx, q, email)
+	if err != nil {
+		return Summary{}, err
+	}
+	return u.Summary(), nil
+}
+
 // MarkEmailVerified records that the user confirmed their email. It is
 // idempotent: verifying twice keeps the first timestamp.
 func (s *Service) MarkEmailVerified(ctx context.Context, q db.DBTX, id uuid.UUID) error {

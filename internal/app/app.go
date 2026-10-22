@@ -73,7 +73,7 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 	// ownership transfer confirms a password), each through an interface the
 	// consumer declares. The composition root closes the loop: org is built
 	// first and receives auth once it exists.
-	organizations := org.NewService(org.Dependencies{Clock: clk, Tx: database, Users: users})
+	organizations := org.NewService(org.Dependencies{Clock: clk, Tx: database, Users: users, Mail: mailer, FrontendURL: cfg.App.FrontendURL})
 	authService := auth.NewService(auth.Dependencies{
 		Tx:          database,
 		Pool:        database.Pool(),
@@ -97,6 +97,6 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 	auth.NewHandler(authService, authMiddleware, auth.HandlerConfig{SecureCookie: cfg.IsProduction()}).Routes(v1)
 	user.NewHandler(user.Dependencies{Profiles: users, Security: authService, Pool: database.Pool(), Organizations: organizations}).
 		Routes(v1, authMiddleware.Authenticate())
-	org.NewHandler(organizations).Routes(v1, authMiddleware.Authenticate())
+	org.NewHandler(organizations).Routes(v1, authMiddleware.Authenticate(), authMiddleware.RequireVerifiedEmail())
 	return router, nil
 }

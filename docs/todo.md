@@ -127,10 +127,10 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Test RLS: query tanpa filter org tidak bocor; lupa `SET LOCAL` → hasil kosong; worker/migrasi punya jalur bypass (0.3). `internal/org/rls_integration_test.go` + penjaga struktural di `migrations/` (setiap tabel ber-`organization_id` wajib RLS + policy dan punya index berawalan `organization_id`, jadi tabel Fase 5–6 otomatis terjaga)
 - [x] Anggota: `GET members`, `PATCH role`, `DELETE member`, `POST leave` (0.6). Matriks izin diuji lewat e2e (`internal/app/members_integration_test.go`); keputusan di spec §7.6
 - [x] Transfer kepemilikan atomik + konfirmasi password (§7.5) (0.4). Atomisitas diuji dengan trigger yang menggagalkan langkah terakhir, balapan dua transfer diuji dengan dua goroutine; `org.NewService` kini menerima `org.Dependencies`
-- [ ] Undangan: buat/list/batalkan/resend; perbarui undangan aktif yang sama (§7.4) (0.6)
+- [x] Undangan: buat/list/batalkan/resend; perbarui undangan aktif yang sama (§7.4) (0.6). Limit `members` dipasang di Fase 5
 - [ ] Undangan: `GET /invitations/{token}`, accept (cek email sama), decline, kedaluwarsa 7 hari (0.6)
 - [ ] Registrasi dengan email yang punya undangan → auto-accept, tanpa org baru (0.3)
-- [ ] Template `invitation`; guard `EMAIL_NOT_VERIFIED` untuk undang (0.3). Template selesai (dikerjakan lebih awal karena mail menolak template yang belum ada saat enqueue); guard dipasang bersama rute undangan
+- [x] Template `invitation`; guard `EMAIL_NOT_VERIFIED` untuk undang (0.3). Template dikerjakan lebih awal (mail menolak template yang belum ada saat enqueue); guard dipasang pada `POST /invitations` dan `.../resend`
 - [ ] Hubungkan penolakan hapus akun owner ke modul org: implementasikan `auth.OrganizationGuard` (menolak bila owner org berisi anggota lain; hapus org yang hanya berisi dia + batalkan subscription) dan ganti `auth.NoOrganizations` di `internal/app` (0.3)
 - [ ] **Daftar akun sandbox Midtrans** (0.1) ⚠️ lakukan di fase ini, persetujuan bisa lama
 - [ ] Test: matriks izin lengkap, isolasi tenant A vs B, transfer atomik, siklus undangan (0.7)
