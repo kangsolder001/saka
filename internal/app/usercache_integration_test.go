@@ -41,7 +41,7 @@ func TestUserCache_SuspensionTakesEffectOnceTheCacheIsInvalidated(t *testing.T) 
 	access := s.loggedIn("ann@example.com")
 	require.Equal(t, http.StatusOK, s.post(resendPath, ``, bearer(access)).Code)
 
-	_, err := s.db.Pool().Exec(context.Background(), "UPDATE users SET status = 'suspended'")
+	_, err := s.admin.Exec(context.Background(), "UPDATE users SET status = 'suspended'")
 	require.NoError(t, err)
 
 	assert.NotEqual(t, http.StatusUnauthorized, s.post(resendPath, ``, bearer(access)).Code,
@@ -72,7 +72,7 @@ func TestUserCache_RefreshUsesTheCacheAndStillRejectsInvalidatedSuspensions(t *t
 	first, next := s.refreshWithCookie(sess.refresh)
 	require.Equal(t, http.StatusOK, first.Code)
 
-	_, err := s.db.Pool().Exec(context.Background(), "UPDATE users SET status = 'suspended'")
+	_, err := s.admin.Exec(context.Background(), "UPDATE users SET status = 'suspended'")
 	require.NoError(t, err)
 	s.invalidateAllUsers()
 

@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kangsolder001/saka/internal/app"
@@ -39,9 +40,11 @@ var epoch = time.Date(2026, 6, 1, 10, 0, 0, 0, time.UTC)
 type stack struct {
 	t      *testing.T
 	router http.Handler
-	db     *db.DB
-	redis  *redisx.Client
-	clock  *clock.Fake
+	db     *db.DB // the API's own connection (restricted by row-level security)
+	// admin sees every tenant: tests arrange and assert through it.
+	admin *pgxpool.Pool
+	redis *redisx.Client
+	clock *clock.Fake
 	// users shares the API's Redis cache, so tests can invalidate it the way
 	// an admin or profile flow would after changing a user.
 	users *user.Service
@@ -75,7 +78,7 @@ func newStack(t *testing.T, tweak ...func(*app.Options)) *stack {
 	router, err := app.NewRouter(cfg, logger.Nop(), clk, d, rdb, opts)
 	require.NoError(t, err)
 	users := user.NewService(clk, user.WithCache(rdb.Namespace("user"), cfg.Redis.UserCacheTTL.Std(), logger.Nop()))
-	return &stack{t: t, router: router, db: d, redis: rdb, clock: clk, users: users}
+	return &stack{t: t, router: router, db: d, admin: dbtest.AdminPool(t, dsn), redis: rdb, clock: clk, users: users}
 }
 
 type response struct {
@@ -120,7 +123,7 @@ func (s *stack) post(path, body string, headers ...map[string]string) response {
 }
 
 func (s *stack) queryRow(sql string, args ...any) interface{ Scan(...any) error } {
-	return s.db.Pool().QueryRow(context.Background(), sql, args...)
+	return s.admin.QueryRow(context.Background(), sql, args...)
 }
 
 func authHash(raw string) string { return auth.HashToken(raw) }
@@ -129,7 +132,7 @@ func authHash(raw string) string { return auth.HashToken(raw) }
 // a user does after committing.
 func (s *stack) invalidateAllUsers() {
 	s.t.Helper()
-	rows, err := s.db.Pool().Query(context.Background(), "SELECT id FROM users")
+	rows, err := s.admin.Query(context.Background(), "SELECT id FROM users")
 	require.NoError(s.t, err)
 	defer rows.Close()
 	var ids []uuid.UUID

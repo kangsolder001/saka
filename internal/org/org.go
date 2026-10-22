@@ -45,7 +45,11 @@ type Membership struct {
 
 // Transactor runs a function in a database transaction; *db.DB implements it.
 type Transactor interface {
+	// WithTx runs fn in a transaction pinned to the tenant on ctx, if any.
 	WithTx(ctx context.Context, fn func(tx pgx.Tx) error) error
+	// WithSystemTx runs fn in a transaction that sees every tenant. Only the
+	// few flows that are cross-tenant by nature use it.
+	WithSystemTx(ctx context.Context, fn func(tx pgx.Tx) error) error
 }
 
 var _ Transactor = (*db.DB)(nil)

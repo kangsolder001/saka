@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	_ "github.com/jackc/pgx/v5/stdlib" // registers the "pgx" database/sql driver
 	"github.com/pressly/goose/v3"
 	"github.com/testcontainers/testcontainers-go"
@@ -114,4 +115,19 @@ func Migrate(t testing.TB, dsn string) {
 	if _, err := provider.Up(context.Background()); err != nil {
 		t.Fatalf("apply migrations: %v", err)
 	}
+}
+
+// AdminPool opens a pool as the login user itself (the table owner and a
+// superuser in the test container), so it is not subject to row-level
+// security. Tests use it to arrange and assert on tenant tables regardless of
+// tenant; the code under test connects through db.Connect, which runs as the
+// restricted application role.
+func AdminPool(t testing.TB, dsn string) *pgxpool.Pool {
+	t.Helper()
+	pool, err := pgxpool.New(context.Background(), dsn)
+	if err != nil {
+		t.Fatalf("open admin pool: %v", err)
+	}
+	t.Cleanup(pool.Close)
+	return pool
 }

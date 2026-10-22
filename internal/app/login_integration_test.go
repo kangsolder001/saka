@@ -107,7 +107,7 @@ func TestLogin_EmailIsCaseInsensitive(t *testing.T) {
 func TestLogin_SuspendedAccount(t *testing.T) {
 	s := newStack(t)
 	s.registered("ann@example.com")
-	_, err := s.db.Pool().Exec(context.Background(), "UPDATE users SET status = 'suspended'")
+	_, err := s.admin.Exec(context.Background(), "UPDATE users SET status = 'suspended'")
 	require.NoError(t, err)
 
 	good := s.post(loginPath, loginBody("ann@example.com", "correct-horse"))

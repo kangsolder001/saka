@@ -21,6 +21,8 @@ import (
 // DefaultPath is the config file used when none is given.
 const DefaultPath = "config.json"
 
+var rolePattern = regexp.MustCompile(`^[a-z_][a-z0-9_]{0,62}$`)
+
 var keyPrefixPattern = regexp.MustCompile(`^[a-z0-9_-]{1,32}$`)
 
 const (
@@ -90,6 +92,11 @@ type DatabaseConfig struct {
 	URL      string `json:"url"`
 	MaxConns int32  `json:"max_conns"`
 	MinConns int32  `json:"min_conns"`
+	// AppRole is the non-owner PostgreSQL role every connection switches to
+	// (SET ROLE), so row-level security applies even when the login user owns
+	// the tables or is a superuser. The migrations create saka_app. Empty
+	// disables the switch (tests of the pool itself); never do that in production.
+	AppRole string `json:"app_role"`
 }
 
 // RedisConfig covers the shared Redis instance (rate limits, caches). Redis is
@@ -154,7 +161,7 @@ func Default() Config {
 			AccessTokenTTL:  Duration(15 * time.Minute),
 			RefreshTokenTTL: Duration(30 * 24 * time.Hour),
 		},
-		Database: DatabaseConfig{MaxConns: 10, MinConns: 0},
+		Database: DatabaseConfig{MaxConns: 10, MinConns: 0, AppRole: "saka_app"},
 		Redis: RedisConfig{
 			Addr:         "localhost:6379",
 			KeyPrefix:    "saka",
@@ -269,6 +276,12 @@ func (c Config) Validate() error {
 		add("database.url is required")
 	} else if u, err := url.Parse(c.Database.URL); err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") {
 		add("database.url must be a postgres:// URL")
+	}
+	if c.Database.AppRole != "" && !rolePattern.MatchString(c.Database.AppRole) {
+		add("database.app_role must be a lowercase PostgreSQL role name such as saka_app")
+	}
+	if c.IsProduction() && c.Database.AppRole == "" {
+		add("database.app_role must be set in production: without it row-level security does not protect tenants")
 	}
 	if c.Database.MaxConns < 1 {
 		add("database.max_conns must be at least 1")

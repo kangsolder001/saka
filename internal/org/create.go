@@ -58,6 +58,11 @@ func (s *Service) CreateWithOwner(ctx context.Context, q db.DBTX, ownerID uuid.U
 	if err != nil {
 		return Organization{}, fmt.Errorf("org: new id: %w", err)
 	}
+	// The organization does not exist yet, so no tenant is on the context; pin
+	// the new one so its own rows pass the row-level security policy.
+	if err := db.PinTenant(ctx, q, id); err != nil {
+		return Organization{}, fmt.Errorf("org: %w", err)
+	}
 	row, err := s.insertOrganization(ctx, q, id, ownerID, name, explicit)
 	if err != nil {
 		return Organization{}, err

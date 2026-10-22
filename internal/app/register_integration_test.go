@@ -101,7 +101,7 @@ func TestRegister_RegistrationIsAtomicWhenTheEmailStepFails(t *testing.T) {
 	s := newStack(t)
 	// Make the outbox insert fail: the user created earlier in the same
 	// transaction must disappear with it.
-	_, err := s.db.Pool().Exec(context.Background(), "DROP TABLE outbox_jobs")
+	_, err := s.admin.Exec(context.Background(), "DROP TABLE outbox_jobs")
 	require.NoError(t, err)
 
 	res := s.post(registerPath, registerBody("ann@example.com"))

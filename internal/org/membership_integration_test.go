@@ -34,7 +34,7 @@ func TestMembership_NotFoundForNonMembersUnknownAndDeletedOrganizations(t *testi
 	require.NoError(t, err)
 	gone, err := e.create(ann.ID, "Gone", "")
 	require.NoError(t, err)
-	_, err = e.db.Pool().Exec(context.Background(), "UPDATE organizations SET deleted_at = now() WHERE id = $1", gone.ID)
+	_, err = e.admin.Exec(context.Background(), "UPDATE organizations SET deleted_at = now() WHERE id = $1", gone.ID)
 	require.NoError(t, err)
 
 	tests := map[string]struct{ org, user uuid.UUID }{

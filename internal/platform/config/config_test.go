@@ -137,6 +137,8 @@ func TestParse_Validation(t *testing.T) {
 		{"unknown log level", with(`{"log_level": "trace"}`, "", "", ""), "app.log_level must be one of"},
 		{"zero shutdown timeout", with(`{"shutdown_timeout": "0s"}`, "", "", ""), "app.shutdown_timeout must be positive"},
 		{"min conns above max", with("", `{"url": "`+validDBURL+`", "max_conns": 2, "min_conns": 5}`, "", ""), "database.min_conns"},
+		{"app role with uppercase", with("", `{"url": "`+validDBURL+`", "app_role": "Saka App"}`, "", ""), "database.app_role"},
+		{"no app role in production", with(`{"env": "production"}`, `{"url": "`+validDBURL+`", "app_role": ""}`, `{"driver": "smtp"}`, ""), "database.app_role must be set in production"},
 		{"zero max conns", with("", `{"url": "`+validDBURL+`", "max_conns": 0}`, "", ""), "database.max_conns"},
 		{"wildcard cors in production", with(`{"env": "production", "cors_allowed_origins": ["*"]}`, "", `{"driver": "smtp"}`, ""), "must not contain *"},
 		{"missing jwt secret", `{"database": {"url": "` + validDBURL + `"}}`, "auth.jwt_secret is required"},
@@ -238,4 +240,18 @@ func TestExampleFileIsValid(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Equal(t, "smtp", cfg.Mail.Driver)
+}
+
+func TestParse_TheApplicationRoleDefaultsToSakaApp(t *testing.T) {
+	cfg, err := config.Parse([]byte(minimal))
+
+	require.NoError(t, err)
+	assert.Equal(t, "saka_app", cfg.Database.AppRole)
+}
+
+func TestParse_TheApplicationRoleMayBeDisabledOutsideProduction(t *testing.T) {
+	cfg, err := config.Parse([]byte(`{"database": {"url": "` + validDBURL + `", "app_role": ""}, "auth": {"jwt_secret": "` + validSecret + `"}}`))
+
+	require.NoError(t, err)
+	assert.Empty(t, cfg.Database.AppRole)
 }

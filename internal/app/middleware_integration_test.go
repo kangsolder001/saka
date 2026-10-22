@@ -77,7 +77,7 @@ func TestAccessToken_StopsWorkingImmediatelyWhenTheSessionIsRevoked(t *testing.T
 	access := s.loggedIn("ann@example.com")
 	require.Equal(t, http.StatusOK, s.post(resendPath, ``, bearer(access)).Code)
 
-	_, err := s.db.Pool().Exec(context.Background(), "UPDATE refresh_tokens SET revoked_at = now()")
+	_, err := s.admin.Exec(context.Background(), "UPDATE refresh_tokens SET revoked_at = now()")
 	require.NoError(t, err)
 
 	res := s.post(resendPath, ``, bearer(access))
@@ -95,7 +95,7 @@ func TestAccessToken_StopsWorkingImmediatelyWhenTheUserIsSuspendedOrDeleted(t *t
 			s.registered("ann@example.com")
 			access := s.loggedIn("ann@example.com")
 			require.Equal(t, http.StatusOK, s.post(resendPath, ``, bearer(access)).Code, "the account is cached as active")
-			_, err := s.db.Pool().Exec(context.Background(), statement)
+			_, err := s.admin.Exec(context.Background(), statement)
 			require.NoError(t, err)
 			s.invalidateAllUsers() // what the suspend/delete flow does after committing
 
@@ -112,7 +112,7 @@ func TestAccessToken_OfAnotherUsersSessionCannotBeReused(t *testing.T) {
 	s.registered("bob@example.com")
 	annAccess := s.loggedIn("ann@example.com")
 	// Revoke only Bob's sessions: Ann must be unaffected.
-	_, err := s.db.Pool().Exec(context.Background(),
+	_, err := s.admin.Exec(context.Background(),
 		"UPDATE refresh_tokens SET revoked_at = now() WHERE user_id = (SELECT id FROM users WHERE email = 'bob@example.com')")
 	require.NoError(t, err)
 

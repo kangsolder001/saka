@@ -12,7 +12,8 @@
   "database": {
     "url": "postgres://saka:saka@localhost:5433/saka?sslmode=disable",
     "max_conns": 10,
-    "min_conns": 0
+    "min_conns": 0,
+    "app_role": "saka_app"
   },
   "auth": {
     "jwt_secret": "change-me-to-a-random-string-of-at-least-32-chars",

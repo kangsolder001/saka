@@ -85,7 +85,7 @@ func TestVerifyEmail_UnknownAndWrongTypeTokensAreRejected(t *testing.T) {
 	var userID string
 	require.NoError(t, s.queryRow("SELECT id FROM users").Scan(&userID))
 	// A password-reset token must never verify an email.
-	_, err := s.db.Pool().Exec(context.Background(),
+	_, err := s.admin.Exec(context.Background(),
 		`INSERT INTO user_tokens (user_id, type, token_hash, expires_at)
 		 VALUES ($1, 'password_reset', $2, now() + interval '1 hour')`, userID, authHash("reset-token"))
 	require.NoError(t, err)

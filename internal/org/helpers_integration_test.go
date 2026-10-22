@@ -8,6 +8,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kangsolder001/saka/internal/org"
@@ -21,7 +22,8 @@ import (
 // env is a migrated database with the services the org tests drive directly.
 type env struct {
 	t     *testing.T
-	db    *db.DB
+	db    *db.DB        // the application's connection: restricted by row-level security
+	admin *pgxpool.Pool // the owner's: sees every tenant, for arranging and asserting
 	clock *clock.Fake
 	users *user.Service
 	orgs  *org.Service
@@ -39,7 +41,7 @@ func newEnv(t *testing.T) *env {
 	t.Cleanup(d.Close)
 
 	clk := clock.NewFake(epoch)
-	return &env{t: t, db: d, clock: clk, users: user.NewService(clk), orgs: org.NewService(clk, d)}
+	return &env{t: t, db: d, admin: dbtest.AdminPool(t, dsn), clock: clk, users: user.NewService(clk), orgs: org.NewService(clk, d)}
 }
 
 // newUser inserts a user and returns it.
@@ -53,14 +55,14 @@ func (e *env) newUser(email string) user.User {
 func (e *env) count(sql string, args ...any) int {
 	e.t.Helper()
 	var n int
-	require.NoError(e.t, e.db.Pool().QueryRow(context.Background(), sql, args...).Scan(&n), sql)
+	require.NoError(e.t, e.admin.QueryRow(context.Background(), sql, args...).Scan(&n), sql)
 	return n
 }
 
 func (e *env) role(orgID, userID uuid.UUID) (string, bool) {
 	e.t.Helper()
 	var role string
-	err := e.db.Pool().QueryRow(context.Background(),
+	err := e.admin.QueryRow(context.Background(),
 		"SELECT role FROM memberships WHERE organization_id = $1 AND user_id = $2", orgID, userID).Scan(&role)
 	return role, err == nil
 }

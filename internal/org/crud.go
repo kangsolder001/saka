@@ -45,7 +45,9 @@ func (s *Service) ListForUser(ctx context.Context, userID uuid.UUID, p paginatio
 		params.AfterCreatedAt, params.AfterID = &p.Cursor.CreatedAt, &p.Cursor.ID
 	}
 	var out []MyOrganization
-	err := s.tx.WithTx(ctx, func(tx pgx.Tx) error {
+	// Cross-tenant by nature: the user's organizations are many tenants. The
+	// query filters on the user's own memberships.
+	err := s.tx.WithSystemTx(ctx, func(tx pgx.Tx) error {
 		rows, err := orgdb.New(tx).ListOrganizationsForUser(ctx, params)
 		if err != nil {
 			return fmt.Errorf("org: list for user: %w", err)

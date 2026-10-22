@@ -146,7 +146,7 @@ func TestForgotPassword_DoesNotRevealWhichEmailsAreRegistered(t *testing.T) {
 func TestForgotPassword_SuspendedAccountGetsNoEmailButSameAnswer(t *testing.T) {
 	s := newStack(t)
 	s.registered("ann@example.com")
-	_, err := s.db.Pool().Exec(t.Context(), "UPDATE users SET status = 'suspended'")
+	_, err := s.admin.Exec(t.Context(), "UPDATE users SET status = 'suspended'")
 	require.NoError(t, err)
 
 	res := s.post(forgotPath, `{"email":"ann@example.com"}`)

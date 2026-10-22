@@ -23,6 +23,7 @@ func connect(t *testing.T) *db.DB {
 	dsn := dbtest.NewDatabase(t)
 	cfg := config.Default()
 	cfg.Database.URL = dsn
+	cfg.Database.AppRole = "" // no migrations here, so the application role does not exist
 
 	d, err := db.Connect(context.Background(), cfg)
 	require.NoError(t, err)

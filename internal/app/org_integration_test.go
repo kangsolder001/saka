@@ -28,7 +28,7 @@ func (s *stack) firstOrg(email string) string {
 // addMember inserts a membership directly (invitations have their own tests).
 func (s *stack) addMember(orgID, email, role string) {
 	s.t.Helper()
-	_, err := s.db.Pool().Exec(s.ctx(), `
+	_, err := s.admin.Exec(s.ctx(), `
 		INSERT INTO memberships (organization_id, user_id, role)
 		SELECT $1, id, $3 FROM users WHERE email = $2`, orgID, email, role)
 	require.NoError(s.t, err)
@@ -244,7 +244,7 @@ func TestUpdateOrg_ASlugInUseByAnotherOrganizationIsAConflict(t *testing.T) {
 func TestDeleteOrg_OnlyTheOwnerMayAndItEndsEveryonesAccess(t *testing.T) {
 	s := newStack(t)
 	tm := s.newTeam()
-	_, err := s.db.Pool().Exec(s.ctx(), `
+	_, err := s.admin.Exec(s.ctx(), `
 		INSERT INTO invitations (organization_id, email, role, token_hash, invited_by, expires_at)
 		SELECT $1, 'pending@example.com', 'member', 'hash', id, now() + interval '7 days' FROM users WHERE email = 'owner@example.com'`, tm.orgID)
 	require.NoError(t, err)

@@ -106,7 +106,7 @@ func TestCreateWithOwner_ADeletedOrganizationKeepsItsSlugReserved(t *testing.T) 
 	ann, bob := e.newUser("ann@example.com"), e.newUser("bob@example.com")
 	first, err := e.create(ann.ID, "Acme", "")
 	require.NoError(t, err)
-	_, err = e.db.Pool().Exec(context.Background(), "UPDATE organizations SET deleted_at = now() WHERE id = $1", first.ID)
+	_, err = e.admin.Exec(context.Background(), "UPDATE organizations SET deleted_at = now() WHERE id = $1", first.ID)
 	require.NoError(t, err)
 
 	second, err := e.create(bob.ID, "Acme", "")

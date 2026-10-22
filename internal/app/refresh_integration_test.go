@@ -160,7 +160,7 @@ func TestRefresh_SuspendedUserCannotRefresh(t *testing.T) {
 	s := newStack(t)
 	s.registered("ann@example.com")
 	sess := s.cookieLogin("ann@example.com")
-	_, err := s.db.Pool().Exec(t.Context(), "UPDATE users SET status = 'suspended'")
+	_, err := s.admin.Exec(t.Context(), "UPDATE users SET status = 'suspended'")
 	require.NoError(t, err)
 
 	res, _ := s.refreshWithCookie(sess.refresh)
