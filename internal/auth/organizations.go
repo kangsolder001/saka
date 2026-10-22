@@ -7,6 +7,7 @@ import (
 
 	"github.com/kangsolder001/saka/internal/platform/apperr"
 	"github.com/kangsolder001/saka/internal/platform/db"
+	"github.com/kangsolder001/saka/internal/user"
 )
 
 // OrganizationGuard is what account deletion needs from the organization
@@ -20,6 +21,15 @@ type OrganizationGuard interface {
 	// their subscriptions. Doing the check and the cleanup in one transaction
 	// means nobody can join in between.
 	BeforeUserDeleted(ctx context.Context, tx db.DBTX, userID uuid.UUID) error
+}
+
+// OrganizationProvisioner is what registration needs from the organization
+// module (spec §5.2): every new user ends up in an organization.
+type OrganizationProvisioner interface {
+	// ProvisionForNewUser runs inside the registration transaction, after the
+	// user row exists. It creates the user's own organization (they become its
+	// owner), or joins the organizations that invited this email instead.
+	ProvisionForNewUser(ctx context.Context, tx db.DBTX, u user.User, organizationName string) error
 }
 
 // ErrOwnsSharedOrganization is the CONFLICT an OrganizationGuard returns when

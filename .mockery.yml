@@ -27,6 +27,7 @@ packages:
       TokenService:
       RefreshStore:
       OrganizationGuard:
+      OrganizationProvisioner:
   github.com/kangsolder001/saka/internal/user:
     interfaces:
       ProfileService:

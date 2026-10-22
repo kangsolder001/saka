@@ -11,6 +11,7 @@ import (
 
 	"github.com/kangsolder001/saka/internal/auth"
 	"github.com/kangsolder001/saka/internal/mail"
+	"github.com/kangsolder001/saka/internal/org"
 	"github.com/kangsolder001/saka/internal/platform/clock"
 	"github.com/kangsolder001/saka/internal/platform/config"
 	"github.com/kangsolder001/saka/internal/platform/db"
@@ -67,20 +68,22 @@ func NewRouter(cfg config.Config, log *logger.Logger, clk clock.Clock, database 
 	if orgs == nil {
 		orgs = auth.NoOrganizations{} // TODO(phase-4): wire the organization module
 	}
+	organizations := org.NewService(clk)
 	users := user.NewService(clk, user.WithCache(redis.Namespace("user"), cfg.Redis.UserCacheTTL.Std(), log))
 	authService := auth.NewService(auth.Dependencies{
-		Tx:       database,
-		Pool:     database.Pool(),
-		Users:    users,
-		Orgs:     orgs,
-		Tokens:   auth.NewUserTokens(clk),
-		Sessions: auth.NewRefreshTokens(clk, cfg.Auth.RefreshTokenTTL.Std()),
-		JWT:      jwt,
-		Mail:     mailer,
-		Hasher:   hasher,
-		Limiter:  ratelimit.New(redis, clk),
-		Clock:    clk,
-		Log:      log,
+		Tx:          database,
+		Pool:        database.Pool(),
+		Users:       users,
+		Orgs:        orgs,
+		Provisioner: organizations,
+		Tokens:      auth.NewUserTokens(clk),
+		Sessions:    auth.NewRefreshTokens(clk, cfg.Auth.RefreshTokenTTL.Std()),
+		JWT:         jwt,
+		Mail:        mailer,
+		Hasher:      hasher,
+		Limiter:     ratelimit.New(redis, clk),
+		Clock:       clk,
+		Log:         log,
 	}, auth.Config{FrontendURL: cfg.App.FrontendURL})
 
 	authMiddleware := auth.NewMiddleware(authService)

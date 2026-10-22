@@ -107,8 +107,52 @@ func TestRegister_RegistrationIsAtomicWhenTheEmailStepFails(t *testing.T) {
 	res := s.post(registerPath, registerBody("ann@example.com"))
 
 	assert.Equal(t, http.StatusInternalServerError, res.Code)
-	var users, tokens int
-	require.NoError(t, s.queryRow("SELECT (SELECT count(*) FROM users), (SELECT count(*) FROM user_tokens)").Scan(&users, &tokens))
+	var users, tokens, orgs, members int
+	require.NoError(t, s.queryRow(`SELECT (SELECT count(*) FROM users), (SELECT count(*) FROM user_tokens),
+		(SELECT count(*) FROM organizations), (SELECT count(*) FROM memberships)`).Scan(&users, &tokens, &orgs, &members))
 	assert.Zero(t, users, "no user without its verification email")
 	assert.Zero(t, tokens)
+	assert.Zero(t, orgs, "nor an organization without its user")
+	assert.Zero(t, members)
+}
+
+func TestRegister_CreatesTheUsersOwnOrganizationAsOwner(t *testing.T) {
+	s := newStack(t)
+
+	require.Equal(t, http.StatusCreated, s.post(registerPath, registerBody("ann@example.com")).Code)
+
+	var name, slug, role string
+	var ownerMatches bool
+	require.NoError(t, s.queryRow(`
+		SELECT o.name, o.slug, m.role, o.owner_id = u.id
+		FROM users u
+		JOIN memberships m ON m.user_id = u.id
+		JOIN organizations o ON o.id = m.organization_id
+		WHERE u.email = 'ann@example.com'`).Scan(&name, &slug, &role, &ownerMatches))
+	assert.Equal(t, "Acme", name)
+	assert.Equal(t, "acme", slug)
+	assert.Equal(t, "owner", role)
+	assert.True(t, ownerMatches)
+}
+
+func TestRegister_TwoUsersWithTheSameOrganizationNameGetDistinctSlugs(t *testing.T) {
+	s := newStack(t)
+
+	require.Equal(t, http.StatusCreated, s.post(registerPath, registerBody("ann@example.com")).Code)
+	require.Equal(t, http.StatusCreated, s.post(registerPath, registerBody("bob@example.com")).Code)
+
+	var distinct int
+	require.NoError(t, s.queryRow("SELECT count(DISTINCT slug) FROM organizations").Scan(&distinct))
+	assert.Equal(t, 2, distinct)
+}
+
+func TestRegister_DuplicateEmailCreatesNoOrganization(t *testing.T) {
+	s := newStack(t)
+	require.Equal(t, http.StatusCreated, s.post(registerPath, registerBody("ann@example.com")).Code)
+
+	require.Equal(t, http.StatusConflict, s.post(registerPath, registerBody("ann@example.com")).Code)
+
+	var orgs, members int
+	require.NoError(t, s.queryRow("SELECT (SELECT count(*) FROM organizations), (SELECT count(*) FROM memberships)").Scan(&orgs, &members))
+	assert.Equal(t, []int{1, 1}, []int{orgs, members})
 }

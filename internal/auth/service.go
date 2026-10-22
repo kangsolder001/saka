@@ -77,8 +77,10 @@ type Dependencies struct {
 	Users UserService
 	// Orgs is the organization module's part of account deletion; use
 	// NoOrganizations until that module exists.
-	Orgs   OrganizationGuard
-	Tokens TokenService
+	Orgs OrganizationGuard
+	// Provisioner creates the new user's organization during registration.
+	Provisioner OrganizationProvisioner
+	Tokens      TokenService
 	// Sessions stores refresh token sessions.
 	Sessions RefreshStore
 	// JWT signs access tokens.
@@ -108,14 +110,15 @@ type RegisterInput struct {
 	Email    string
 	Password string
 	Name     string
-	// OrganizationName is validated now but only used once organizations exist (Phase 4).
+	// OrganizationName names the organization created for the new user.
 	OrganizationName string
 	// ClientIP is the caller's address, used for the sign-up rate limit.
 	ClientIP string
 }
 
-// Register creates the user and queues the verification email in a single
-// transaction: either everything exists afterwards or nothing does. It does
+// Register creates the user, their organization (or membership of the one that
+// invited them) and the verification email in a single transaction: either
+// everything exists afterwards or nothing does. It does
 // not log the user in. A taken email returns CONFLICT.
 func (s *Service) Register(ctx context.Context, in RegisterInput) (user.User, error) {
 	if err := s.take(ctx, RuleRegister, in.ClientIP); err != nil {
@@ -150,6 +153,9 @@ func (s *Service) Register(ctx context.Context, in RegisterInput) (user.User, er
 		var err error
 		created, err = s.Users.Create(ctx, tx, user.NewUser{Email: email, PasswordHash: hash, Name: name})
 		if err != nil {
+			return err
+		}
+		if err := s.Provisioner.ProvisionForNewUser(ctx, tx, created, strings.TrimSpace(in.OrganizationName)); err != nil {
 			return err
 		}
 		return s.sendVerificationEmail(ctx, tx, created.Summary())

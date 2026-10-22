@@ -29,6 +29,8 @@ func TestRegister_CreatesUserAndQueuesVerificationEmailInOneTransaction(t *testi
 		ok, _, err := f.hasher.Verify("correct-horse", in.PasswordHash)
 		return in.Email == "ann@example.com" && in.Name == "Ann" && err == nil && ok
 	})).Return(user.User{ID: userID, Email: "ann@example.com", Name: "Ann"}, nil).Once()
+	f.prov.EXPECT().ProvisionForNewUser(mock.Anything, mock.Anything, mock.MatchedBy(func(u user.User) bool { return u.ID == userID }), "Acme").
+		Return(nil).Once()
 	f.tokens.EXPECT().Issue(mock.Anything, mock.Anything, userID, auth.TokenEmailVerification, nil).
 		Return("raw+token/1", nil).Once()
 	f.mail.EXPECT().Send(mock.Anything, mock.Anything, mail.Email{
@@ -52,6 +54,7 @@ func TestRegister_DoesNotStorePlaintextPassword(t *testing.T) {
 			stored = in.PasswordHash
 			return user.User{ID: uuid.New(), Email: in.Email, Name: in.Name}, nil
 		}).Once()
+	f.expectProvision()
 	f.tokens.EXPECT().Issue(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return("t", nil).Once()
 	f.mail.EXPECT().Send(mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 
@@ -115,6 +118,7 @@ func TestRegister_MailFailureFailsTheWholeRegistration(t *testing.T) {
 	f.expectTx()
 	f.users.EXPECT().Create(mock.Anything, mock.Anything, mock.Anything).
 		Return(user.User{ID: uuid.New(), Email: "ann@example.com", Name: "Ann"}, nil).Once()
+	f.expectProvision()
 	f.tokens.EXPECT().Issue(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return("t", nil).Once()
 	boom := errors.New("outbox insert failed")
 	f.mail.EXPECT().Send(mock.Anything, mock.Anything, mock.Anything).Return(boom).Once()
@@ -129,10 +133,29 @@ func TestRegister_TokenFailureFailsTheWholeRegistration(t *testing.T) {
 	f.expectTx()
 	f.users.EXPECT().Create(mock.Anything, mock.Anything, mock.Anything).
 		Return(user.User{ID: uuid.New()}, nil).Once()
+	f.expectProvision()
 	boom := errors.New("token insert failed")
 	f.tokens.EXPECT().Issue(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return("", boom).Once()
 
 	_, err := f.svc.Register(context.Background(), validRegistration())
 
 	assert.ErrorIs(t, err, boom)
+}
+
+func (f *fixture) expectProvision() {
+	f.prov.EXPECT().ProvisionForNewUser(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+}
+
+func TestRegister_OrganizationFailureFailsTheWholeRegistration(t *testing.T) {
+	f := newFixture(t)
+	f.expectTx()
+	f.users.EXPECT().Create(mock.Anything, mock.Anything, mock.Anything).
+		Return(user.User{ID: uuid.New(), Email: "ann@example.com", Name: "Ann"}, nil).Once()
+	boom := errors.New("organization insert failed")
+	f.prov.EXPECT().ProvisionForNewUser(mock.Anything, mock.Anything, mock.Anything, "Acme").Return(boom).Once()
+
+	_, err := f.svc.Register(context.Background(), validRegistration())
+
+	assert.ErrorIs(t, err, boom, "the error reaches the transaction so the user insert rolls back")
+	// no Issue / Send expectations: no email for a registration that failed
 }

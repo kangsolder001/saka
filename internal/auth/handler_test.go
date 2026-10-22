@@ -44,6 +44,7 @@ func TestRegisterEndpoint_Created(t *testing.T) {
 	f.expectTx()
 	f.users.EXPECT().Create(mock.Anything, mock.Anything, mock.Anything).
 		Return(user.User{ID: id, Email: "ann@example.com", Name: "Ann"}, nil).Once()
+	f.expectProvision()
 	f.tokens.EXPECT().Issue(mock.Anything, mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return("t", nil).Once()
 	f.mail.EXPECT().Send(mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 
