@@ -33,6 +33,16 @@ type Invoice struct {
 	UpdatedAt        time.Time
 }
 
+type PaymentEvent struct {
+	ID          uuid.UUID
+	Provider    string
+	EventID     string
+	Payload     []byte
+	ReceivedAt  time.Time
+	ProcessedAt *time.Time
+	Error       *string
+}
+
 type Plan struct {
 	ID          uuid.UUID
 	Code        string

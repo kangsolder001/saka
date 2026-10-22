@@ -111,3 +111,21 @@ func (h *Handler) getInvoice(c *gin.Context) {
 	}
 	c.JSON(http.StatusOK, gin.H{"invoice": invoiceJSON(inv)})
 }
+
+// maxWebhookBytes caps a notification body; real ones are a few hundred bytes.
+const maxWebhookBytes = 1 << 20
+
+// webhook receives a notification from a payment gateway. It is public: the
+// signature, checked by the gateway's own code, is the credential. A gateway
+// treats any 2xx as "received" and retries everything else, so the status code
+// is the protocol: 200 when the event is stored (and, from the next step on,
+// processed), 401 for a bad signature, 500 when processing failed and should
+// be retried.
+func (h *Handler) webhook(c *gin.Context) {
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxWebhookBytes)
+	if err := h.Service.HandleWebhook(c.Request.Context(), c.Param("provider"), c.Request); err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "ok"})
+}

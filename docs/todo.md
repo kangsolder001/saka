@@ -169,8 +169,8 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Test checkout end-to-end dengan fake provider (0.3). `internal/app/checkout_integration_test.go` (HTTP + fake gateway) dan `internal/billing/checkout_integration_test.go` (rollback, balapan, RLS)
 
 **Bagian B: webhook & state machine**
-- [ ] `POST /webhooks/{provider}`: verifikasi signature → 401 jika salah (§8.5) (0.4)
-- [ ] Idempotensi `payment_events` `(provider, event_id)` (0.3)
+- [x] `POST /webhooks/{provider}`: verifikasi signature → 401 jika salah (§8.5) (0.4). Publik, signature diperiksa kode gateway; tes unit (`billing`) dan e2e HTTP (`internal/app`)
+- [x] Idempotensi `payment_events` `(provider, event_id)` (0.3). Insert `ON CONFLICT DO NOTHING`; pengiriman ganda (juga bersamaan) tersimpan sekali
 - [ ] Proses webhook transaksional: invoice → subscription → job email; `processed_at`/`error`, 500 jika gagal (0.8)
 - [x] State machine subscription (`trialing/active/past_due/expired/canceled`) sebagai fungsi murni + tabel transisi (§8.2) (0.6). `billing.Next`/`DueEvent`/`AddInterval`; tes menelusuri setiap pasangan status×event (13 transisi sah, sisanya `ErrIllegalTransition`) dengan `now` yang dipilih sendiri; aturan rinci di spec §8.7
 - [ ] `change-plan` (upgrade via invoice; downgrade via `pending_plan_id`), `cancel`, `resume` (§8.4) (0.7)

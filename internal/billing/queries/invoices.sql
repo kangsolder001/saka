@@ -60,3 +60,30 @@ WHERE subscription_id = @subscription_id
 -- name: GetPaidRenewalForPeriod :one
 SELECT * FROM invoices
 WHERE subscription_id = @subscription_id AND kind = 'renewal' AND status = 'paid' AND period_start = @period_start;
+
+-- A webhook knows an invoice only by its number, across tenants (a system
+-- transaction): the subscription is found from it and locked first, then the
+-- invoice is locked and read again.
+-- name: GetInvoiceByNumber :one
+SELECT * FROM invoices WHERE number = @number;
+
+-- name: LockInvoice :one
+SELECT * FROM invoices WHERE id = @id FOR UPDATE;
+
+-- Marks a live invoice paid. The period is written too: a checkout is paid for
+-- the period that starts when it is paid, not when it was issued.
+-- name: MarkInvoicePaid :exec
+UPDATE invoices
+SET status       = 'paid',
+    paid_at      = @paid_at::timestamptz,
+    period_start = @period_start,
+    period_end   = @period_end,
+    provider_ref = COALESCE(sqlc.narg(provider_ref), provider_ref),
+    updated_at   = @paid_at::timestamptz
+WHERE id = @id AND status IN ('draft', 'open');
+
+-- Closes a live invoice as expired or void; a paid or already closed one is left alone.
+-- name: CloseInvoice :execrows
+UPDATE invoices
+SET status = @status, updated_at = @now::timestamptz
+WHERE id = @id AND status IN ('draft', 'open');

@@ -12,6 +12,27 @@ import (
 	"github.com/google/uuid"
 )
 
+const closeInvoice = `-- name: CloseInvoice :execrows
+UPDATE invoices
+SET status = $1, updated_at = $2::timestamptz
+WHERE id = $3 AND status IN ('draft', 'open')
+`
+
+type CloseInvoiceParams struct {
+	Status string
+	Now    time.Time
+	ID     uuid.UUID
+}
+
+// Closes a live invoice as expired or void; a paid or already closed one is left alone.
+func (q *Queries) CloseInvoice(ctx context.Context, arg CloseInvoiceParams) (int64, error) {
+	result, err := q.db.Exec(ctx, closeInvoice, arg.Status, arg.Now, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getInvoice = `-- name: GetInvoice :one
 SELECT i.id, i.organization_id, i.subscription_id, i.number, i.kind, i.plan_id, i.amount, i.currency, i.status, i.period_start, i.period_end, i.due_at, i.paid_at, i.provider, i.provider_ref, i.payment_url, i.reminder_3d_sent_at, i.reminder_1d_sent_at, i.created_at, i.updated_at, p.code AS plan_code, p.name AS plan_name
 FROM invoices i
@@ -76,6 +97,41 @@ func (q *Queries) GetInvoice(ctx context.Context, arg GetInvoiceParams) (GetInvo
 		&i.UpdatedAt,
 		&i.PlanCode,
 		&i.PlanName,
+	)
+	return i, err
+}
+
+const getInvoiceByNumber = `-- name: GetInvoiceByNumber :one
+SELECT id, organization_id, subscription_id, number, kind, plan_id, amount, currency, status, period_start, period_end, due_at, paid_at, provider, provider_ref, payment_url, reminder_3d_sent_at, reminder_1d_sent_at, created_at, updated_at FROM invoices WHERE number = $1
+`
+
+// A webhook knows an invoice only by its number, across tenants (a system
+// transaction): the subscription is found from it and locked first, then the
+// invoice is locked and read again.
+func (q *Queries) GetInvoiceByNumber(ctx context.Context, number string) (Invoice, error) {
+	row := q.db.QueryRow(ctx, getInvoiceByNumber, number)
+	var i Invoice
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.SubscriptionID,
+		&i.Number,
+		&i.Kind,
+		&i.PlanID,
+		&i.Amount,
+		&i.Currency,
+		&i.Status,
+		&i.PeriodStart,
+		&i.PeriodEnd,
+		&i.DueAt,
+		&i.PaidAt,
+		&i.Provider,
+		&i.ProviderRef,
+		&i.PaymentUrl,
+		&i.Reminder3dSentAt,
+		&i.Reminder1dSentAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }
@@ -294,6 +350,38 @@ func (q *Queries) ListInvoices(ctx context.Context, arg ListInvoicesParams) ([]L
 	return items, nil
 }
 
+const lockInvoice = `-- name: LockInvoice :one
+SELECT id, organization_id, subscription_id, number, kind, plan_id, amount, currency, status, period_start, period_end, due_at, paid_at, provider, provider_ref, payment_url, reminder_3d_sent_at, reminder_1d_sent_at, created_at, updated_at FROM invoices WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockInvoice(ctx context.Context, id uuid.UUID) (Invoice, error) {
+	row := q.db.QueryRow(ctx, lockInvoice, id)
+	var i Invoice
+	err := row.Scan(
+		&i.ID,
+		&i.OrganizationID,
+		&i.SubscriptionID,
+		&i.Number,
+		&i.Kind,
+		&i.PlanID,
+		&i.Amount,
+		&i.Currency,
+		&i.Status,
+		&i.PeriodStart,
+		&i.PeriodEnd,
+		&i.DueAt,
+		&i.PaidAt,
+		&i.Provider,
+		&i.ProviderRef,
+		&i.PaymentUrl,
+		&i.Reminder3dSentAt,
+		&i.Reminder1dSentAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const lockLiveInvoicesForSubscription = `-- name: LockLiveInvoicesForSubscription :many
 SELECT id, organization_id, subscription_id, number, kind, plan_id, amount, currency, status, period_start, period_end, due_at, paid_at, provider, provider_ref, payment_url, reminder_3d_sent_at, reminder_1d_sent_at, created_at, updated_at FROM invoices
 WHERE subscription_id = $1 AND status IN ('draft', 'open')
@@ -342,6 +430,38 @@ func (q *Queries) LockLiveInvoicesForSubscription(ctx context.Context, subscript
 		return nil, err
 	}
 	return items, nil
+}
+
+const markInvoicePaid = `-- name: MarkInvoicePaid :exec
+UPDATE invoices
+SET status       = 'paid',
+    paid_at      = $1::timestamptz,
+    period_start = $2,
+    period_end   = $3,
+    provider_ref = COALESCE($4, provider_ref),
+    updated_at   = $1::timestamptz
+WHERE id = $5 AND status IN ('draft', 'open')
+`
+
+type MarkInvoicePaidParams struct {
+	PaidAt      time.Time
+	PeriodStart time.Time
+	PeriodEnd   time.Time
+	ProviderRef *string
+	ID          uuid.UUID
+}
+
+// Marks a live invoice paid. The period is written too: a checkout is paid for
+// the period that starts when it is paid, not when it was issued.
+func (q *Queries) MarkInvoicePaid(ctx context.Context, arg MarkInvoicePaidParams) error {
+	_, err := q.db.Exec(ctx, markInvoicePaid,
+		arg.PaidAt,
+		arg.PeriodStart,
+		arg.PeriodEnd,
+		arg.ProviderRef,
+		arg.ID,
+	)
+	return err
 }
 
 const nextInvoiceSequence = `-- name: NextInvoiceSequence :one

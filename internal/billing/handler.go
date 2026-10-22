@@ -58,6 +58,7 @@ func NewHandler(deps HandlerDependencies) *Handler {
 // service email the customer or create a payment (checkout, change-plan).
 func (h *Handler) Routes(rg, tenant *gin.RouterGroup, requireVerifiedEmail gin.HandlerFunc) {
 	rg.GET("/plans", h.listPlans)
+	rg.POST("/webhooks/:provider", h.webhook)
 	tenant.GET("/subscription", h.getSubscription)
 	h.paymentRoutes(tenant, requireVerifiedEmail)
 }
