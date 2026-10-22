@@ -17,6 +17,19 @@ import (
 // MaxNameLength is the longest organization name accepted.
 const MaxNameLength = 100
 
+// nameProblem returns why a trimmed organization name is unacceptable, or "".
+func nameProblem(name string) string {
+	switch {
+	case name == "":
+		return "is required"
+	case utf8.RuneCountInString(name) > MaxNameLength:
+		return fmt.Sprintf("must be at most %d characters", MaxNameLength)
+	}
+	return ""
+}
+
+var slugProblem = fmt.Sprintf("must be %d-%d lowercase letters, digits or hyphens", MinSlugLength, MaxSlugLength)
+
 // maxSlugAttempts bounds the search for a free slug when none was requested.
 const maxSlugAttempts = 8
 
@@ -30,15 +43,12 @@ const maxSlugAttempts = 8
 func (s *Service) CreateWithOwner(ctx context.Context, q db.DBTX, ownerID uuid.UUID, name, slug string) (Organization, error) {
 	name = strings.TrimSpace(name)
 	fields := map[string]string{}
-	switch {
-	case name == "":
-		fields["name"] = "is required"
-	case utf8.RuneCountInString(name) > MaxNameLength:
-		fields["name"] = fmt.Sprintf("must be at most %d characters", MaxNameLength)
+	if reason := nameProblem(name); reason != "" {
+		fields["name"] = reason
 	}
 	explicit := strings.ToLower(strings.TrimSpace(slug))
 	if explicit != "" && !ValidSlug(explicit) {
-		fields["slug"] = fmt.Sprintf("must be %d-%d lowercase letters, digits or hyphens", MinSlugLength, MaxSlugLength)
+		fields["slug"] = slugProblem
 	}
 	if len(fields) > 0 {
 		return Organization{}, apperr.Validation(fields)

@@ -12,6 +12,26 @@ import (
 	"github.com/google/uuid"
 )
 
+const getOrganization = `-- name: GetOrganization :one
+SELECT id, name, slug, logo_url, owner_id, created_at, updated_at, deleted_at FROM organizations WHERE id = $1 AND deleted_at IS NULL
+`
+
+func (q *Queries) GetOrganization(ctx context.Context, id uuid.UUID) (Organization, error) {
+	row := q.db.QueryRow(ctx, getOrganization, id)
+	var i Organization
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.LogoUrl,
+		&i.OwnerID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
 const insertOrganization = `-- name: InsertOrganization :one
 INSERT INTO organizations (id, name, slug, owner_id, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5::timestamptz, $5::timestamptz)
@@ -37,6 +57,142 @@ func (q *Queries) InsertOrganization(ctx context.Context, arg InsertOrganization
 		arg.Slug,
 		arg.OwnerID,
 		arg.Now,
+	)
+	var i Organization
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.LogoUrl,
+		&i.OwnerID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.DeletedAt,
+	)
+	return i, err
+}
+
+const listOrganizationsForUser = `-- name: ListOrganizationsForUser :many
+SELECT o.id, o.name, o.slug, o.logo_url, o.owner_id, o.created_at, o.updated_at,
+       m.id AS membership_id, m.role, m.created_at AS joined_at
+FROM memberships m
+JOIN organizations o ON o.id = m.organization_id
+WHERE m.user_id = $1
+  AND o.deleted_at IS NULL
+  AND (
+    $2::timestamptz IS NULL
+    OR (m.created_at, m.id) > ($2::timestamptz, $3::uuid)
+  )
+ORDER BY m.created_at, m.id
+LIMIT $4
+`
+
+type ListOrganizationsForUserParams struct {
+	UserID         uuid.UUID
+	AfterCreatedAt *time.Time
+	AfterID        *uuid.UUID
+	RowLimit       int32
+}
+
+type ListOrganizationsForUserRow struct {
+	ID           uuid.UUID
+	Name         string
+	Slug         string
+	LogoUrl      *string
+	OwnerID      uuid.UUID
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
+	MembershipID uuid.UUID
+	Role         string
+	JoinedAt     time.Time
+}
+
+// Keyset pagination on (membership created_at, membership id), oldest first.
+func (q *Queries) ListOrganizationsForUser(ctx context.Context, arg ListOrganizationsForUserParams) ([]ListOrganizationsForUserRow, error) {
+	rows, err := q.db.Query(ctx, listOrganizationsForUser,
+		arg.UserID,
+		arg.AfterCreatedAt,
+		arg.AfterID,
+		arg.RowLimit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListOrganizationsForUserRow
+	for rows.Next() {
+		var i ListOrganizationsForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.LogoUrl,
+			&i.OwnerID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.MembershipID,
+			&i.Role,
+			&i.JoinedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const softDeleteOrganization = `-- name: SoftDeleteOrganization :execrows
+UPDATE organizations
+SET deleted_at = $1::timestamptz, updated_at = $1::timestamptz
+WHERE id = $2 AND deleted_at IS NULL
+`
+
+type SoftDeleteOrganizationParams struct {
+	Now time.Time
+	ID  uuid.UUID
+}
+
+// Soft delete: the row stays so the slug remains reserved (migration 00006).
+func (q *Queries) SoftDeleteOrganization(ctx context.Context, arg SoftDeleteOrganizationParams) (int64, error) {
+	result, err := q.db.Exec(ctx, softDeleteOrganization, arg.Now, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateOrganization = `-- name: UpdateOrganization :one
+UPDATE organizations
+SET name       = COALESCE($1, name),
+    slug       = COALESCE($2, slug),
+    logo_url   = CASE WHEN $3::boolean THEN $4 ELSE logo_url END,
+    updated_at = $5::timestamptz
+WHERE id = $6 AND deleted_at IS NULL
+RETURNING id, name, slug, logo_url, owner_id, created_at, updated_at, deleted_at
+`
+
+type UpdateOrganizationParams struct {
+	Name    *string
+	Slug    *string
+	SetLogo bool
+	LogoUrl *string
+	Now     time.Time
+	ID      uuid.UUID
+}
+
+// PATCH semantics: a NULL name or slug keeps the current value; the logo is
+// only touched when set_logo is true, so it can be cleared by passing NULL.
+func (q *Queries) UpdateOrganization(ctx context.Context, arg UpdateOrganizationParams) (Organization, error) {
+	row := q.db.QueryRow(ctx, updateOrganization,
+		arg.Name,
+		arg.Slug,
+		arg.SetLogo,
+		arg.LogoUrl,
+		arg.Now,
+		arg.ID,
 	)
 	var i Organization
 	err := row.Scan(

@@ -37,6 +37,7 @@ type handlerFixture struct {
 	router   *gin.Engine
 	profiles *usermocks.MockProfileService
 	security *usermocks.MockAccountSecurity
+	orgs     *usermocks.MockOrganizationLister
 	userID   uuid.UUID
 	session  uuid.UUID
 }
@@ -46,11 +47,12 @@ func newHandlerFixture(t *testing.T) *handlerFixture {
 	f := &handlerFixture{
 		profiles: usermocks.NewMockProfileService(t),
 		security: usermocks.NewMockAccountSecurity(t),
+		orgs:     usermocks.NewMockOrganizationLister(t),
 		userID:   uuid.New(),
 		session:  uuid.New(),
 	}
 	f.router = gin.New()
-	user.NewHandler(user.Dependencies{Profiles: f.profiles, Security: f.security, Pool: stubDB{}}).
+	user.NewHandler(user.Dependencies{Profiles: f.profiles, Security: f.security, Organizations: f.orgs, Pool: stubDB{}}).
 		Routes(f.router.Group("/api/v1"), asUser(f.userID, f.session))
 	return f
 }
@@ -68,13 +70,16 @@ func TestGetMe_ReturnsTheCallersProfile(t *testing.T) {
 	avatar := "https://cdn.example.com/ann.png"
 	f.profiles.EXPECT().GetSummary(mock.Anything, mock.Anything, f.userID).
 		Return(user.Summary{ID: f.userID, Email: "ann@example.com", Name: "Ann", AvatarURL: &avatar, Status: user.StatusActive}, nil).Once()
+	orgID := uuid.New()
+	f.orgs.EXPECT().OrganizationsOf(mock.Anything, f.userID).
+		Return([]user.OrganizationRef{{ID: orgID, Name: "Acme", Slug: "acme", Role: "owner"}}, nil).Once()
 
 	rec := f.do(http.MethodGet, "/api/v1/me", "")
 
 	require.Equal(t, http.StatusOK, rec.Code, rec.Body.String())
 	assert.JSONEq(t, `{
 		"user": {"id":"`+f.userID.String()+`","email":"ann@example.com","name":"Ann","avatar_url":"https://cdn.example.com/ann.png","email_verified":false},
-		"organizations": []
+		"organizations": [{"id":"`+orgID.String()+`","name":"Acme","slug":"acme","role":"owner"}]
 	}`, rec.Body.String())
 }
 
@@ -82,10 +87,12 @@ func TestGetMe_AvatarIsNullWhenUnset(t *testing.T) {
 	f := newHandlerFixture(t)
 	f.profiles.EXPECT().GetSummary(mock.Anything, mock.Anything, f.userID).
 		Return(user.Summary{ID: f.userID, Email: "ann@example.com", Name: "Ann"}, nil).Once()
+	f.orgs.EXPECT().OrganizationsOf(mock.Anything, f.userID).Return(nil, nil).Once()
 
 	rec := f.do(http.MethodGet, "/api/v1/me", "")
 
 	assert.Contains(t, rec.Body.String(), `"avatar_url":null`)
+	assert.Contains(t, rec.Body.String(), `"organizations":[]`, "never null")
 	assert.NotContains(t, rec.Body.String(), "password")
 }
 
@@ -161,7 +168,8 @@ func TestMe_RequiresAnAuthenticatedUser(t *testing.T) {
 	// Mounted with a middleware that authenticates nobody: a wiring bug must fail closed.
 	r := gin.New()
 	user.NewHandler(user.Dependencies{
-		Profiles: usermocks.NewMockProfileService(t), Security: usermocks.NewMockAccountSecurity(t), Pool: stubDB{},
+		Profiles: usermocks.NewMockProfileService(t), Security: usermocks.NewMockAccountSecurity(t),
+		Organizations: usermocks.NewMockOrganizationLister(t), Pool: stubDB{},
 	}).Routes(r.Group("/api/v1"), func(c *gin.Context) { c.Next() })
 
 	for _, c := range []struct{ method, path, body string }{
@@ -275,7 +283,7 @@ func TestConfirmEmailChange_NeedsNoLoginBecauseTheTokenIsTheCredential(t *testin
 	security := usermocks.NewMockAccountSecurity(t)
 	security.EXPECT().ConfirmEmailChange(mock.Anything, "raw-token").Return("new@example.com", nil).Once()
 	r := gin.New()
-	user.NewHandler(user.Dependencies{Profiles: usermocks.NewMockProfileService(t), Security: security, Pool: stubDB{}}).
+	user.NewHandler(user.Dependencies{Profiles: usermocks.NewMockProfileService(t), Security: security, Organizations: usermocks.NewMockOrganizationLister(t), Pool: stubDB{}}).
 		Routes(r.Group("/api/v1"), func(c *gin.Context) { httpx.Error(c, apperr.Unauthenticated()) })
 
 	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/api/v1/me/email/confirm", strings.NewReader(`{"token":"raw-token"}`))

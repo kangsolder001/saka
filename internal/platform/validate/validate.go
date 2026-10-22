@@ -6,6 +6,7 @@ package validate
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"reflect"
 	"strings"
 	"sync"
@@ -95,4 +96,19 @@ func message(fe validator.FieldError) string {
 
 func isText(fe validator.FieldError) bool {
 	return fe.Kind() == reflect.String
+}
+
+// HTTPURLProblem returns why raw is not an acceptable stored URL, or "". Only
+// absolute http(s) URLs up to maxLen characters pass, so a stored value can
+// never be a javascript: or data: URL when a client renders it (avatars,
+// organization logos).
+func HTTPURLProblem(raw string, maxLen int) string {
+	if len(raw) > maxLen {
+		return fmt.Sprintf("must be at most %d characters", maxLen)
+	}
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return "must be a valid http(s) URL"
+	}
+	return ""
 }

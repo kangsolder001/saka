@@ -141,3 +141,5 @@ func (s *stack) invalidateAllUsers() {
 	require.NoError(s.t, rows.Err())
 	require.NoError(s.t, s.users.InvalidateCache(context.Background(), ids...))
 }
+
+func (s *stack) ctx() context.Context { return context.Background() }

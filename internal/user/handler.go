@@ -57,12 +57,29 @@ type Session struct {
 	Current bool
 }
 
+// OrganizationRef is one organization a user belongs to, as listed in GET /me.
+type OrganizationRef struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+	Slug string    `json:"slug"`
+	Role string    `json:"role"`
+}
+
+// OrganizationLister is what the handler needs from the organization module,
+// which already depends on this package, so this package declares the interface
+// and the organization service implements it.
+type OrganizationLister interface {
+	OrganizationsOf(ctx context.Context, userID uuid.UUID) ([]OrganizationRef, error)
+}
+
 var _ ProfileService = (*Service)(nil)
 
 // Dependencies are the collaborators of Handler.
 type Dependencies struct {
 	Profiles ProfileService
 	Security AccountSecurity
+	// Organizations fills the "organizations" list of GET /me.
+	Organizations OrganizationLister
 	// Pool serves reads and single-statement writes outside a transaction.
 	Pool db.DBTX
 }
@@ -129,10 +146,17 @@ func (h *Handler) get(c *gin.Context) {
 		httpx.Error(c, err)
 		return
 	}
+	orgs, err := h.Organizations.OrganizationsOf(c.Request.Context(), id)
+	if err != nil {
+		httpx.Error(c, err)
+		return
+	}
+	if orgs == nil {
+		orgs = []OrganizationRef{}
+	}
 	c.JSON(http.StatusOK, gin.H{
-		"user": profileFromSummary(sum),
-		// Filled in once organizations exist (Phase 4).
-		"organizations": []any{},
+		"user":          profileFromSummary(sum),
+		"organizations": orgs,
 	})
 }
 

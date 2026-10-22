@@ -3,7 +3,6 @@ package user
 import (
 	"context"
 	"fmt"
-	"net/url"
 	"strings"
 	"unicode/utf8"
 
@@ -11,6 +10,7 @@ import (
 
 	"github.com/kangsolder001/saka/internal/platform/apperr"
 	"github.com/kangsolder001/saka/internal/platform/db"
+	"github.com/kangsolder001/saka/internal/platform/validate"
 	"github.com/kangsolder001/saka/internal/user/userdb"
 )
 
@@ -53,7 +53,7 @@ func (s *Service) UpdateProfile(ctx context.Context, q db.DBTX, id uuid.UUID, in
 	}
 	if in.SetAvatar && in.AvatarURL != nil {
 		avatar := strings.TrimSpace(*in.AvatarURL)
-		if reason := avatarURLProblem(avatar); reason != "" {
+		if reason := validate.HTTPURLProblem(avatar, MaxAvatarURLLength); reason != "" {
 			fields["avatar_url"] = reason
 		} else {
 			params.AvatarUrl = &avatar
@@ -69,18 +69,4 @@ func (s *Service) UpdateProfile(ctx context.Context, q db.DBTX, id uuid.UUID, in
 	}
 	s.invalidateAfterCommit(ctx, q, id)
 	return fromRow(row), nil
-}
-
-// avatarURLProblem returns why raw is not an acceptable avatar URL, or "".
-// Only absolute http(s) URLs are accepted, so a stored value can never be a
-// javascript: or data: URL when a client renders it.
-func avatarURLProblem(raw string) string {
-	if len(raw) > MaxAvatarURLLength {
-		return fmt.Sprintf("must be at most %d characters", MaxAvatarURLLength)
-	}
-	u, err := url.Parse(raw)
-	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
-		return "must be a valid http(s) URL"
-	}
-	return ""
 }

@@ -80,3 +80,12 @@ func TestStruct_PointerAndNonStructInput(t *testing.T) {
 	require.Error(t, err)
 	assert.Equal(t, apperr.CodeInternal, apperr.From(err).Code)
 }
+
+func TestHTTPURLProblem(t *testing.T) {
+	assert.Empty(t, validate.HTTPURLProblem("https://cdn.example.com/a.png", 100))
+	assert.Empty(t, validate.HTTPURLProblem("http://localhost:3000/a.png", 100))
+	for _, bad := range []string{"", "javascript:alert(1)", "data:image/png;base64,AAAA", "/relative/a.png", "ftp://example.com/a", "https://", "ht tp://x"} {
+		assert.Equal(t, "must be a valid http(s) URL", validate.HTTPURLProblem(bad, 100), bad)
+	}
+	assert.Equal(t, "must be at most 10 characters", validate.HTTPURLProblem("https://example.com/long", 10))
+}

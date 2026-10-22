@@ -435,6 +435,17 @@ Opsional (direkomendasikan): aktifkan PostgreSQL Row Level Security dengan `SET 
 - Dalam satu transaksi: target jadi `owner`, owner lama jadi `admin`, `organizations.owner_id` diperbarui.
 - Wajib konfirmasi password owner.
 
+### 7.6 Keputusan implementasi
+
+Hal-hal yang tidak ditentukan §7.1–7.5 dan sudah diputuskan di Fase 4:
+
+- **Pembagian modul.** Modul `org` memiliki `organizations`, `memberships`, `invitations`. `org` mengimpor `user` (bukan sebaliknya): `user.Handler` mendeklarasikan `OrganizationLister` untuk daftar organisasi di `GET /me`, dan `org.Service` mengimplementasikannya.
+- **Rute per organisasi.** Modul lain memasang rute `/orgs/{orgId}/...` lewat `org.TenantRoutes(rg, authenticate, members)`, yang sudah memuat middleware autentikasi dan tenant. Handler membaca organisasi dan role hanya dari `context.Context` (`reqctx.OrgID`, `org.RoleFrom`). `orgId` bukan UUID, organisasi tak dikenal, organisasi yang sudah dihapus, dan bukan anggota semuanya `404 NOT_FOUND`.
+- **Otorisasi di service.** Method service org memanggil `org.Authorize(ctx, action)` sendiri (matriks §7.2 sebagai data di `org/authz.go`), jadi pemanggil non-HTTP pun terjaga; middleware `org.Require(action)` tersedia untuk gerbang rute (billing). Aturan target (`CanManageMember`): owner mengelola admin dan member, admin hanya member, tidak ada yang mengelola owner (kepemilikan hanya pindah lewat transfer). Role yang bisa diberikan hanya `admin` dan `member` (`Assignable`).
+- **`GET /orgs`** berpaginasi cursor (`?limit=&cursor=`), diurutkan dari keanggotaan tertua, dan memuat `role` pemanggil. `POST /orgs` membuat organisasi dengan pemanggil sebagai owner (`201`), `slug` opsional (diturunkan dari nama bila kosong; slug eksplisit yang dipakai → `409`). Aturan slug: 3–48 karakter, huruf kecil/angka/tanda hubung tunggal; tidak peka huruf besar-kecil.
+- **`PATCH /orgs/{orgId}`** menerima `name`, `slug`, `logo_url` (`null` menghapus; hanya URL `http(s)` absolut). Hanya owner dan admin. Body kosong atau field tak dikenal (mis. `owner_id`) ditolak.
+- **`DELETE /orgs/{orgId}`** (owner saja) adalah soft delete: baris dan slug tetap tercadangkan, undangan terbuka dicabut dalam transaksi yang sama, dan semua anggota langsung kehilangan akses (404). Pembatalan subscription menyusul di Fase 6.
+
 ---
 
 ## 8. Modul Billing & Subscription

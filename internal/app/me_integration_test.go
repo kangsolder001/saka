@@ -36,7 +36,10 @@ func TestMe_EndToEnd(t *testing.T) {
 	assert.Equal(t, "Ann", profile["name"])
 	assert.Equal(t, false, profile["email_verified"])
 	assert.Nil(t, profile["avatar_url"])
-	assert.Empty(t, body["organizations"])
+	orgs := body["organizations"].([]any)
+	require.Len(t, orgs, 1, "registration created the user's organization")
+	assert.Equal(t, "Acme", orgs[0].(map[string]any)["name"])
+	assert.Equal(t, "owner", orgs[0].(map[string]any)["role"])
 	assert.NotContains(t, res.Body.String(), "argon2id", "the password hash never leaves the server")
 }
 
