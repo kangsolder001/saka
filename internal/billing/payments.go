@@ -56,6 +56,10 @@ type Settings struct {
 	Grace time.Duration
 	// ReconcileMinAge is how old an open invoice must be before reconcile asks the gateway.
 	ReconcileMinAge time.Duration
+	// HourlyInterval and DailyInterval are how often the worker runs the
+	// hourly jobs (renewals, expire, apply_scheduled) and the daily ones
+	// (reminders, reconcile).
+	HourlyInterval, DailyInterval time.Duration
 }
 
 const day = 24 * time.Hour
@@ -68,6 +72,8 @@ func SettingsFrom(c config.BillingConfig) Settings {
 		RenewalLead:     time.Duration(c.RenewalLeadDays) * day,
 		Grace:           time.Duration(c.GraceDays) * day,
 		ReconcileMinAge: c.ReconcileMinAge.Std(),
+		HourlyInterval:  c.HourlyJobsInterval.Std(),
+		DailyInterval:   c.DailyJobsInterval.Std(),
 	}
 }
 

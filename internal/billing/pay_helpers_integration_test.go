@@ -22,6 +22,8 @@ import (
 	"github.com/kangsolder001/saka/internal/platform/logger"
 	"github.com/kangsolder001/saka/internal/platform/outbox"
 	"github.com/kangsolder001/saka/internal/platform/reqctx"
+	"github.com/kangsolder001/saka/internal/platform/safego"
+	"github.com/kangsolder001/saka/internal/platform/scheduler"
 	"github.com/kangsolder001/saka/internal/user"
 	emailtemplates "github.com/kangsolder001/saka/templates/email"
 )
@@ -50,6 +52,7 @@ func (u *stubUsage) Usage(context.Context, db.DBTX, uuid.UUID) (map[string]entit
 
 var testSettings = billing.Settings{
 	Provider: fake.Name, InvoiceDue: 7 * day, RenewalLead: 3 * day, Grace: 3 * day, ReconcileMinAge: time.Hour,
+	HourlyInterval: time.Hour, DailyInterval: 24 * time.Hour,
 }
 
 func newPayEnv(t *testing.T) *payEnv {
@@ -252,3 +255,10 @@ func (e *payEnv) setTrialDays(planCode string, days int) {
 func at(t time.Time) *time.Time { return &t }
 
 func str(s string) *string { return &s }
+
+// newTestScheduler is a scheduler on the test database, clocked by the test.
+func newTestScheduler(t *testing.T, e *payEnv) *scheduler.Scheduler {
+	t.Helper()
+	log := logger.Nop()
+	return scheduler.New(scheduler.NewPostgresLocker(e.db.Pool()), e.clock, safego.NewRunner(log), log)
+}

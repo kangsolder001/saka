@@ -178,7 +178,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 
 **Bagian C: cron & notifikasi**
 - [x] Scheduler di worker + advisory lock (0.3). `internal/platform/scheduler`: satu loop di `cmd/worker` lewat `safego`, `pg_try_advisory_xact_lock` per nama job, interval dari config `billing.*_jobs_interval`; diuji dengan lock Postgres sungguhan (dua worker, panic, koneksi mati)
-- [ ] `billing.renewals` (invoice H-3) (0.3)
+- [x] `billing.renewals` (invoice H-3) (0.3). `Service.IssueRenewals`; pola semua job (halaman, `SKIP LOCKED`, cek ulang) di spec §8.7; worker membangun `billing.Service` dan mendaftarkan job
 - [ ] `billing.expire` (active→past_due→expired, trial→expired, `grace_until` 3 hari) (0.5)
 - [ ] `billing.apply_scheduled` (pending plan & cancel_at_period_end) (0.3)
 - [ ] `billing.reminders` (H-3, H-1) + `billing.reconcile` (cek status `open` ke gateway) (0.8)
