@@ -124,7 +124,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Tenant context middleware (404 jika bukan anggota; orgId & role ke context) (§7.3) (0.4). `org.Tenant(...)`; role dicari dari DB tiap request, org yang dihapus sama dengan tak dikenal. Dikerjakan sebelum CRUD org supaya handler CRUD langsung memakainya
 - [x] Authorization helper berdasarkan matriks izin (§7.2) (0.4). `org.Can`, `CanManageMember` (aturan target admin/owner), `Assignable`, `Authorize(ctx, action)` dan middleware `org.Require(action)`; test mentranskripsi matriks sel demi sel
 - [x] RLS: role DB aplikasi non-owner, `SET LOCAL app.current_org` di `WithTx`, policy dengan `(SELECT current_setting(...))`, index berawalan `organization_id` (0.8). Migrasi `00007` (role `saka_app`, policy di `organizations`/`memberships`/`invitations`), `database.app_role` (`SET ROLE` per koneksi), `db.WithSystemTx` untuk alur lintas tenant, `db.PinTenant` untuk org yang baru dibuat. Index `(organization_id, ...)` sudah ada sejak `00006`
-- [ ] Test RLS: query tanpa filter org tidak bocor; lupa `SET LOCAL` → hasil kosong; worker/migrasi punya jalur bypass (0.3)
+- [x] Test RLS: query tanpa filter org tidak bocor; lupa `SET LOCAL` → hasil kosong; worker/migrasi punya jalur bypass (0.3). `internal/org/rls_integration_test.go` + penjaga struktural di `migrations/` (setiap tabel ber-`organization_id` wajib RLS + policy dan punya index berawalan `organization_id`, jadi tabel Fase 5–6 otomatis terjaga)
 - [ ] Anggota: `GET members`, `PATCH role`, `DELETE member`, `POST leave` (0.6)
 - [ ] Transfer kepemilikan atomik + konfirmasi password (§7.5) (0.4)
 - [ ] Undangan: buat/list/batalkan/resend; perbarui undangan aktif yang sama (§7.4) (0.6)

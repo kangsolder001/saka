@@ -444,3 +444,73 @@ func TestInvitations_EndExactlyOneWay(t *testing.T) {
 
 	requirePgCode(t, err, "23514")
 }
+
+// tenantTables lists every table the policy check below must cover: those with
+// an organization_id column, plus organizations itself (its id is the tenant).
+const tenantTablesSQL = `
+	SELECT c.relname, c.relrowsecurity,
+	       EXISTS (SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid) AS has_policy
+	FROM pg_class c
+	JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
+	WHERE c.relkind = 'r'
+	  AND (c.relname = 'organizations'
+	       OR EXISTS (SELECT 1 FROM pg_attribute a
+	                  WHERE a.attrelid = c.oid AND a.attname = 'organization_id' AND NOT a.attisdropped))
+	ORDER BY c.relname`
+
+// A table that gains an organization_id column in a future migration must also
+// get row-level security, or tenant isolation would rest on application
+// queries alone. This turns "remember to add a policy" into a failing test.
+func TestTenantTables_AllHaveRowLevelSecurityAndAPolicy(t *testing.T) {
+	conn, _ := newConn(t)
+
+	rows, err := conn.Query(context.Background(), tenantTablesSQL)
+	require.NoError(t, err)
+	defer rows.Close()
+
+	var seen []string
+	for rows.Next() {
+		var name string
+		var enabled, hasPolicy bool
+		require.NoError(t, rows.Scan(&name, &enabled, &hasPolicy))
+		seen = append(seen, name)
+		assert.True(t, enabled, "%s: row-level security is not enabled", name)
+		assert.True(t, hasPolicy, "%s: no policy defined", name)
+	}
+	require.NoError(t, rows.Err())
+	assert.Subset(t, seen, []string{"organizations", "memberships", "invitations"})
+}
+
+// Every index on a tenant table that is meant for lookups starts with
+// organization_id (CLAUDE.md): the policy predicate then becomes an Index Cond
+// instead of a scan (docs/rls.md). Unique indexes that exist to enforce a
+// global rule (organizations.slug, invitations.token_hash) are the exceptions.
+func TestTenantTables_HaveAnIndexLedByOrganizationID(t *testing.T) {
+	conn, _ := newConn(t)
+
+	for table, column := range map[string]string{"memberships": "organization_id", "invitations": "organization_id"} {
+		var n int
+		err := conn.QueryRow(context.Background(), `
+			SELECT count(*)
+			FROM pg_index i
+			JOIN pg_class t ON t.oid = i.indrelid
+			JOIN pg_attribute a ON a.attrelid = t.oid AND a.attnum = i.indkey[0]
+			WHERE t.relname = $1 AND a.attname = $2`, table, column).Scan(&n)
+
+		require.NoError(t, err)
+		assert.Positive(t, n, "%s has no index starting with %s", table, column)
+	}
+}
+
+func TestApplicationRole_ExistsAndIsRestricted(t *testing.T) {
+	conn, _ := newConn(t)
+
+	var super, bypass, login bool
+	err := conn.QueryRow(context.Background(),
+		"SELECT rolsuper, rolbypassrls, rolcanlogin FROM pg_roles WHERE rolname = 'saka_app'").Scan(&super, &bypass, &login)
+
+	require.NoError(t, err)
+	assert.False(t, super, "a superuser would ignore every policy")
+	assert.False(t, bypass)
+	assert.False(t, login, "it is only reachable by SET ROLE from the login user")
+}

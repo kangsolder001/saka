@@ -24,6 +24,7 @@ type env struct {
 	t     *testing.T
 	db    *db.DB        // the application's connection: restricted by row-level security
 	admin *pgxpool.Pool // the owner's: sees every tenant, for arranging and asserting
+	dsn   string
 	clock *clock.Fake
 	users *user.Service
 	orgs  *org.Service
@@ -41,7 +42,7 @@ func newEnv(t *testing.T) *env {
 	t.Cleanup(d.Close)
 
 	clk := clock.NewFake(epoch)
-	return &env{t: t, db: d, admin: dbtest.AdminPool(t, dsn), clock: clk, users: user.NewService(clk), orgs: org.NewService(clk, d)}
+	return &env{t: t, db: d, dsn: dsn, admin: dbtest.AdminPool(t, dsn), clock: clk, users: user.NewService(clk), orgs: org.NewService(clk, d)}
 }
 
 // newUser inserts a user and returns it.
