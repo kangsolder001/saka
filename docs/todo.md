@@ -144,7 +144,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Migrasi `plans` + seed `free/pro/business` (§4.7, §9.3) (0.3). `migrations/00008`; plan global (bukan data tenant), tanpa RLS
 - [x] Migrasi `subscriptions` (§4.8) (0.15). `00009`; `current_period_end` NULL untuk Free, RLS, backfill Free untuk org yang sudah ada
 - [x] Registrasi membuat subscription `free` dalam transaksi yang sama (0.15). Juga `POST /orgs`; lewat `org.CreateWithOwner` → `billing.StartFree`
-- [ ] Plan efektif: status → akses fitur (§8.2, §9.2) (0.3)
+- [x] Plan efektif: status → akses fitur (§8.2, §9.2) (0.3). `billing.GrantsAccess` (murni) + `EffectivePlan`
 - [ ] Interface `Entitlements`: `HasFeature`, `CheckLimit`, `Usage` (hitung dari data aktual) (0.6)
 - [ ] Limit `members` = anggota + undangan aktif; pasang di alur undangan (§7.4) (0.3)
 - [ ] Middleware `RequireFeature(...)` + error `PLAN_LIMIT_REACHED` / `PLAN_FEATURE_UNAVAILABLE` berisi detail upgrade (0.3)
