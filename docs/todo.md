@@ -122,7 +122,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Pembuatan org di registrasi: user + org + membership `owner` dalam 1 transaksi (§5.2) (0.3). `org.Service.CreateWithOwner` dipanggil lewat `auth.OrganizationProvisioner`; slug otomatis dari nama dengan akhiran acak bila bentrok
 - [ ] CRUD org: `GET/POST /orgs`, `GET/PATCH/DELETE /orgs/{orgId}` (slug unik) (0.6)
 - [x] Tenant context middleware (404 jika bukan anggota; orgId & role ke context) (§7.3) (0.4). `org.Tenant(...)`; role dicari dari DB tiap request, org yang dihapus sama dengan tak dikenal. Dikerjakan sebelum CRUD org supaya handler CRUD langsung memakainya
-- [ ] Authorization helper berdasarkan matriks izin (§7.2) (0.4)
+- [x] Authorization helper berdasarkan matriks izin (§7.2) (0.4). `org.Can`, `CanManageMember` (aturan target admin/owner), `Assignable`, `Authorize(ctx, action)` dan middleware `org.Require(action)`; test mentranskripsi matriks sel demi sel
 - [ ] RLS: role DB aplikasi non-owner, `SET LOCAL app.current_org` di `WithTx`, policy dengan `(SELECT current_setting(...))`, index berawalan `organization_id` (0.8)
 - [ ] Test RLS: query tanpa filter org tidak bocor; lupa `SET LOCAL` → hasil kosong; worker/migrasi punya jalur bypass (0.3)
 - [ ] Anggota: `GET members`, `PATCH role`, `DELETE member`, `POST leave` (0.6)
