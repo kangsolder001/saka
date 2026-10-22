@@ -24,8 +24,8 @@ func TestHTTPStatusMapping(t *testing.T) {
 		{apperr.TokenExpired(), http.StatusUnauthorized},
 		{apperr.Forbidden(), http.StatusForbidden},
 		{apperr.EmailNotVerified(), http.StatusForbidden},
-		{apperr.PlanFeatureUnavailable("audit_log"), http.StatusForbidden},
-		{apperr.PlanLimitReached("members", 3), http.StatusPaymentRequired},
+		{apperr.PlanFeatureUnavailable("Fitur tidak tersedia.", "audit_log", "free", nil), http.StatusForbidden},
+		{apperr.PlanLimitReached("Batas tercapai.", "members", 3, 3, "free", nil), http.StatusPaymentRequired},
 		{apperr.SubscriptionInactive(), http.StatusPaymentRequired},
 		{apperr.NotFound(), http.StatusNotFound},
 		{apperr.Conflict("email sudah terdaftar"), http.StatusConflict},
@@ -41,14 +41,35 @@ func TestHTTPStatusMapping(t *testing.T) {
 	}
 }
 
-func TestResponse_PlanLimitReachedMatchesSpecFormat(t *testing.T) {
-	status, body := apperr.PlanLimitReached("members", 3).Response()
+func TestResponse_PlanLimitReachedCarriesTheUpgradeDetails(t *testing.T) {
+	pro := "pro"
+	status, body := apperr.PlanLimitReached("Paket Free hanya mendukung 3 anggota.", "members", 3, 3, "free", &pro).Response()
 
 	raw, err := json.Marshal(body)
 	require.NoError(t, err)
 
 	assert.Equal(t, http.StatusPaymentRequired, status)
-	assert.JSONEq(t, `{"error":{"code":"PLAN_LIMIT_REACHED","message":"Batas paket tercapai.","details":{"limit":"members","max":3}}}`, string(raw))
+	assert.JSONEq(t, `{"error":{"code":"PLAN_LIMIT_REACHED","message":"Paket Free hanya mendukung 3 anggota.","details":{"limit":"members","max":3,"used":3,"plan":"free","upgrade_to":"pro"}}}`, string(raw))
+}
+
+func TestResponse_PlanLimitReachedWithoutAnUpgradeSaysNull(t *testing.T) {
+	_, body := apperr.PlanLimitReached("Batas tercapai.", "members", 10, 10, "business", nil).Response()
+
+	raw, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	assert.Contains(t, string(raw), `"upgrade_to":null`)
+}
+
+func TestResponse_PlanFeatureUnavailableCarriesTheUpgradeDetails(t *testing.T) {
+	business := "business"
+	status, body := apperr.PlanFeatureUnavailable("Fitur ini tidak tersedia di paket Pro.", "audit_log", "pro", &business).Response()
+
+	raw, err := json.Marshal(body)
+	require.NoError(t, err)
+
+	assert.Equal(t, http.StatusForbidden, status)
+	assert.JSONEq(t, `{"error":{"code":"PLAN_FEATURE_UNAVAILABLE","message":"Fitur ini tidak tersedia di paket Pro.","details":{"feature":"audit_log","plan":"pro","upgrade_to":"business"}}}`, string(raw))
 }
 
 func TestResponse_DetailsIsAlwaysAnObject(t *testing.T) {

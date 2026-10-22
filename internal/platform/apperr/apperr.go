@@ -171,16 +171,38 @@ func EmailNotVerified() *Error {
 	return New(CodeEmailNotVerified, "Email belum diverifikasi.")
 }
 
-// PlanFeatureUnavailable reports a feature missing from the current plan.
-func PlanFeatureUnavailable(feature string) *Error {
-	return New(CodePlanFeatureUnavailable, "Fitur ini tidak tersedia di paket Anda.").
-		WithDetails(map[string]any{"feature": feature})
+// PlanFeatureUnavailable reports a feature the current plan does not include
+// (spec §9.2). plan is the current plan's code and upgradeTo the code of the
+// cheapest plan that has the feature, nil when none does; the frontend uses
+// them to offer an upgrade. message is user-facing.
+func PlanFeatureUnavailable(message, feature, plan string, upgradeTo *string) *Error {
+	return New(CodePlanFeatureUnavailable, message).WithDetails(map[string]any{
+		"feature":    feature,
+		"plan":       plan,
+		"upgrade_to": nullable(upgradeTo),
+	})
 }
 
-// PlanLimitReached reports an exceeded plan limit.
-func PlanLimitReached(limit string, max int) *Error {
-	return New(CodePlanLimitReached, "Batas paket tercapai.").
-		WithDetails(map[string]any{"limit": limit, "max": max})
+// PlanLimitReached reports a plan limit that the requested change would exceed
+// (spec §9.2). max is the plan's maximum, used the current usage, plan the
+// current plan's code and upgradeTo the code of the cheapest plan that would
+// allow the change, nil when none does. message is user-facing.
+func PlanLimitReached(message, limit string, max, used int, plan string, upgradeTo *string) *Error {
+	return New(CodePlanLimitReached, message).WithDetails(map[string]any{
+		"limit":      limit,
+		"max":        max,
+		"used":       used,
+		"plan":       plan,
+		"upgrade_to": nullable(upgradeTo),
+	})
+}
+
+// nullable keeps a nil *string as JSON null instead of a typed nil in the map.
+func nullable(s *string) any {
+	if s == nil {
+		return nil
+	}
+	return *s
 }
 
 // SubscriptionInactive reports a subscription that no longer grants access.

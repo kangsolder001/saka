@@ -36,3 +36,6 @@ packages:
   github.com/kangsolder001/saka/internal/org:
     interfaces:
       MembershipReader:
+  github.com/kangsolder001/saka/internal/entitlement:
+    interfaces:
+      PlanSource:
