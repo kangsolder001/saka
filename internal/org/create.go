@@ -104,9 +104,55 @@ func (s *Service) insertOrganization(ctx context.Context, q db.DBTX, id, ownerID
 }
 
 // ProvisionForNewUser gives a freshly registered user an organization they
-// own. It runs inside the registration transaction (auth declares the
-// interface it satisfies).
+// own, inside the registration transaction (auth declares the interface it
+// satisfies). When the address has been invited somewhere (spec §7.4) no
+// organization is created: the user is going to join the inviting one(s). The
+// join itself waits for email verification (AcceptPendingInvitations).
 func (s *Service) ProvisionForNewUser(ctx context.Context, q db.DBTX, u user.User, organizationName string) error {
-	_, err := s.CreateWithOwner(ctx, q, u.ID, organizationName, "")
+	var invited bool
+	err := db.WithBypass(ctx, q, func() error {
+		var err error
+		invited, err = orgdbQueries(q).HasLiveInvitationForEmail(ctx, orgdb.HasLiveInvitationForEmailParams{
+			Email: user.NormalizeEmail(u.Email), Now: s.clk.Now(),
+		})
+		return err
+	})
+	if err != nil {
+		return fmt.Errorf("org: check invitations: %w", err)
+	}
+	if invited {
+		return nil
+	}
+	_, err = s.CreateWithOwner(ctx, q, u.ID, organizationName, "")
 	return err
+}
+
+// AcceptPendingInvitations joins userID to every organization that invited
+// email and whose invitation is still live, and closes those invitations. Auth
+// calls it, in the same transaction, when the address has just been proven
+// (email verification, confirmed email change): until then anyone could sign up
+// with an invited address and walk into its organization, so registration alone
+// does not join anything. Joining is idempotent: someone already a member keeps
+// their role.
+func (s *Service) AcceptPendingInvitations(ctx context.Context, q db.DBTX, userID uuid.UUID, email string) error {
+	return db.WithBypass(ctx, q, func() error {
+		queries := orgdbQueries(q)
+		live, err := queries.ListLiveInvitationsForEmailForUpdate(ctx, orgdb.ListLiveInvitationsForEmailForUpdateParams{
+			Email: user.NormalizeEmail(email), Now: s.clk.Now(),
+		})
+		if err != nil {
+			return fmt.Errorf("org: list live invitations: %w", err)
+		}
+		for _, inv := range live {
+			if _, err := queries.InsertMembershipIfAbsent(ctx, orgdb.InsertMembershipIfAbsentParams{
+				OrganizationID: inv.OrganizationID, UserID: userID, Role: inv.Role, Now: s.clk.Now(),
+			}); err != nil {
+				return fmt.Errorf("org: join invited organization: %w", err)
+			}
+			if _, err := queries.MarkInvitationAccepted(ctx, orgdb.MarkInvitationAcceptedParams{ID: inv.ID, Now: s.clk.Now()}); err != nil {
+				return fmt.Errorf("org: close invitation: %w", err)
+			}
+		}
+		return nil
+	})
 }

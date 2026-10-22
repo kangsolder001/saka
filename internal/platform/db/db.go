@@ -165,6 +165,25 @@ func PinTenant(ctx context.Context, q DBTX, orgID uuid.UUID) error {
 	return pinTenant(ctx, q, orgID)
 }
 
+// WithBypass lifts row-level security for fn inside the caller's transaction,
+// then restores it. It is for a single cross-tenant lookup in the middle of a
+// transaction that was not opened as a system one (registration needs to know
+// whether the new address has been invited anywhere, before any tenant exists).
+// It refuses to run outside a transaction, where the setting would not last.
+func WithBypass(ctx context.Context, q DBTX, fn func() error) error {
+	if _, ok := q.(pgx.Tx); !ok {
+		return errors.New("db: WithBypass needs a transaction")
+	}
+	if _, err := q.Exec(ctx, "SELECT set_config($1, 'on', true)", BypassRLSSetting); err != nil {
+		return fmt.Errorf("enable system access: %w", err)
+	}
+	fnErr := fn()
+	if _, err := q.Exec(ctx, "SELECT set_config($1, 'off', true)", BypassRLSSetting); err != nil {
+		return errors.Join(fnErr, fmt.Errorf("restore row-level security: %w", err))
+	}
+	return fnErr
+}
+
 // CommitHooker is implemented by the transaction WithTx hands to its function.
 type CommitHooker interface {
 	// AfterCommit registers fn to run once the transaction has committed. It

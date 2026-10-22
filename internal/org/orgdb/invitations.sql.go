@@ -131,6 +131,32 @@ func (q *Queries) GetOpenInvitationByEmailForUpdate(ctx context.Context, arg Get
 	return id, err
 }
 
+const hasLiveInvitationForEmail = `-- name: HasLiveInvitationForEmail :one
+SELECT EXISTS (
+    SELECT 1
+    FROM invitations i
+    JOIN organizations o ON o.id = i.organization_id
+    WHERE i.email = $1
+      AND i.accepted_at IS NULL AND i.declined_at IS NULL AND i.revoked_at IS NULL
+      AND i.expires_at > $2::timestamptz
+      AND o.deleted_at IS NULL
+) AS live
+`
+
+type HasLiveInvitationForEmailParams struct {
+	Email string
+	Now   time.Time
+}
+
+// Whether the address has been invited anywhere and the invitation can still be
+// used. Cross-tenant, so callers lift row-level security around it.
+func (q *Queries) HasLiveInvitationForEmail(ctx context.Context, arg HasLiveInvitationForEmailParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasLiveInvitationForEmail, arg.Email, arg.Now)
+	var live bool
+	err := row.Scan(&live)
+	return live, err
+}
+
 const listActiveInvitations = `-- name: ListActiveInvitations :many
 SELECT id, organization_id, email, role, token_hash, invited_by, expires_at, accepted_at, declined_at, revoked_at, created_at FROM invitations
 WHERE organization_id = $1
@@ -181,6 +207,51 @@ func (q *Queries) ListActiveInvitations(ctx context.Context, arg ListActiveInvit
 			&i.RevokedAt,
 			&i.CreatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLiveInvitationsForEmailForUpdate = `-- name: ListLiveInvitationsForEmailForUpdate :many
+SELECT i.id, i.organization_id, i.role
+FROM invitations i
+JOIN organizations o ON o.id = i.organization_id
+WHERE i.email = $1
+  AND i.accepted_at IS NULL AND i.declined_at IS NULL AND i.revoked_at IS NULL
+  AND i.expires_at > $2::timestamptz
+  AND o.deleted_at IS NULL
+ORDER BY i.created_at, i.id
+FOR UPDATE OF i
+`
+
+type ListLiveInvitationsForEmailForUpdateParams struct {
+	Email string
+	Now   time.Time
+}
+
+type ListLiveInvitationsForEmailForUpdateRow struct {
+	ID             uuid.UUID
+	OrganizationID uuid.UUID
+	Role           string
+}
+
+// The invitations an address can still redeem, locked so a concurrent accept by
+// link and a verification cannot both redeem the same one.
+func (q *Queries) ListLiveInvitationsForEmailForUpdate(ctx context.Context, arg ListLiveInvitationsForEmailForUpdateParams) ([]ListLiveInvitationsForEmailForUpdateRow, error) {
+	rows, err := q.db.Query(ctx, listLiveInvitationsForEmailForUpdate, arg.Email, arg.Now)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListLiveInvitationsForEmailForUpdateRow
+	for rows.Next() {
+		var i ListLiveInvitationsForEmailForUpdateRow
+		if err := rows.Scan(&i.ID, &i.OrganizationID, &i.Role); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

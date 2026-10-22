@@ -80,3 +80,29 @@ WHERE id = @id AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS
 -- name: MarkInvitationDeclined :execrows
 UPDATE invitations SET declined_at = @now::timestamptz
 WHERE id = @id AND accepted_at IS NULL AND declined_at IS NULL AND revoked_at IS NULL;
+
+-- Whether the address has been invited anywhere and the invitation can still be
+-- used. Cross-tenant, so callers lift row-level security around it.
+-- name: HasLiveInvitationForEmail :one
+SELECT EXISTS (
+    SELECT 1
+    FROM invitations i
+    JOIN organizations o ON o.id = i.organization_id
+    WHERE i.email = @email
+      AND i.accepted_at IS NULL AND i.declined_at IS NULL AND i.revoked_at IS NULL
+      AND i.expires_at > @now::timestamptz
+      AND o.deleted_at IS NULL
+) AS live;
+
+-- The invitations an address can still redeem, locked so a concurrent accept by
+-- link and a verification cannot both redeem the same one.
+-- name: ListLiveInvitationsForEmailForUpdate :many
+SELECT i.id, i.organization_id, i.role
+FROM invitations i
+JOIN organizations o ON o.id = i.organization_id
+WHERE i.email = @email
+  AND i.accepted_at IS NULL AND i.declined_at IS NULL AND i.revoked_at IS NULL
+  AND i.expires_at > @now::timestamptz
+  AND o.deleted_at IS NULL
+ORDER BY i.created_at, i.id
+FOR UPDATE OF i;

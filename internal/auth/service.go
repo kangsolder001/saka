@@ -189,7 +189,8 @@ func (s *Service) link(path, token string) string {
 }
 
 // VerifyEmail consumes the verification token and marks the user's email as
-// verified, atomically. An unknown, expired or already used token fails with a
+// verified, atomically, together with joining the organizations that invited
+// that address. An unknown, expired or already used token fails with a
 // validation error on "token". Verifying twice is harmless: the second token
 // is simply rejected.
 func (s *Service) VerifyEmail(ctx context.Context, rawToken string) error {
@@ -200,7 +201,16 @@ func (s *Service) VerifyEmail(ctx context.Context, rawToken string) error {
 		}
 		// MarkEmailVerified clears the user's cached summary once this
 		// transaction commits; no cache handling is needed here.
-		return s.Users.MarkEmailVerified(ctx, tx, tok.UserID)
+		if err := s.Users.MarkEmailVerified(ctx, tx, tok.UserID); err != nil {
+			return err
+		}
+		// The address is now proven, which is what lets the user claim the
+		// invitations sent to it (spec §7.4).
+		u, err := s.Users.GetByID(ctx, tx, tok.UserID)
+		if err != nil {
+			return err
+		}
+		return s.Provisioner.AcceptPendingInvitations(ctx, tx, u.ID, u.Email)
 	})
 }
 

@@ -24,10 +24,27 @@ func TestVerifyEmail_ConsumesTokenThenMarksUserVerified(t *testing.T) {
 	f.tokens.EXPECT().Consume(mock.Anything, mock.Anything, "the-raw-token", auth.TokenEmailVerification).
 		Return(auth.UserToken{UserID: userID}, nil).Once()
 	f.users.EXPECT().MarkEmailVerified(mock.Anything, mock.Anything, userID).Return(nil).Once()
+	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, userID).Return(user.User{ID: userID, Email: "ann@example.com"}, nil).Once()
+	f.prov.EXPECT().AcceptPendingInvitations(mock.Anything, mock.Anything, userID, "ann@example.com").Return(nil).Once()
 
 	err := f.svc.VerifyEmail(context.Background(), "the-raw-token")
 
 	assert.NoError(t, err)
+}
+
+func TestVerifyEmail_JoiningInvitedOrganizationsFailsTheWholeVerification(t *testing.T) {
+	f := newFixture(t)
+	userID := uuid.New()
+	f.expectTx()
+	f.tokens.EXPECT().Consume(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(auth.UserToken{UserID: userID}, nil).Once()
+	f.users.EXPECT().MarkEmailVerified(mock.Anything, mock.Anything, userID).Return(nil).Once()
+	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, userID).Return(user.User{ID: userID, Email: "ann@example.com"}, nil).Once()
+	boom := errors.New("membership insert failed")
+	f.prov.EXPECT().AcceptPendingInvitations(mock.Anything, mock.Anything, userID, mock.Anything).Return(boom).Once()
+
+	err := f.svc.VerifyEmail(context.Background(), "t")
+
+	assert.ErrorIs(t, err, boom, "returned from the transaction: the token stays unused and the email unverified")
 }
 
 func TestVerifyEmail_InvalidTokenDoesNotTouchTheUser(t *testing.T) {
@@ -96,6 +113,8 @@ func TestVerifyEmailEndpoint(t *testing.T) {
 		f.tokens.EXPECT().Consume(mock.Anything, mock.Anything, "tok", auth.TokenEmailVerification).
 			Return(auth.UserToken{UserID: uuid.New()}, nil).Once()
 		f.users.EXPECT().MarkEmailVerified(mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+		f.users.EXPECT().GetByID(mock.Anything, mock.Anything, mock.Anything).Return(user.User{Email: "ann@example.com"}, nil).Once()
+		f.prov.EXPECT().AcceptPendingInvitations(mock.Anything, mock.Anything, mock.Anything, "ann@example.com").Return(nil).Once()
 
 		rec := postJSON(newRouter(f), "/api/v1/auth/verify-email", `{"token":"tok"}`)
 

@@ -216,3 +216,19 @@ func mustUUID(t *testing.T, s string) uuid.UUID {
 	require.NoError(t, err)
 	return id
 }
+
+func TestRLS_WithBypassLiftsPoliciesForOneStepOfATransactionOnly(t *testing.T) {
+	e, _, _ := newTwoTenants(t)
+	ctx := t.Context()
+
+	assert.Error(t, db.WithBypass(ctx, e.db.Pool(), func() error { return nil }), "outside a transaction the setting would not last")
+
+	require.NoError(t, e.db.WithTx(ctx, func(tx pgx.Tx) error {
+		require.NoError(t, db.WithBypass(ctx, tx, func() error {
+			assert.Equal(t, 2, rowCount(ctx, t, tx, "organizations"), "inside the bypass both tenants are visible")
+			return nil
+		}))
+		assert.Zero(t, rowCount(ctx, t, tx, "organizations"), "and it is restored for the rest of the transaction")
+		return nil
+	}))
+}

@@ -229,6 +229,7 @@ func TestConfirmEmailChange_SwitchesTheAddressAndNotifiesTheOldOne(t *testing.T)
 	f.tokens.EXPECT().Consume(mock.Anything, mock.Anything, "raw", auth.TokenEmailChange).Return(changeToken(u.ID, "new@example.com"), nil).Once()
 	f.users.EXPECT().GetByID(mock.Anything, mock.Anything, u.ID).Return(u, nil).Once()
 	f.users.EXPECT().ChangeEmail(mock.Anything, mock.Anything, u.ID, "new@example.com").Return(nil).Once()
+	f.prov.EXPECT().AcceptPendingInvitations(mock.Anything, mock.Anything, u.ID, "new@example.com").Return(nil).Once()
 	f.mail.EXPECT().Send(mock.Anything, mock.Anything, mail.Email{
 		Template: "email_changed_notice", To: "ann@example.com",
 		Data: map[string]any{"name": "Ann", "new_email": "new@example.com"},
@@ -290,8 +291,13 @@ func TestConfirmEmailChange_FailureAnywhereFailsTheWholeChange(t *testing.T) {
 		"taken in the meantime": func(f *fixture) {
 			f.users.EXPECT().ChangeEmail(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(apperr.Conflict("taken")).Once()
 		},
+		"join invited organizations": func(f *fixture) {
+			f.users.EXPECT().ChangeEmail(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+			f.prov.EXPECT().AcceptPendingInvitations(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(boom).Once()
+		},
 		"queue notice": func(f *fixture) {
 			f.users.EXPECT().ChangeEmail(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
+			f.prov.EXPECT().AcceptPendingInvitations(mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(nil).Once()
 			f.mail.EXPECT().Send(mock.Anything, mock.Anything, mock.Anything).Return(boom).Once()
 		},
 	}

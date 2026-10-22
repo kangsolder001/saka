@@ -30,6 +30,11 @@ type OrganizationProvisioner interface {
 	// user row exists. It creates the user's own organization (they become its
 	// owner), or joins the organizations that invited this email instead.
 	ProvisionForNewUser(ctx context.Context, tx db.DBTX, u user.User, organizationName string) error
+	// AcceptPendingInvitations runs inside the transaction in which an email
+	// address has just been proven to belong to userID (verification, a
+	// confirmed email change). It joins the user to the organizations that
+	// invited that address (spec §7.4).
+	AcceptPendingInvitations(ctx context.Context, tx db.DBTX, userID uuid.UUID, email string) error
 }
 
 // ErrOwnsSharedOrganization is the CONFLICT an OrganizationGuard returns when

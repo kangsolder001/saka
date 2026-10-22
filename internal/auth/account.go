@@ -198,6 +198,11 @@ func (s *Service) ConfirmEmailChange(ctx context.Context, rawToken string) (stri
 			return err
 		}
 		newEmail = payload.NewEmail
+		// The new address is proven (the link reached it), so invitations sent to
+		// it can be claimed, as after email verification.
+		if err := s.Provisioner.AcceptPendingInvitations(ctx, tx, u.ID, payload.NewEmail); err != nil {
+			return err
+		}
 		return s.Mail.Send(ctx, tx, mail.Email{
 			Template: "email_changed_notice",
 			To:       u.Email,
