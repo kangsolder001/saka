@@ -201,9 +201,13 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 - [x] Dokumentasi: README (setup, `config.json`, jalankan API + worker), daftar endpoint/OpenAPI (0.6). `README.md` dan `docs/openapi.yaml` (OpenAPI 3.1, semua route); `TestOpenAPI_*` mencocokkan dokumen dengan router (method + path, dua arah), memeriksa `$ref`, kode error dan bahwa operasi bertanda bearer menjawab 401 tanpa token
 - [x] Panduan "cara menambah modul domain baru" (tenant context + CheckLimit) (0.3). `docs/panduan-modul-baru.md`, dibuktikan dengan modul contoh `projects` di `internal/app/example_module_integration_test.go` (isolasi, limit, balapan slot terakhir, role, fitur). Menambah `org.LockOrganization` (bentuk ekspor dari kunci yang dipakai `Invite`) supaya modul lain bisa menserialisasi pembuatan resource berlimit
 - [x] Demo end-to-end skenario penuh (daftar → undang → upgrade → expired) (0.3). `TestDemoScenario_*` (cerita satu test dengan jam palsu) dan `docs/demo.md` (perintah `curl` terhadap API lokal dengan provider `fake`; pembayaran disimulasikan dengan webhook bertanda tangan, waktu dengan menggeser data langganan lalu me-restart worker). Seluruh perintah di `demo.md` dijalankan sungguhan terhadap API + worker + Mailpit pada database sekali pakai
-- [ ] Update spec ke v1.0 + catat backlog Tier 2 (0.2)
+- [x] Update spec ke v1.0 + catat backlog Tier 2 (0.2). Status v1.0, §14 menjadi tabel keputusan final, backlog Tier 2 di §13 dan di bawah; bullet §9.4 yang tercecer setelah §14 dikembalikan ke §9.4
 
-**Selesai bila:** semua checklist §12 tercentang, Tier 1 selesai.
+**Selesai bila:** semua checklist §12 tercentang, Tier 1 selesai. **Hampir:** semua kriteria §12 tercentang dengan test bernama kecuali satu, "Checkout menghasilkan payment link yang valid di sandbox gateway", yang butuh akun sandbox Midtrans (tindakan pemilik repo, lihat Fase 4 dan Fase 6). Semua pekerjaan kode Tier 1 selesai; yang tersisa hanya tindakan pemilik repo:
+
+- [ ] Daftar akun sandbox Midtrans, isi `config.json`, jalankan `go test ./internal/billing/payment/midtrans -run TestSandbox -v`, verifikasi asumsi spec §8.7 (terutama signature notifikasi), lalu centang kriteria Billing pertama di §12
+- [ ] Konfirmasi provider email produksi (rekomendasi: Resend), buat akun dan kunci API, pasang record SPF/DKIM/DMARC (`docs/email.md`), kirim satu email uji sungguhan
+- [ ] Bangun dan deploy dengan Go >= 1.26.10 (advisori pustaka standar, spec §11.3) dan jalankan ulang `govulncheck` sebelum rilis
 
 ---
 
@@ -214,3 +218,9 @@ Dipakai untuk bug, review, atau fase yang molor. Fase yang paling rawan molor: F
 ## Backlog (di luar Tier 1, §13 spec)
 
 Panel super admin · audit log · notifikasi in-app · 2FA · OAuth · upload file · proration · kupon · pajak · multi-currency · API publik
+
+### Kandidat Tier 2 dari pengerjaan Tier 1 (rincian di spec §13)
+
+- Billing: invoice dua fase (draft lalu kirim) supaya koneksi DB tidak tertahan selama panggilan gateway (Fase 6, spec §8.7) · `Cancel` tautan pembayaran di `PaymentProvider` · refund/chargeback otomatis · retry/backoff panggilan keluar ke gateway · gateway Xendit
+- Keamanan/operasi: rate limit webhook yang dapat disetel lewat config (kini konstanta) · `Idempotency-Key` Resend dengan ID job outbox · pembersihan `outbox_jobs` dan `payment_events` lama · tolak kredensial database default di production · `iss`/`aud` JWT · metrik dan tracing terdistribusi
+- Produk: rute produksi pertama yang digerbang fitur (`audit_log`, `export_csv` baru ada di test) · avatar/logo lewat upload, bukan URL
