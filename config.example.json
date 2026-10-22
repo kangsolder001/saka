@@ -35,6 +35,11 @@
       "port": 1025,
       "username": "",
       "password": ""
+    },
+    "resend": {
+      "api_key": "",
+      "base_url": "https://api.resend.com",
+      "timeout": "15s"
     }
   },
   "worker": {

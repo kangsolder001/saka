@@ -124,10 +124,23 @@ type AuthConfig struct {
 
 // MailConfig covers outgoing email.
 type MailConfig struct {
-	// Driver is "smtp" or "log" (development only: emails are only logged).
-	Driver string     `json:"driver"`
-	From   string     `json:"from"`
-	SMTP   SMTPConfig `json:"smtp"`
+	// Driver is "smtp", "resend" (the Resend HTTP API, the production
+	// recommendation, see docs/email.md) or "log" (development only: emails are
+	// only logged).
+	Driver string       `json:"driver"`
+	From   string       `json:"from"`
+	SMTP   SMTPConfig   `json:"smtp"`
+	Resend ResendConfig `json:"resend"`
+}
+
+// ResendConfig is the Resend account used when the mail driver is "resend".
+// The API key is a secret: it lives in config.json only and is never logged.
+type ResendConfig struct {
+	APIKey string `json:"api_key"`
+	// BaseURL is the API root; only change it to point tests at a stand-in server.
+	BaseURL string `json:"base_url"`
+	// Timeout bounds one API call.
+	Timeout Duration `json:"timeout"`
 }
 
 // SMTPConfig is the SMTP relay used when the mail driver is "smtp".
@@ -215,6 +228,7 @@ func Default() Config {
 			Driver: "log",
 			From:   "Saka <noreply@saka.local>",
 			SMTP:   SMTPConfig{Host: "localhost", Port: 1025},
+			Resend: ResendConfig{BaseURL: "https://api.resend.com", Timeout: Duration(15 * time.Second)},
 		},
 		Worker: WorkerConfig{
 			Concurrency:  4,
@@ -373,12 +387,29 @@ func (c Config) Validate() error {
 		if _, err := mail.ParseAddress(c.Mail.From); err != nil {
 			add(`mail.from must be a valid address such as "Name <user@example.com>"`)
 		}
+	case "resend":
+		if strings.TrimSpace(c.Mail.Resend.APIKey) == "" {
+			add("mail.resend.api_key is required when mail.driver is resend")
+		} else if c.IsProduction() && (strings.Contains(strings.ToLower(c.Mail.Resend.APIKey), placeholderMarker) || strings.HasPrefix(c.Mail.Resend.APIKey, "re_xxx")) {
+			add("mail.resend.api_key still contains the example placeholder")
+		}
+		if u, err := url.Parse(c.Mail.Resend.BaseURL); err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			add("mail.resend.base_url must be an http(s) URL")
+		} else if c.IsProduction() && u.Scheme != "https" {
+			add("mail.resend.base_url must use https in production: the API key travels in every request")
+		}
+		if c.Mail.Resend.Timeout <= 0 {
+			add("mail.resend.timeout must be positive")
+		}
+		if _, err := mail.ParseAddress(c.Mail.From); err != nil {
+			add(`mail.from must be a valid address such as "Name <user@example.com>"`)
+		}
 	case "log":
 		if c.IsProduction() {
 			add("mail.driver \"log\" is not allowed in production: emails would be dropped")
 		}
 	default:
-		add("mail.driver must be one of smtp, log (got %q)", c.Mail.Driver)
+		add("mail.driver must be one of smtp, resend, log (got %q)", c.Mail.Driver)
 	}
 
 	if c.Worker.Concurrency < 1 {

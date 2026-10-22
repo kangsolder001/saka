@@ -132,6 +132,13 @@ func newMailer(cfg config.Config, log *logger.Logger, clk clock.Clock) (mail.Mai
 			Password: cfg.Mail.SMTP.Password,
 			From:     cfg.Mail.From,
 		}, clk)
+	case "resend":
+		return mail.NewResendMailer(mail.ResendConfig{
+			APIKey:  cfg.Mail.Resend.APIKey,
+			From:    cfg.Mail.From,
+			BaseURL: cfg.Mail.Resend.BaseURL,
+			Timeout: cfg.Mail.Resend.Timeout.Std(),
+		})
 	case "log":
 		return mail.NewLogMailer(log), nil
 	default:

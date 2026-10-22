@@ -181,6 +181,12 @@ func TestParse_Validation(t *testing.T) {
 		{"redis cache ttl too long", with("", "", "", "", `{"user_cache_ttl": "48h"}`), "redis.user_cache_ttl"},
 		{"unknown mail driver", with("", "", `{"driver": "pigeon"}`, ""), "mail.driver must be one of"},
 		{"log mailer in production", with(`{"env": "production"}`, "", `{"driver": "log"}`, ""), "not allowed in production"},
+		{"resend without api key", with("", "", `{"driver": "resend"}`, ""), "mail.resend.api_key is required"},
+		{"resend bad base url", with("", "", `{"driver": "resend", "resend": {"api_key": "re_abc", "base_url": "api.resend.com"}}`, ""), "mail.resend.base_url"},
+		{"resend zero timeout", with("", "", `{"driver": "resend", "resend": {"api_key": "re_abc", "timeout": "0s"}}`, ""), "mail.resend.timeout"},
+		{"resend bad from", with("", "", `{"driver": "resend", "from": "nope", "resend": {"api_key": "re_abc"}}`, ""), "mail.from"},
+		{"resend placeholder key in production", with(`{"env": "production"}`, "", `{"driver": "resend", "resend": {"api_key": "re_change-me"}}`, ""), "example placeholder"},
+		{"resend over http in production", with(`{"env": "production"}`, "", `{"driver": "resend", "resend": {"api_key": "re_abc", "base_url": "http://api.resend.com"}}`, ""), "must use https in production"},
 		{"smtp without host", with("", "", `{"driver": "smtp", "smtp": {"host": " "}}`, ""), "mail.smtp.host is required"},
 		{"smtp bad port", with("", "", `{"driver": "smtp", "smtp": {"port": 70000}}`, ""), "mail.smtp.port"},
 		{"smtp bad from", with("", "", `{"driver": "smtp", "from": "nope"}`, ""), "mail.from"},
@@ -309,4 +315,26 @@ func TestParse_TheApplicationRoleMayBeDisabledOutsideProduction(t *testing.T) {
 
 	require.NoError(t, err)
 	assert.Empty(t, cfg.Database.AppRole)
+}
+
+func TestParse_TheResendDriver(t *testing.T) {
+	cfg, err := config.Parse([]byte(`{"app": {"env": "production"}, "database": {"url": "` + validDBURL + `"},
+		"auth": {"jwt_secret": "` + validSecret + `"},
+		"mail": {"driver": "resend", "from": "Saka <noreply@example.com>", "resend": {"api_key": "re_realKey123"}},
+		"billing": {"provider": "midtrans", "midtrans": {"server_key": "Mid-server-abc",
+			"snap_base_url": "https://app.midtrans.com", "api_base_url": "https://api.midtrans.com"}}}`))
+
+	require.NoError(t, err, "resend is accepted in production")
+	assert.Equal(t, "resend", cfg.Mail.Driver)
+	assert.Equal(t, "re_realKey123", cfg.Mail.Resend.APIKey)
+	assert.Equal(t, "https://api.resend.com", cfg.Mail.Resend.BaseURL, "the base URL defaults to the real API")
+	assert.Equal(t, 15*time.Second, cfg.Mail.Resend.Timeout.Std())
+}
+
+func TestParse_NeverEchoesTheResendAPIKey(t *testing.T) {
+	_, err := config.Parse([]byte(`{"app": {"env": "production"}, "database": {"url": "` + validDBURL + `"}, "auth": {"jwt_secret": "` + validSecret + `"},
+		"mail": {"driver": "resend", "from": "nope", "resend": {"api_key": "re_topsecretkey", "base_url": "http://x.example", "timeout": "0s"}}}`))
+
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "topsecret")
 }

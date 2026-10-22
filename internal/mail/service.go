@@ -107,7 +107,7 @@ func (h *JobHandler) Handle(ctx context.Context, job outbox.Job) error {
 	}
 
 	if err := h.mailer.Send(ctx, msg); err != nil {
-		if IsPermanentSMTPError(err) || errors.Is(err, ErrUnknownTemplate) {
+		if IsPermanentSMTPError(err) || IsPermanentResendError(err) || errors.Is(err, ErrUnknownTemplate) {
 			return outbox.Permanent(err)
 		}
 		return fmt.Errorf("send %s email: %w", p.Template, err)
