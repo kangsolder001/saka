@@ -76,14 +76,20 @@ type PasswordConfirmer interface {
 	ConfirmPassword(ctx context.Context, userID uuid.UUID, password string) error
 }
 
-// SubscriptionStarter gives a new organization its subscription. It runs in the
-// transaction that creates the organization, so the two exist together or not
-// at all. billing.Service implements it; org declares it so the modules stay
-// decoupled.
-type SubscriptionStarter interface {
+// SubscriptionLifecycle is what the organization module needs from billing
+// over the life of an organization: a subscription when it is created, and
+// the end of it when the organization is deleted. Both run in the
+// transaction of the change that triggers them, so the organization and its
+// subscription are never out of step. billing.Service implements it; org
+// declares it so the modules stay decoupled.
+type SubscriptionLifecycle interface {
 	// StartFree starts the Free subscription of orgID using q, a transaction
 	// already pinned to that organization.
 	StartFree(ctx context.Context, q db.DBTX, orgID uuid.UUID) error
+	// OrganizationDeleted cancels the subscription of orgID and voids its open
+	// invoices, using q (the transaction that deletes the organization). It is
+	// safe to call for an organization that is already canceled.
+	OrganizationDeleted(ctx context.Context, q db.DBTX, orgID uuid.UUID) error
 }
 
 // Dependencies are the collaborators of Service, injected by the composition root.
@@ -98,8 +104,9 @@ type Dependencies struct {
 	// after construction because entitlement counts seats through this very
 	// service (set by the composition root, like Passwords).
 	Limits LimitChecker
-	// Subscriptions starts the Free subscription of every new organization.
-	Subscriptions SubscriptionStarter
+	// Subscriptions starts the Free subscription of every new organization and
+	// ends it when the organization is deleted.
+	Subscriptions SubscriptionLifecycle
 	// Mail queues invitation emails in the caller's transaction.
 	Mail mail.Sender
 	// FrontendURL is the base of links in emails, e.g. https://app.example.com.

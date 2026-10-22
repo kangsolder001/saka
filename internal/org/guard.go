@@ -52,7 +52,7 @@ func (s *Service) BeforeUserDeleted(ctx context.Context, q db.DBTX, userID uuid.
 			case Role(m.Role) == RoleOwner && others > 0:
 				return auth.ErrOwnsSharedOrganization()
 			case Role(m.Role) == RoleOwner:
-				if err := s.deleteOrganization(ctx, queries, m.OrganizationID); err != nil {
+				if err := s.deleteOrganization(ctx, q, m.OrganizationID); err != nil {
 					return err
 				}
 			default:

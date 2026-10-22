@@ -250,3 +250,5 @@ func (e *payEnv) setTrialDays(planCode string, days int) {
 }
 
 func at(t time.Time) *time.Time { return &t }
+
+func str(s string) *string { return &s }

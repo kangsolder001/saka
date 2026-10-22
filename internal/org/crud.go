@@ -13,6 +13,7 @@ import (
 
 	"github.com/kangsolder001/saka/internal/org/orgdb"
 	"github.com/kangsolder001/saka/internal/platform/apperr"
+	"github.com/kangsolder001/saka/internal/platform/db"
 	"github.com/kangsolder001/saka/internal/platform/pagination"
 	"github.com/kangsolder001/saka/internal/platform/reqctx"
 	"github.com/kangsolder001/saka/internal/platform/validate"
@@ -197,24 +198,31 @@ func (s *Service) Delete(ctx context.Context) error {
 		return err
 	}
 	return s.tx.WithTx(ctx, func(tx pgx.Tx) error {
-		return s.deleteOrganization(ctx, orgdb.New(tx), id)
+		return s.deleteOrganization(ctx, tx, id)
 	})
 }
 
-// deleteOrganization soft-deletes an organization and revokes its open
-// invitations using q (a transaction). NOT_FOUND when it is already gone.
-func (s *Service) deleteOrganization(ctx context.Context, q *orgdb.Queries, id uuid.UUID) error {
-	n, err := q.SoftDeleteOrganization(ctx, orgdb.SoftDeleteOrganizationParams{ID: id, Now: s.clk.Now()})
+// deleteOrganization soft-deletes an organization, revokes its open
+// invitations and ends its subscription (cancels it and voids its open
+// invoices) using q, a transaction: the organization is never deleted with its
+// subscription still running, nor the other way round. NOT_FOUND when it is
+// already gone.
+func (s *Service) deleteOrganization(ctx context.Context, q db.DBTX, id uuid.UUID) error {
+	queries := orgdb.New(q)
+	n, err := queries.SoftDeleteOrganization(ctx, orgdb.SoftDeleteOrganizationParams{ID: id, Now: s.clk.Now()})
 	if err != nil {
 		return fmt.Errorf("org: delete: %w", err)
 	}
 	if n == 0 {
 		return apperr.NotFound()
 	}
-	if _, err := q.RevokeOpenInvitationsForOrganization(ctx, orgdb.RevokeOpenInvitationsForOrganizationParams{
+	if _, err := queries.RevokeOpenInvitationsForOrganization(ctx, orgdb.RevokeOpenInvitationsForOrganizationParams{
 		OrganizationID: id, Now: s.clk.Now(),
 	}); err != nil {
 		return fmt.Errorf("org: revoke invitations: %w", err)
+	}
+	if err := s.Subscriptions.OrganizationDeleted(ctx, q, id); err != nil {
+		return fmt.Errorf("org: end subscription: %w", err)
 	}
 	return nil
 }
