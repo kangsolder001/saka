@@ -514,3 +514,49 @@ func TestApplicationRole_ExistsAndIsRestricted(t *testing.T) {
 	assert.False(t, bypass)
 	assert.False(t, login, "it is only reachable by SET ROLE from the login user")
 }
+
+func TestPlans_SeedMatchesTheDocumentedCatalogue(t *testing.T) {
+	conn, _ := newConn(t)
+
+	type plan struct {
+		code, name   string
+		price        int64
+		trial        int
+		features     string
+		members      int
+		active       bool
+		sortOrderSet bool
+	}
+	rows, err := conn.Query(context.Background(), `
+		SELECT code, name, price_amount, trial_days, features::text, (limits->>'members')::int, is_active, sort_order > 0
+		FROM plans ORDER BY sort_order`)
+	require.NoError(t, err)
+	got, err := pgx.CollectRows(rows, func(r pgx.CollectableRow) (plan, error) {
+		var p plan
+		err := r.Scan(&p.code, &p.name, &p.price, &p.trial, &p.features, &p.members, &p.active, &p.sortOrderSet)
+		return p, err
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, []plan{
+		{"free", "Free", 0, 0, `[]`, 3, true, true},
+		{"pro", "Pro", 99000, 14, `["export_csv"]`, 10, true, true},
+		{"business", "Business", 299000, 14, `["export_csv", "audit_log"]`, -1, true, true},
+	}, got)
+}
+
+func TestPlans_ConstraintsRejectNonsense(t *testing.T) {
+	conn, _ := newConn(t)
+	insert := func(extra string) error {
+		_, err := conn.Exec(context.Background(), `INSERT INTO plans (code, name, price_amount `+extra)
+		return err
+	}
+
+	assert.Error(t, insert(`) VALUES ('free', 'Duplicate code', 0)`), "codes are unique")
+	assert.Error(t, insert(`) VALUES ('neg', 'Negative', -1)`), "no negative prices")
+	assert.Error(t, insert(`, interval) VALUES ('wk', 'Weekly', 1, 'week')`), "month or year only")
+	assert.Error(t, insert(`, trial_days) VALUES ('t', 'T', 1, -3)`), "no negative trial")
+	assert.Error(t, insert(`, features) VALUES ('f', 'F', 1, '{"a":1}')`), "features is an array")
+	assert.Error(t, insert(`, limits) VALUES ('l', 'L', 1, '[1]')`), "limits is an object")
+	assert.NoError(t, insert(`) VALUES ('ok', 'Fine', 1)`))
+}

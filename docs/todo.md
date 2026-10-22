@@ -141,7 +141,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 
 ## Fase 5 — Entitlement (3 hari)
 
-- [ ] Migrasi `plans` + seed `free/pro/business` (§4.7, §9.3) (0.3)
+- [x] Migrasi `plans` + seed `free/pro/business` (§4.7, §9.3) (0.3). `migrations/00008`; plan global (bukan data tenant), tanpa RLS
 - [ ] Migrasi `subscriptions` (§4.8) (0.15)
 - [ ] Registrasi membuat subscription `free` dalam transaksi yang sama (0.15)
 - [ ] Plan efektif: status → akses fitur (§8.2, §9.2) (0.3)
