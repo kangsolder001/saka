@@ -235,3 +235,212 @@ func TestRateLimitHitsTableIsGoneAfterRateLimitingMovedToRedis(t *testing.T) {
 
 	assert.False(t, exists)
 }
+
+// createOrg inserts an organization and its owner membership in one
+// transaction, the way the service does.
+func createOrg(t *testing.T, conn *pgx.Conn, slug, ownerID string) string {
+	t.Helper()
+	ctx := context.Background()
+	tx, err := conn.Begin(ctx)
+	require.NoError(t, err)
+	var id string
+	require.NoError(t, tx.QueryRow(ctx,
+		"INSERT INTO organizations (name, slug, owner_id) VALUES ('Org', $1, $2) RETURNING id", slug, ownerID).Scan(&id))
+	_, err = tx.Exec(ctx, "INSERT INTO memberships (organization_id, user_id, role) VALUES ($1, $2, 'owner')", id, ownerID)
+	require.NoError(t, err)
+	require.NoError(t, tx.Commit(ctx))
+	return id
+}
+
+func requirePgCode(t *testing.T, err error, code string, msgAndArgs ...any) {
+	t.Helper()
+	var pgErr *pgconn.PgError
+	require.ErrorAs(t, err, &pgErr, msgAndArgs...)
+	assert.Equal(t, code, pgErr.Code, msgAndArgs...)
+}
+
+func TestOrganizations_Defaults(t *testing.T) {
+	conn, _ := newConn(t)
+	owner := createUser(t, conn, "owner@example.com")
+
+	orgID := createOrg(t, conn, "acme", owner)
+
+	var (
+		version int
+		deleted *string
+		logo    *string
+	)
+	require.NoError(t, conn.QueryRow(context.Background(),
+		"SELECT uuid_extract_version(id), deleted_at::text, logo_url FROM organizations WHERE id = $1", orgID).Scan(&version, &deleted, &logo))
+	assert.Equal(t, 7, version)
+	assert.Nil(t, deleted)
+	assert.Nil(t, logo)
+}
+
+func TestOrganizations_SlugIsCaseInsensitiveUnique(t *testing.T) {
+	conn, _ := newConn(t)
+	owner := createUser(t, conn, "owner@example.com")
+	createOrg(t, conn, "Acme", owner)
+
+	_, err := conn.Exec(context.Background(),
+		"INSERT INTO organizations (name, slug, owner_id) VALUES ('Other', 'ACME', $1)", owner)
+
+	requirePgCode(t, err, "23505")
+}
+
+func TestOrganizations_SlugStaysReservedAfterSoftDelete(t *testing.T) {
+	conn, _ := newConn(t)
+	owner := createUser(t, conn, "owner@example.com")
+	orgID := createOrg(t, conn, "acme", owner)
+	_, err := conn.Exec(context.Background(), "UPDATE organizations SET deleted_at = now() WHERE id = $1", orgID)
+	require.NoError(t, err)
+
+	_, err = conn.Exec(context.Background(),
+		"INSERT INTO organizations (name, slug, owner_id) VALUES ('Squatter', 'acme', $1)", owner)
+
+	requirePgCode(t, err, "23505")
+}
+
+func TestOrganizations_OwnerMustBeAMember(t *testing.T) {
+	conn, _ := newConn(t)
+	stranger := createUser(t, conn, "stranger@example.com")
+
+	// The deferred foreign key only fires at commit.
+	_, err := conn.Exec(context.Background(),
+		"INSERT INTO organizations (name, slug, owner_id) VALUES ('Org', 'ownerless', $1)", stranger)
+
+	requirePgCode(t, err, "23503", "an organization whose owner has no membership must not commit")
+}
+
+func TestOrganizations_OwnerCannotLeaveWithoutTransfer(t *testing.T) {
+	conn, _ := newConn(t)
+	owner := createUser(t, conn, "owner@example.com")
+	orgID := createOrg(t, conn, "acme", owner)
+
+	_, err := conn.Exec(context.Background(),
+		"DELETE FROM memberships WHERE organization_id = $1 AND user_id = $2", orgID, owner)
+
+	requirePgCode(t, err, "23503")
+}
+
+func TestOrganizations_OwnerIsRestrictedFromUserDeletion(t *testing.T) {
+	conn, _ := newConn(t)
+	owner := createUser(t, conn, "owner@example.com")
+	createOrg(t, conn, "acme", owner)
+
+	_, err := conn.Exec(context.Background(), "DELETE FROM users WHERE id = $1", owner)
+
+	requirePgCode(t, err, "23001", "restrict_violation")
+}
+
+func TestMemberships_Constraints(t *testing.T) {
+	conn, _ := newConn(t)
+	owner := createUser(t, conn, "owner@example.com")
+	member := createUser(t, conn, "member@example.com")
+	other := createUser(t, conn, "other@example.com")
+	orgID := createOrg(t, conn, "acme", owner)
+	insert := func(userID, role string) error {
+		_, err := conn.Exec(context.Background(),
+			"INSERT INTO memberships (organization_id, user_id, role) VALUES ($1, $2, $3)", orgID, userID, role)
+		return err
+	}
+
+	require.NoError(t, insert(member, "member"))
+
+	requirePgCode(t, insert(member, "admin"), "23505", "a user is a member of an org at most once")
+	requirePgCode(t, insert(other, "owner"), "23505", "an org has exactly one owner")
+	requirePgCode(t, insert(other, "superuser"), "23514", "role is restricted")
+}
+
+func TestMemberships_AreRemovedWithTheirOrganization(t *testing.T) {
+	conn, _ := newConn(t)
+	owner := createUser(t, conn, "owner@example.com")
+	member := createUser(t, conn, "member@example.com")
+	orgID := createOrg(t, conn, "acme", owner)
+	_, err := conn.Exec(context.Background(),
+		"INSERT INTO memberships (organization_id, user_id, role) VALUES ($1, $2, 'member')", orgID, member)
+	require.NoError(t, err)
+	_, err = conn.Exec(context.Background(),
+		"INSERT INTO invitations (organization_id, email, role, token_hash, invited_by, expires_at) VALUES ($1, 'x@example.com', 'member', 'h', $2, now())", orgID, owner)
+	require.NoError(t, err)
+
+	_, err = conn.Exec(context.Background(), "DELETE FROM organizations WHERE id = $1", orgID)
+	require.NoError(t, err)
+
+	var memberships, invitations int
+	require.NoError(t, conn.QueryRow(context.Background(),
+		"SELECT (SELECT count(*) FROM memberships), (SELECT count(*) FROM invitations)").Scan(&memberships, &invitations))
+	assert.Zero(t, memberships)
+	assert.Zero(t, invitations)
+}
+
+func TestMemberships_OwnershipTransferCommitsAtomically(t *testing.T) {
+	conn, _ := newConn(t)
+	ctx := context.Background()
+	owner := createUser(t, conn, "owner@example.com")
+	member := createUser(t, conn, "member@example.com")
+	orgID := createOrg(t, conn, "acme", owner)
+	_, err := conn.Exec(ctx, "INSERT INTO memberships (organization_id, user_id, role) VALUES ($1, $2, 'member')", orgID, member)
+	require.NoError(t, err)
+
+	tx, err := conn.Begin(ctx)
+	require.NoError(t, err)
+	_, err = tx.Exec(ctx, "UPDATE memberships SET role = 'admin' WHERE organization_id = $1 AND user_id = $2", orgID, owner)
+	require.NoError(t, err)
+	_, err = tx.Exec(ctx, "UPDATE memberships SET role = 'owner' WHERE organization_id = $1 AND user_id = $2", orgID, member)
+	require.NoError(t, err)
+	_, err = tx.Exec(ctx, "UPDATE organizations SET owner_id = $2 WHERE id = $1", orgID, member)
+	require.NoError(t, err)
+
+	require.NoError(t, tx.Commit(ctx))
+}
+
+func TestInvitations_Constraints(t *testing.T) {
+	conn, _ := newConn(t)
+	owner := createUser(t, conn, "owner@example.com")
+	orgID := createOrg(t, conn, "acme", owner)
+	insert := func(email, role, hash string) error {
+		_, err := conn.Exec(context.Background(),
+			"INSERT INTO invitations (organization_id, email, role, token_hash, invited_by, expires_at) VALUES ($1, $2, $3, $4, $5, now() + interval '7 days')",
+			orgID, email, role, hash, owner)
+		return err
+	}
+
+	require.NoError(t, insert("Guest@Example.com", "member", "h1"))
+
+	requirePgCode(t, insert("guest@example.com", "admin", "h2"), "23505", "one open invitation per org and email, case-insensitive")
+	requirePgCode(t, insert("new@example.com", "member", "h1"), "23505", "token_hash is unique")
+	requirePgCode(t, insert("new@example.com", "owner", "h3"), "23514", "an invitation cannot grant ownership")
+}
+
+func TestInvitations_ClosedInvitationDoesNotBlockANewOne(t *testing.T) {
+	conn, _ := newConn(t)
+	ctx := context.Background()
+	owner := createUser(t, conn, "owner@example.com")
+	orgID := createOrg(t, conn, "acme", owner)
+	insert := func(hash string) error {
+		_, err := conn.Exec(ctx,
+			"INSERT INTO invitations (organization_id, email, role, token_hash, invited_by, expires_at) VALUES ($1, 'g@example.com', 'member', $2, $3, now())",
+			orgID, hash, owner)
+		return err
+	}
+	require.NoError(t, insert("h1"))
+
+	for i, closing := range []string{"accepted_at", "declined_at", "revoked_at"} {
+		_, err := conn.Exec(ctx, "UPDATE invitations SET "+closing+" = now() WHERE token_hash = $1", "h"+string(rune('1'+i)))
+		require.NoError(t, err)
+		require.NoError(t, insert("h"+string(rune('2'+i))), "after %s the same email can be invited again", closing)
+	}
+}
+
+func TestInvitations_EndExactlyOneWay(t *testing.T) {
+	conn, _ := newConn(t)
+	owner := createUser(t, conn, "owner@example.com")
+	orgID := createOrg(t, conn, "acme", owner)
+
+	_, err := conn.Exec(context.Background(),
+		"INSERT INTO invitations (organization_id, email, role, token_hash, invited_by, expires_at, accepted_at, revoked_at) VALUES ($1, 'g@example.com', 'member', 'h', $2, now(), now(), now())",
+		orgID, owner)
+
+	requirePgCode(t, err, "23514")
+}

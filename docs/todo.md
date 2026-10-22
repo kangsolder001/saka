@@ -117,7 +117,7 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 ## Fase 4 — Organisasi, Tim & Role (8 hari)
 
 - [x] Keputusan #3: pakai RLS sebagai lapisan kedua (sekalian belajar)
-- [ ] Migrasi `organizations`, `memberships`, `invitations` + constraint unik (§4.4–4.6) (0.3)
+- [x] Migrasi `organizations`, `memberships`, `invitations` + constraint unik (§4.4–4.6) (0.3). `migrations/00006`: slug tetap tercadangkan setelah soft delete; satu owner per org (partial unique index) dan `owner_id` wajib anggota org (FK komposit deferred); undangan terbuka unik per `(organization_id, email)` tanpa melihat kedaluwarsa, jadi mengundang ulang memperbarui baris lama (§7.4)
 - [ ] **Spike belajar RLS:** tabel dummy, policy, `SET LOCAL`, role DB non-owner, `EXPLAIN ANALYZE` dengan/tanpa RLS (1 juta baris) (1)
 - [ ] Pembuatan org di registrasi: user + org + membership `owner` dalam 1 transaksi (§5.2) (0.3)
 - [ ] CRUD org: `GET/POST /orgs`, `GET/PATCH/DELETE /orgs/{orgId}` (slug unik) (0.6)
