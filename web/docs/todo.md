@@ -26,7 +26,7 @@
 - [x] **W0.1 Scaffold SvelteKit** (0,25)
   - **Lakukan:** dari root repo jalankan `pnpm dlx sv create web` (template minimal, TypeScript). Lalu `pnpm dlx sv add` untuk `tailwindcss`, `eslint`, `prettier`, `vitest`, `playwright`, `paraglide` (locale `id,en`). Isi `packageManager` di `web/package.json` dengan versi pnpm yang dipakai. Tambahkan `"engines": { "node": ">=22" }` dan file `web/.nvmrc` berisi `22`.
   - **Selesai bila:** `pnpm --dir web dev` menampilkan halaman awal; `pnpm-lock.yaml` di-commit; `node_modules`, `.svelte-kit`, `build`, `src/lib/paraglide` ada di `web/.gitignore`.
-- [ ] **W0.2 Mode SPA statis** (0,25)
+- [x] **W0.2 Mode SPA statis** (0,25)
   - **File:** `web/svelte.config.js`, `web/src/routes/+layout.ts`
   - **Lakukan:** pasang `@sveltejs/adapter-static` dengan `fallback: 'index.html'`. Di `+layout.ts` root: `export const ssr = false; export const prerender = false;`. Cek dokumentasi SvelteKit versi terpasang untuk opsi SPA yang benar.
   - **Selesai bila:** `pnpm build` menghasilkan `web/build/index.html`; membuka path acak di `pnpm preview` tetap memuat aplikasi.
