@@ -1,8 +1,8 @@
 {{define "content"}}
-<p>Halo {{.Data.name}},</p>
-<p>Periode langganan paket <strong>{{.Data.plan_name}}</strong> untuk organisasi <strong>{{.Data.organization_name}}</strong> telah berakhir dan pembayaran perpanjangan belum kami terima.</p>
-<p>Organisasi Anda tetap bisa memakai paket {{.Data.plan_name}} selama masa tenggang, sampai <strong>{{.Data.grace_until}}</strong>. Setelah itu langganan berakhir dan organisasi kembali ke paket Free (data tidak dihapus).</p>
-{{if .Data.payment_url}}<p style="margin:24px 0;"><a href="{{.Data.payment_url}}" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;">Bayar sekarang</a></p>
-<p>Jika tombol tidak berfungsi, salin tautan ini ke browser Anda:<br><a href="{{.Data.payment_url}}">{{.Data.payment_url}}</a></p>{{else}}<p>Masuk ke {{.App.Name}} dan buka pengaturan langganan untuk membayar.</p>{{end}}
+<p>Hi {{.Data.name}},</p>
+<p>The <strong>{{.Data.plan_name}}</strong> subscription period for the organization <strong>{{.Data.organization_name}}</strong> has ended and we have not yet received the renewal payment.</p>
+<p>Your organization can keep using the {{.Data.plan_name}} plan during the grace period, until <strong>{{.Data.grace_until}}</strong>. After that the subscription ends and the organization returns to the Free plan (no data is deleted).</p>
+{{if .Data.payment_url}}<p style="margin:24px 0;"><a href="{{.Data.payment_url}}" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;">Pay now</a></p>
+<p>If the button doesn't work, copy this link into your browser:<br><a href="{{.Data.payment_url}}">{{.Data.payment_url}}</a></p>{{else}}<p>Log in to {{.App.Name}} and open the subscription settings to pay.</p>{{end}}
 {{end}}
 {{template "layout" .}}

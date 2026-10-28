@@ -1,8 +1,8 @@
 {{define "content"}}
-<p>Halo {{.Data.name}},</p>
-<p>Terima kasih sudah mendaftar di {{.App.Name}}. Klik tombol di bawah untuk memverifikasi alamat email Anda. Tautan berlaku selama 24 jam.</p>
-<p style="margin:24px 0;"><a href="{{.Data.url}}" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;">Verifikasi email</a></p>
-<p>Jika tombol tidak berfungsi, salin tautan ini ke browser Anda:<br><a href="{{.Data.url}}">{{.Data.url}}</a></p>
-<p>Jika Anda tidak merasa mendaftar, abaikan email ini.</p>
+<p>Hi {{.Data.name}},</p>
+<p>Thanks for signing up for {{.App.Name}}. Click the button below to verify your email address. The link is valid for 24 hours.</p>
+<p style="margin:24px 0;"><a href="{{.Data.url}}" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;">Verify email</a></p>
+<p>If the button doesn't work, copy this link into your browser:<br><a href="{{.Data.url}}">{{.Data.url}}</a></p>
+<p>If you didn't sign up, you can ignore this email.</p>
 {{end}}
 {{template "layout" .}}

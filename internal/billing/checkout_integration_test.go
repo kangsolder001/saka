@@ -102,7 +102,7 @@ func TestCheckout_QueuesTheInvoiceEmailForTheOwnerInTheSameTransaction(t *testin
 	require.Len(t, emails, 1)
 	assert.Equal(t, e.ownerEmail(orgID), emails[0].To)
 	assert.Equal(t, "INV-2026-000001", emails[0].Data["invoice_number"])
-	assert.Equal(t, "Rp99.000", emails[0].Data["amount"])
+	assert.Equal(t, "IDR 99,000", emails[0].Data["amount"])
 	assert.Equal(t, "Pro", emails[0].Data["plan_name"])
 	assert.Equal(t, fake.PaymentURL("INV-2026-000001"), emails[0].Data["payment_url"])
 	assert.Equal(t, "Org", emails[0].Data["organization_name"])

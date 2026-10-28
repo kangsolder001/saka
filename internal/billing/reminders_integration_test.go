@@ -39,7 +39,7 @@ func TestReminders_TheTrialsFirstInvoiceGetsTrialEndingThreeDaysAndOneDayBeforeT
 	assert.Equal(t, e.ownerEmail(orgID), emails[0].To)
 	assert.EqualValues(t, 3, emails[0].Data["days_left"])
 	assert.Equal(t, billing.FormatDate(trialEnd), emails[0].Data["trial_end_date"])
-	assert.Equal(t, "Rp99.000", emails[0].Data["amount"])
+	assert.Equal(t, "IDR 99,000", emails[0].Data["amount"])
 	assert.Equal(t, fake.PaymentURL(inv.Number), emails[0].Data["payment_url"], "the way to keep the plan")
 	assert.Empty(t, e.emails("payment_reminder"))
 

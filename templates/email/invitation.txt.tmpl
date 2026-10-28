@@ -1,9 +1,9 @@
-{{define "subject"}}{{.Data.inviter_name}} mengundang Anda ke {{.Data.organization_name}} di {{.App.Name}}{{end}}
-{{define "content"}}Halo,
+{{define "subject"}}{{.Data.inviter_name}} invited you to {{.Data.organization_name}} on {{.App.Name}}{{end}}
+{{define "content"}}Hi,
 
-{{.Data.inviter_name}} mengundang Anda bergabung dengan organisasi {{.Data.organization_name}} di {{.App.Name}} sebagai {{.Data.role_label}}. Buka tautan berikut untuk melihat dan menerima undangan (berlaku {{.Data.expires_in_days}} hari):
+{{.Data.inviter_name}} has invited you to join the organization {{.Data.organization_name}} on {{.App.Name}} as {{.Data.role_label}}. Open the link below to view and accept the invitation (valid for {{.Data.expires_in_days}} days):
 
 {{.Data.url}}
 
-Anda perlu masuk atau mendaftar dengan alamat email ini untuk menerima undangan. Jika Anda tidak mengenal pengundang, abaikan email ini.{{end}}
+You need to log in or sign up with this email address to accept the invitation. If you don't know the person who invited you, you can ignore this email.{{end}}
 {{template "layout" .}}

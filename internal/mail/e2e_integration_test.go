@@ -167,11 +167,11 @@ func TestEmailFlow_RequestToMailpitThroughOutbox(t *testing.T) {
 	msgs := mp.messages(t)
 	require.Len(t, msgs, 1)
 	msg := msgs[0]
-	assert.Equal(t, "Verifikasi email Anda di Saka", msg.Subject)
+	assert.Equal(t, "Verify your email for Saka", msg.Subject)
 	require.Len(t, msg.To, 1)
 	assert.Equal(t, "ann@example.com", msg.To[0].Address)
 	assert.Equal(t, "noreply@saka.local", msg.From.Address)
-	assert.Contains(t, msg.Text, "Halo Ann")
+	assert.Contains(t, msg.Text, "Hi Ann")
 	assert.Contains(t, msg.Text, "https://app.example/verify?token=abc123")
 	assert.Contains(t, msg.HTML, `href="https://app.example/verify?token=abc123"`)
 

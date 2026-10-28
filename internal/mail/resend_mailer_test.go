@@ -72,7 +72,7 @@ func newHandlerWith(t *testing.T, m mail.Mailer) *mail.JobHandler {
 	return mail.NewJobHandler(realRenderer(t), m, logger.Nop())
 }
 
-var resendMessage = mail.Message{To: "ann@example.com", Subject: "Halo Ann", HTML: "<p>Halo</p>", Text: "Halo"}
+var resendMessage = mail.Message{To: "ann@example.com", Subject: "Hi Ann", HTML: "<p>Hi</p>", Text: "Hi"}
 
 func TestNewResendMailer_Validation(t *testing.T) {
 	for name, cfg := range map[string]mail.ResendConfig{
@@ -101,7 +101,7 @@ func TestResendMailer_PostsTheMessageWithTheKeyAsBearerToken(t *testing.T) {
 	assert.Equal(t, "Bearer "+resendKey, call.auth)
 	assert.Equal(t, "application/json", call.contentType)
 	assert.Equal(t, map[string]any{
-		"from": "\"Saka\" <noreply@example.com>", "to": []any{"<ann@example.com>"}, "subject": "Halo Ann", "html": "<p>Halo</p>", "text": "Halo",
+		"from": "\"Saka\" <noreply@example.com>", "to": []any{"<ann@example.com>"}, "subject": "Hi Ann", "html": "<p>Hi</p>", "text": "Hi",
 	}, call.body)
 }
 

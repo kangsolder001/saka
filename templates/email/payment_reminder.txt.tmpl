@@ -1,11 +1,11 @@
-{{define "subject"}}Pengingat: invoice {{.Data.invoice_number}} jatuh tempo {{.Data.due_date}}{{end}}
-{{define "content"}}Halo {{.Data.name}},
+{{define "subject"}}Reminder: invoice {{.Data.invoice_number}} is due {{.Data.due_date}}{{end}}
+{{define "content"}}Hi {{.Data.name}},
 
-Pengingat: invoice {{.Data.invoice_number}} untuk organisasi {{.Data.organization_name}} (paket {{.Data.plan_name}}, {{.Data.amount}}) jatuh tempo pada {{.Data.due_date}}, {{.Data.days_left}} hari lagi.
+Reminder: invoice {{.Data.invoice_number}} for the organization {{.Data.organization_name}} ({{.Data.plan_name}} plan, {{.Data.amount}}) is due on {{.Data.due_date}}, in {{.Data.days_left}} days.
 
-Bayar lewat tautan berikut:
+Pay using the link below:
 
 {{.Data.payment_url}}
 
-Jika invoice sudah dibayar, abaikan email ini.{{end}}
+If you have already paid this invoice, you can ignore this email.{{end}}
 {{template "layout" .}}

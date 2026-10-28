@@ -1,11 +1,11 @@
-{{define "subject"}}Invoice {{.Data.invoice_number}} untuk {{.Data.organization_name}} di {{.App.Name}}{{end}}
-{{define "content"}}Halo {{.Data.name}},
+{{define "subject"}}Invoice {{.Data.invoice_number}} for {{.Data.organization_name}} on {{.App.Name}}{{end}}
+{{define "content"}}Hi {{.Data.name}},
 
-Invoice {{.Data.invoice_number}} untuk organisasi {{.Data.organization_name}} telah terbit: paket {{.Data.plan_name}} sebesar {{.Data.amount}}. Mohon dibayar sebelum {{.Data.due_date}}.
+Invoice {{.Data.invoice_number}} for the organization {{.Data.organization_name}} has been issued: the {{.Data.plan_name}} plan for {{.Data.amount}}. Please pay it before {{.Data.due_date}}.
 
-Bayar lewat tautan berikut:
+Pay using the link below:
 
 {{.Data.payment_url}}
 
-Paket baru berlaku setelah pembayaran kami terima. Jika Anda tidak merasa membuat invoice ini, abaikan email ini.{{end}}
+The new plan takes effect once we receive your payment. If you didn't create this invoice, you can ignore this email.{{end}}
 {{template "layout" .}}

@@ -1,8 +1,8 @@
 {{define "content"}}
-<p>Halo {{.Data.name}},</p>
-<p>Seseorang meminta mengganti email akun {{.App.Name}} menjadi alamat ini. Klik tombol di bawah untuk mengonfirmasi. Tautan berlaku selama 24 jam.</p>
-<p style="margin:24px 0;"><a href="{{.Data.url}}" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;">Konfirmasi email baru</a></p>
-<p>Jika tombol tidak berfungsi, salin tautan ini ke browser Anda:<br><a href="{{.Data.url}}">{{.Data.url}}</a></p>
-<p>Jika Anda tidak merasa memintanya, abaikan email ini. Email akun tidak akan berubah.</p>
+<p>Hi {{.Data.name}},</p>
+<p>Someone asked to change the email address of a {{.App.Name}} account to this address. Click the button below to confirm. The link is valid for 24 hours.</p>
+<p style="margin:24px 0;"><a href="{{.Data.url}}" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;">Confirm new email</a></p>
+<p>If the button doesn't work, copy this link into your browser:<br><a href="{{.Data.url}}">{{.Data.url}}</a></p>
+<p>If you didn't request this, you can ignore this email. The account email will not change.</p>
 {{end}}
 {{template "layout" .}}

@@ -1,9 +1,9 @@
-{{define "subject"}}Masa percobaan {{.Data.plan_name}} berakhir {{.Data.trial_end_date}}{{end}}
-{{define "content"}}Halo {{.Data.name}},
+{{define "subject"}}Your {{.Data.plan_name}} trial ends {{.Data.trial_end_date}}{{end}}
+{{define "content"}}Hi {{.Data.name}},
 
-Masa percobaan paket {{.Data.plan_name}} untuk organisasi {{.Data.organization_name}} berakhir pada {{.Data.trial_end_date}}, {{.Data.days_left}} hari lagi. Agar tetap memakai paket ini tanpa terputus, bayar invoice sebesar {{.Data.amount}} sebelum masa percobaan berakhir:
+The {{.Data.plan_name}} trial for the organization {{.Data.organization_name}} ends on {{.Data.trial_end_date}}, in {{.Data.days_left}} days. To keep using this plan without interruption, pay the invoice of {{.Data.amount}} before the trial ends:
 
 {{.Data.payment_url}}
 
-Tanpa pembayaran, organisasi kembali ke paket Free setelah masa percobaan berakhir. Data Anda tidak dihapus; hanya batas penggunaannya yang kembali ke paket Free.{{end}}
+Without payment, the organization returns to the Free plan when the trial ends. Your data is not deleted; only the usage limits go back to those of the Free plan.{{end}}
 {{template "layout" .}}

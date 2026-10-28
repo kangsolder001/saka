@@ -163,9 +163,9 @@ func TestSMTPMailer_DeliversMultipartMessage(t *testing.T) {
 
 	err := m.Send(context.Background(), appmail.Message{
 		To:      "Ann <ann@example.com>",
-		Subject: "Verifikasi email Anda — Saka",
-		Text:    "Halo Ann,\nklik tautan ini.",
-		HTML:    "<p>Halo <b>Ann</b>, café</p>",
+		Subject: "Verify your email — Saka",
+		Text:    "Hi Ann,\nclick this link.",
+		HTML:    "<p>Hi <b>Ann</b>, café</p>",
 	})
 
 	require.NoError(t, err)
@@ -183,7 +183,7 @@ func TestSMTPMailer_DeliversMultipartMessage(t *testing.T) {
 
 	subject, err := new(mime.WordDecoder).DecodeHeader(msg.Header.Get("Subject"))
 	require.NoError(t, err)
-	assert.Equal(t, "Verifikasi email Anda — Saka", subject, "non-ASCII subject survives RFC 2047 encoding")
+	assert.Equal(t, "Verify your email — Saka", subject, "non-ASCII subject survives RFC 2047 encoding")
 
 	mediaType, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
 	require.NoError(t, err)
@@ -192,7 +192,7 @@ func TestSMTPMailer_DeliversMultipartMessage(t *testing.T) {
 	parts := readParts(t, msg.Body, params["boundary"])
 	require.Len(t, parts, 2)
 	assert.Equal(t, "text/plain; charset=utf-8", parts[0].contentType)
-	assert.Contains(t, parts[0].body, "Halo Ann,\nklik tautan ini.")
+	assert.Contains(t, parts[0].body, "Hi Ann,\nclick this link.")
 	assert.Equal(t, "text/html; charset=utf-8", parts[1].contentType, "HTML last: clients prefer the last alternative")
 	assert.Contains(t, parts[1].body, "café", "UTF-8 body decodes from quoted-printable")
 }

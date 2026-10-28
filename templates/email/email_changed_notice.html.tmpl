@@ -1,6 +1,6 @@
 {{define "content"}}
-<p>Halo {{.Data.name}},</p>
-<p>Email akun {{.App.Name}} Anda baru saja diganti menjadi <strong>{{.Data.new_email}}</strong>. Mulai sekarang gunakan alamat baru tersebut untuk login, dan email ini tidak lagi terhubung dengan akun.</p>
-<p>Jika bukan Anda yang melakukannya, segera hubungi kami.</p>
+<p>Hi {{.Data.name}},</p>
+<p>The email address of your {{.App.Name}} account was just changed to <strong>{{.Data.new_email}}</strong>. From now on, use the new address to log in; this address is no longer linked to the account.</p>
+<p>If you didn't make this change, contact us right away.</p>
 {{end}}
 {{template "layout" .}}

@@ -92,7 +92,7 @@ func TestJobHandler_RendersAndSends(t *testing.T) {
 	h, m := newHandler(t)
 	m.EXPECT().Send(mock.Anything, mock.MatchedBy(func(msg mail.Message) bool {
 		return msg.To == "ann@example.com" &&
-			msg.Subject == "Verifikasi email Anda di Saka" &&
+			msg.Subject == "Verify your email for Saka" &&
 			len(msg.HTML) > 0 && len(msg.Text) > 0 &&
 			strings.Contains(msg.Text, "https://app.example/verify?token=abc")
 	})).Return(nil).Once()

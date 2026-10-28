@@ -1,8 +1,8 @@
 {{define "content"}}
-<p>Halo {{.Data.name}},</p>
-<p>Masa percobaan paket <strong>{{.Data.plan_name}}</strong> untuk organisasi <strong>{{.Data.organization_name}}</strong> berakhir pada <strong>{{.Data.trial_end_date}}</strong>, {{.Data.days_left}} hari lagi. Agar tetap memakai paket ini tanpa terputus, bayar invoice sebesar <strong>{{.Data.amount}}</strong> sebelum masa percobaan berakhir.</p>
-<p style="margin:24px 0;"><a href="{{.Data.payment_url}}" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;">Bayar dan lanjutkan</a></p>
-<p>Jika tombol tidak berfungsi, salin tautan ini ke browser Anda:<br><a href="{{.Data.payment_url}}">{{.Data.payment_url}}</a></p>
-<p>Tanpa pembayaran, organisasi kembali ke paket Free setelah masa percobaan berakhir. Data Anda tidak dihapus; hanya batas penggunaannya yang kembali ke paket Free.</p>
+<p>Hi {{.Data.name}},</p>
+<p>The <strong>{{.Data.plan_name}}</strong> trial for the organization <strong>{{.Data.organization_name}}</strong> ends on <strong>{{.Data.trial_end_date}}</strong>, in {{.Data.days_left}} days. To keep using this plan without interruption, pay the invoice of <strong>{{.Data.amount}}</strong> before the trial ends.</p>
+<p style="margin:24px 0;"><a href="{{.Data.payment_url}}" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;">Pay and continue</a></p>
+<p>If the button doesn't work, copy this link into your browser:<br><a href="{{.Data.payment_url}}">{{.Data.payment_url}}</a></p>
+<p>Without payment, the organization returns to the Free plan when the trial ends. Your data is not deleted; only the usage limits go back to those of the Free plan.</p>
 {{end}}
 {{template "layout" .}}

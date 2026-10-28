@@ -38,22 +38,22 @@ func TestRealTemplates_AllRenderWithTheirData(t *testing.T) {
 
 		"invoice_created": {
 			"name": "Ann", "organization_name": "Acme Corp", "invoice_number": "INV-2026-000123", "plan_name": "Pro",
-			"amount": "Rp99.000", "due_date": "8 Juni 2026", "payment_url": "https://pay.example/INV-2026-000123",
+			"amount": "IDR 99,000", "due_date": "8 June 2026", "payment_url": "https://pay.example/INV-2026-000123",
 		},
 		"payment_succeeded": {
 			"name": "Ann", "organization_name": "Acme Corp", "invoice_number": "INV-2026-000123", "plan_name": "Pro",
-			"amount": "Rp99.000", "period_end": "1 Juli 2026",
+			"amount": "IDR 99,000", "period_end": "1 July 2026",
 		},
 		"payment_reminder": {
 			"name": "Ann", "organization_name": "Acme Corp", "invoice_number": "INV-2026-000123", "plan_name": "Pro",
-			"amount": "Rp99.000", "due_date": "8 Juni 2026", "days_left": 3, "payment_url": "https://pay.example/INV-2026-000123",
+			"amount": "IDR 99,000", "due_date": "8 June 2026", "days_left": 3, "payment_url": "https://pay.example/INV-2026-000123",
 		},
 		"trial_ending": {
-			"name": "Ann", "organization_name": "Acme Corp", "plan_name": "Pro", "amount": "Rp99.000",
-			"trial_end_date": "15 Juni 2026", "days_left": 3, "payment_url": "https://pay.example/INV-2026-000123",
+			"name": "Ann", "organization_name": "Acme Corp", "plan_name": "Pro", "amount": "IDR 99,000",
+			"trial_end_date": "15 June 2026", "days_left": 3, "payment_url": "https://pay.example/INV-2026-000123",
 		},
 		"subscription_past_due": {
-			"name": "Ann", "organization_name": "Acme Corp", "plan_name": "Pro", "grace_until": "4 Juli 2026",
+			"name": "Ann", "organization_name": "Acme Corp", "plan_name": "Pro", "grace_until": "4 July 2026",
 			"payment_url": "https://pay.example/INV-2026-000123",
 		},
 		"subscription_expired": {"name": "Ann", "organization_name": "Acme Corp", "plan_name": "Pro"},
@@ -73,8 +73,8 @@ func TestRealTemplates_AllRenderWithTheirData(t *testing.T) {
 			assert.NotContains(t, out.Subject, "\n")
 			assert.Contains(t, out.HTML, "<html")
 			if _, addressed := d["name"]; addressed {
-				assert.Contains(t, out.HTML, "Halo Ann")
-				assert.Contains(t, out.Text, "Halo Ann")
+				assert.Contains(t, out.HTML, "Hi Ann")
+				assert.Contains(t, out.Text, "Hi Ann")
 			}
 			if org, ok := d["organization_name"].(string); ok {
 				assert.Contains(t, out.HTML, org)
@@ -82,7 +82,7 @@ func TestRealTemplates_AllRenderWithTheirData(t *testing.T) {
 			}
 			if _, ok := d["inviter_name"]; ok {
 				assert.Contains(t, out.Subject, d["organization_name"])
-				assert.Contains(t, out.Text, "Ann mengundang Anda")
+				assert.Contains(t, out.Text, "Ann has invited you")
 			}
 			for _, key := range []string{"invoice_number", "plan_name", "amount", "due_date", "period_end", "trial_end_date", "grace_until"} {
 				if v, ok := d[key].(string); ok {
@@ -236,19 +236,19 @@ func TestNewRenderer_AcceptsMinimalValidSet(t *testing.T) {
 // not exist yet): it then points at the subscription settings instead.
 func TestRender_PastDueWithoutAPaymentLinkPointsAtTheSettings(t *testing.T) {
 	r := realRenderer(t)
-	data := map[string]any{"name": "Ann", "organization_name": "Acme", "plan_name": "Pro", "grace_until": "4 Juli 2026", "payment_url": ""}
+	data := map[string]any{"name": "Ann", "organization_name": "Acme", "plan_name": "Pro", "grace_until": "4 July 2026", "payment_url": ""}
 
 	out, err := r.Render("subscription_past_due", data)
 
 	require.NoError(t, err)
-	assert.Contains(t, out.HTML, "pengaturan langganan")
-	assert.Contains(t, out.Text, "pengaturan langganan")
+	assert.Contains(t, out.HTML, "subscription settings")
+	assert.Contains(t, out.Text, "subscription settings")
 	assert.NotContains(t, out.HTML, `href=""`)
 
 	withLink, err := r.Render("subscription_past_due", map[string]any{
-		"name": "Ann", "organization_name": "Acme", "plan_name": "Pro", "grace_until": "4 Juli 2026", "payment_url": "https://pay.example/x",
+		"name": "Ann", "organization_name": "Acme", "plan_name": "Pro", "grace_until": "4 July 2026", "payment_url": "https://pay.example/x",
 	})
 	require.NoError(t, err)
 	assert.Contains(t, withLink.HTML, "https://pay.example/x")
-	assert.NotContains(t, withLink.Text, "pengaturan langganan")
+	assert.NotContains(t, withLink.Text, "subscription settings")
 }

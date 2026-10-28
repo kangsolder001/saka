@@ -1,7 +1,7 @@
-{{define "subject"}}Email akun {{.App.Name}} Anda telah diganti{{end}}
-{{define "content"}}Halo {{.Data.name}},
+{{define "subject"}}Your {{.App.Name}} account email has been changed{{end}}
+{{define "content"}}Hi {{.Data.name}},
 
-Email akun {{.App.Name}} Anda baru saja diganti menjadi {{.Data.new_email}}. Mulai sekarang gunakan alamat baru tersebut untuk login, dan email ini tidak lagi terhubung dengan akun.
+The email address of your {{.App.Name}} account was just changed to {{.Data.new_email}}. From now on, use the new address to log in; this address is no longer linked to the account.
 
-Jika bukan Anda yang melakukannya, segera hubungi kami.{{end}}
+If you didn't make this change, contact us right away.{{end}}
 {{template "layout" .}}

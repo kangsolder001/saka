@@ -50,7 +50,7 @@ func roleLabel(r Role) string {
 	if r == RoleAdmin {
 		return "Admin"
 	}
-	return "Anggota"
+	return "Member"
 }
 
 // Invite offers email a place in the current organization with the given role
@@ -164,7 +164,7 @@ func (s *Service) sendInvitationEmail(ctx context.Context, tx pgx.Tx, inv Invita
 	inviter := people[inviterID]
 	inviterName := inviter.Name
 	if inviterName == "" {
-		inviterName = "Seorang anggota tim"
+		inviterName = "A team member"
 	}
 	return s.Mail.Send(ctx, tx, mail.Email{
 		Template: "invitation",

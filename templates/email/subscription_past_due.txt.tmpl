@@ -1,11 +1,11 @@
-{{define "subject"}}Pembayaran langganan {{.Data.organization_name}} belum diterima{{end}}
-{{define "content"}}Halo {{.Data.name}},
+{{define "subject"}}Subscription payment for {{.Data.organization_name}} not yet received{{end}}
+{{define "content"}}Hi {{.Data.name}},
 
-Periode langganan paket {{.Data.plan_name}} untuk organisasi {{.Data.organization_name}} telah berakhir dan pembayaran perpanjangan belum kami terima.
+The {{.Data.plan_name}} subscription period for the organization {{.Data.organization_name}} has ended and we have not yet received the renewal payment.
 
-Organisasi Anda tetap bisa memakai paket {{.Data.plan_name}} selama masa tenggang, sampai {{.Data.grace_until}}. Setelah itu langganan berakhir dan organisasi kembali ke paket Free (data tidak dihapus).
+Your organization can keep using the {{.Data.plan_name}} plan during the grace period, until {{.Data.grace_until}}. After that the subscription ends and the organization returns to the Free plan (no data is deleted).
 
-{{if .Data.payment_url}}Bayar lewat tautan berikut:
+{{if .Data.payment_url}}Pay using the link below:
 
-{{.Data.payment_url}}{{else}}Masuk ke {{.App.Name}} dan buka pengaturan langganan untuk membayar.{{end}}{{end}}
+{{.Data.payment_url}}{{else}}Log in to {{.App.Name}} and open the subscription settings to pay.{{end}}{{end}}
 {{template "layout" .}}

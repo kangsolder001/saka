@@ -1,8 +1,8 @@
 {{define "content"}}
-<p>Halo {{.Data.name}},</p>
-<p>Pengingat: invoice <strong>{{.Data.invoice_number}}</strong> untuk organisasi <strong>{{.Data.organization_name}}</strong> (paket {{.Data.plan_name}}, <strong>{{.Data.amount}}</strong>) jatuh tempo pada <strong>{{.Data.due_date}}</strong>, {{.Data.days_left}} hari lagi.</p>
-<p style="margin:24px 0;"><a href="{{.Data.payment_url}}" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;">Bayar sekarang</a></p>
-<p>Jika tombol tidak berfungsi, salin tautan ini ke browser Anda:<br><a href="{{.Data.payment_url}}">{{.Data.payment_url}}</a></p>
-<p>Jika invoice sudah dibayar, abaikan email ini.</p>
+<p>Hi {{.Data.name}},</p>
+<p>Reminder: invoice <strong>{{.Data.invoice_number}}</strong> for the organization <strong>{{.Data.organization_name}}</strong> ({{.Data.plan_name}} plan, <strong>{{.Data.amount}}</strong>) is due on <strong>{{.Data.due_date}}</strong>, in {{.Data.days_left}} days.</p>
+<p style="margin:24px 0;"><a href="{{.Data.payment_url}}" style="background:#2563eb;color:#ffffff;text-decoration:none;padding:12px 20px;border-radius:6px;display:inline-block;">Pay now</a></p>
+<p>If the button doesn't work, copy this link into your browser:<br><a href="{{.Data.payment_url}}">{{.Data.payment_url}}</a></p>
+<p>If you have already paid this invoice, you can ignore this email.</p>
 {{end}}
 {{template "layout" .}}
