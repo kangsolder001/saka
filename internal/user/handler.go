@@ -223,7 +223,7 @@ func (h *Handler) changePassword(c *gin.Context) {
 		httpx.Error(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Password berhasil diubah. Sesi di perangkat lain telah diakhiri."})
+	c.JSON(http.StatusOK, gin.H{"message": "Password changed successfully. Sessions on other devices have been signed out."})
 }
 
 type requestEmailChangeRequest struct {
@@ -244,7 +244,7 @@ func (h *Handler) requestEmailChange(c *gin.Context) {
 		httpx.Error(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Kami telah mengirim tautan konfirmasi ke email baru Anda. Email akun belum berubah sampai tautan itu dibuka."})
+	c.JSON(http.StatusOK, gin.H{"message": "We have sent a confirmation link to your new email address. Your account email will not change until that link is opened."})
 }
 
 type confirmEmailChangeRequest struct {

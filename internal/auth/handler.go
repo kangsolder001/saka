@@ -264,7 +264,7 @@ func (h *Handler) forgotPassword(c *gin.Context) {
 		httpx.Error(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Jika email terdaftar, tautan untuk mengatur ulang password telah dikirim."})
+	c.JSON(http.StatusOK, gin.H{"message": "If the email is registered, a password reset link has been sent."})
 }
 
 type resetPasswordRequest struct {
@@ -281,5 +281,5 @@ func (h *Handler) resetPassword(c *gin.Context) {
 		httpx.Error(c, err)
 		return
 	}
-	c.JSON(http.StatusOK, gin.H{"message": "Password berhasil diubah. Silakan login kembali."})
+	c.JSON(http.StatusOK, gin.H{"message": "Password changed successfully. Please log in again."})
 }
