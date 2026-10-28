@@ -71,6 +71,7 @@
   - **File:** `web/package.json` (script), `web/src/lib/api/schema.d.ts` (hasil), `web/src/lib/api/types.ts`
   - **Lakukan:** script `api:generate` = `openapi-typescript ../docs/openapi.yaml -o src/lib/api/schema.d.ts`. `types.ts` berisi alias: `Profile`, `AuthUser`, `OrganizationRef`, `MemberOrganization`, `Member`, `Invitation`, `InvitationInfo`, `Plan`, `Subscription`, `SubscriptionStatus`, `Invoice`, `Session`, `Role`, `ErrorCode`, `CheckoutResponse`, `ChangePlanResponse` (bentuk `components['schemas']['X']`).
   - **Selesai bila:** `schema.d.ts` di-commit; langkah drift di CI aktif.
+  - **Prasyarat:** Fase 8 backend (`docs/todo.md`) sudah menerjemahkan `docs/openapi.yaml` ke Bahasa Inggris, supaya komentar JSDoc di `schema.d.ts` berbahasa Inggris. Bila belum, tetap jalan; cukup jalankan ulang `make web-api` setelah Fase 8 (tipe tidak berubah, hanya komentar).
 - [ ] **W1.2 `ApiError` dan `toApiError`** (0,5)
   - **File:** `web/src/lib/api/errors.ts`, `errors.test.ts`
   - **Lakukan:** kelas `ApiError` persis seperti §7.1. `toApiError(response: Response | null, body: unknown, cause?: unknown): ApiError` menangani: body format `{error:{code,message,details}}`, body bukan JSON (pakai status → `INTERNAL_ERROR`), `response === null` (jaringan → `NETWORK_ERROR`, status 0), header `Retry-After` dan `details.retry_after_seconds`, header `X-Trace-ID` (simpan di properti `traceId`).
@@ -282,7 +283,8 @@ Halaman akun memakai sub-navigasi (tab) Profil / Keamanan / Sesi / Hapus akun di
 Hal yang ditemukan saat merancang frontend. **Bukan** bagian pekerjaan frontend; usulkan ke backlog backend (`docs/todo.md`) bila disetujui.
 
 - `POST /auth/register` mewajibkan `organization_name` walaupun email punya undangan aktif (organisasi tidak dibuat). Usulan: jadikan opsional bila ada undangan aktif. Sementara frontend mengisi otomatis (spec §6.4).
-- Pesan `details.fields` pada `VALIDATION_ERROR` berupa teks Inggris teknis dan `message` berbahasa Indonesia saja. Usulan jangka panjang: kode alasan yang stabil per field (mis. `incorrect`, `required`) supaya frontend tidak bergantung pada teks.
+- `message` (error dan sukses) dan isi email akan berbahasa Inggris lewat Fase 8 backend (`docs/todo.md`); path, status, `code`, dan `details` tidak berubah, jadi frontend tidak perlu menyesuaikan apa pun selain menganggap `serverMessage` berbahasa Inggris.
+- Pesan `details.fields` pada `VALIDATION_ERROR` berupa teks Inggris teknis, bukan kode. Usulan jangka panjang: kode alasan yang stabil per field (mis. `incorrect`, `required`) supaya frontend tidak bergantung pada teks.
 
 ## Backlog (di luar versi pertama)
 

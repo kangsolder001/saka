@@ -32,8 +32,9 @@ Alasan urutan:
 | 5 | Entitlement | 3 hari | Plan ter-seed, `CheckLimit` memblokir anggota melebihi limit |
 | 6 | Billing | 10 hari | Checkout sandbox Midtrans, webhook idempoten, state machine, cron, reconcile |
 | 7 | Hardening & Acceptance | 4 hari | Seluruh checklist §12 spec tercentang, observability, dokumentasi |
+| 8 | Bahasa Inggris untuk Kode, Kontrak API & Email | 1,5 hari | `message` API, email, dan `docs/openapi.yaml` berbahasa Inggris; penjaga bahasa otomatis lulus; perilaku API tidak berubah |
 | – | Buffer | 5 hari | Cadangan bug / review |
-| | **Total** | **40 hari efektif + 5 buffer** | |
+| | **Total** | **41,5 hari efektif + 5 buffer** | |
 
 **Konversi ke kalender:** dengan ±2 jam/hari, 1 hari efektif ≈ 3–4 hari kalender, jadi total sekitar 4–6 bulan. Dengan 2 hari penuh tiap akhir pekan, sekitar 20 minggu (±5 bulan).
 
@@ -61,6 +62,8 @@ Karena dikerjakan di sela waktu luang, tiap fase sengaja berakhir pada milestone
 
 **Provider email produksi:** ditunda, diputuskan di Fase 7. Dev memakai Mailpit lewat interface `Mailer`.
 
+**Bahasa (diputuskan, dikerjakan di Fase 8):** kode, komentar, pesan log, teks `message` di respons API (error dan sukses), `docs/openapi.yaml` (termasuk `summary`/`description`), dan isi email **berbahasa Inggris**. Bahasa Indonesia hanya untuk dokumen (`docs/` selain `openapi.yaml`, `web/docs/`, `README.md`, `CLAUDE.md`) dan komunikasi. Alasannya: kontrak API dibaca mesin dan developer mana pun (deskripsi OpenAPI juga ikut ke tipe frontend hasil generate), sedangkan teks yang dilihat end user di web sudah diterjemahkan frontend (id/en) dari `code`/`reason`, sehingga `message` backend hanya fallback. Email belum punya i18n, jadi untuk sekarang satu bahasa (Inggris); email per bahasa user masuk backlog Tier 2. Audit 2026-10-28 menemukan identifier, tabel/kolom, kode error, field JSON, dan enum sudah Inggris, sehingga Fase 8 hanya mengganti teks dan **tidak mengubah perilaku API** (path, status, `code`, `details` tetap). Fase ini ditaruh setelah Fase 7 karena menyentuh banyak modul sekaligus dan harus dikerjakan sebelum frontend W1 (tipe dari OpenAPI) supaya frontend tidak pernah melihat kontrak berbahasa Indonesia.
+
 ## 4. Risiko
 
 | Risiko | Dampak | Mitigasi |
@@ -71,6 +74,7 @@ Karena dikerjakan di sela waktu luang, tiap fase sengaja berakhir pada milestone
 | Cron tidak idempoten / race | Invoice ganda | `FOR UPDATE SKIP LOCKED`, test jalan dua kali, clock yang bisa dimanipulasi sejak Fase 0 |
 | Pengerjaan terputus-putus (waktu luang) | Konteks hilang, lupa progres | Berhenti hanya di batas fase atau tugas; centang todo.md; tiap fase punya milestone yang bisa diuji |
 | Scope creep ke item §13 | Proyek tak kunjung selesai | Tolak; catat ke backlog Tier 2 |
+| Teks Indonesia masuk lagi ke kode/kontrak setelah Fase 8 | Kontrak tidak konsisten | Test penjaga bahasa (`TestLanguage_*`) membaca kode non-test, `templates/`, dan `docs/openapi.yaml` di setiap CI |
 
 ## 5. Strategi Testing
 
@@ -91,4 +95,4 @@ Karena dikerjakan di sela waktu luang, tiap fase sengaja berakhir pada milestone
 
 ## 7. Definisi Selesai Tier 1
 
-Semua checkbox di §12 spec tercentang dan terhubung ke test otomatis, `seed` dev berjalan, dan README menjelaskan cara menjalankan API + worker.
+Semua checkbox di §12 spec tercentang dan terhubung ke test otomatis, `seed` dev berjalan, dan README menjelaskan cara menjalankan API + worker. Fase 8 (bahasa) adalah perapian sesudah Tier 1, bukan syarat kriteria §12.

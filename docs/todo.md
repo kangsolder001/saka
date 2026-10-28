@@ -18,7 +18,8 @@
 | 5 | Entitlement | 3 hari |
 | 6 | Billing | 10 hari |
 | 7 | Hardening & Acceptance | 4 hari |
-| | **Total** | **40 hari kerja efektif** |
+| 8 | Bahasa Inggris untuk Kode, Kontrak API & Email | 1,5 hari |
+| | **Total** | **41,5 hari kerja efektif** |
 | | Buffer | 5 hari |
 
 **Cara membaca:** jika Anda bisa menyisihkan ±2 jam/hari, 1 hari efektif ≈ 3–4 hari kalender. Total sekitar 4–6 bulan. Jika bisa 2 hari penuh tiap akhir pekan, total sekitar 20 minggu (±5 bulan).
@@ -211,6 +212,24 @@ Urutan fase tidak boleh dibalik. Lihat alasannya di [plan.md](plan.md). Tiap fas
 
 ---
 
+## Fase 8 — Bahasa Inggris untuk Kode, Kontrak API & Email (1,5 hari)
+
+> **Keputusan (spec §2 dan §14 #8):** semua yang ditulis untuk mesin atau dikirim backend ke klien dan end user berbahasa Inggris: identifier, komentar, pesan log, teks `message` di respons API (error **dan** sukses), `docs/openapi.yaml` (termasuk `summary`/`description`, karena ikut menjadi JSDoc di tipe frontend hasil generate), dan isi email. Bahasa Indonesia hanya untuk dokumen (`docs/` selain `openapi.yaml`, `web/docs/`, `README.md`, `CLAUDE.md`) dan komunikasi.
+>
+> **Hasil audit (2026-10-28):** identifier, komentar, nama tabel/kolom, kode error, nama field JSON, nilai enum, pesan validasi per field (`details.fields`), keluaran CLI, dan pesan log **sudah** berbahasa Inggris. Yang belum hanya daftar di bawah. Fase ini **tidak mengubah perilaku API**: path, status HTTP, `code`, `details` (termasuk `reason`) dan bentuk respons tetap, sehingga frontend hanya terdampak pada teks fallback `serverMessage` (`web/docs/spec.md` §7.1).
+
+- [ ] Pesan error API ke Inggris (0,3). `internal/platform/apperr/apperr.go`: `defaultInternalMessage` dan pesan bawaan `Validation`, `Unauthenticated`, `TokenExpired`, `Forbidden`, `EmailNotVerified`, `SubscriptionInactive`, `NotFound`, `RateLimited`, `PaymentProviderError`. Pesan `Conflict`/`New` di `auth/account.go`, `auth/organizations.go`, `auth/service.go` (termasuk "Email atau password salah."), `billing/checkout.go`, `billing/manage.go` (empat pesan), `org/create.go`, `org/crud.go`, `org/invitations.go`, `user/user.go`. Perbarui test yang mencocokkan teks (`apperr_test.go`, `auth/handler_test.go`, `auth/register_test.go`, `user/handler_test.go`)
+- [ ] Pesan entitlement ke Inggris (0,1). `entitlement/service.go`: "This feature is not available on the Free plan.", "The Free plan allows up to 3 members.", "The Free plan does not include members." (`limitMessage`, `RequireFeature`); label `members` di `limitLabels` menjadi `members` (peta tetap ada untuk label limit berikutnya). Test: `entitlement/service_test.go`, `entitlement/middleware_test.go`, `app/entitlement_integration_test.go`, `app/require_feature_integration_test.go`, `platform/apperr/apperr_test.go`
+- [ ] Pesan sukses ke Inggris (0,1). `auth/handler.go` (forgot-password, reset-password) dan `user/handler.go` (ganti password, ganti email); bentuk `{"message": "..."}` tetap. Pesan forgot-password tetap sama untuk email terdaftar maupun tidak (§5.2)
+- [ ] Email ke Inggris (0,5). Semua template di `templates/email/` (subject, HTML, text, `layout.*`); `org.roleLabel` (`"Anggota"` → `"Member"`) dan fallback nama pengundang (`"Seorang anggota tim"` → `"A team member"`) di `org/invitations.go`; `billing.FormatDate` memakai nama bulan Inggris (`8 June 2026`, zona tetap WIB) dan `billing.FormatMoney` menulis IDR sebagai `IDR 99,000` (mata uang lain tetap `<amount> <CODE>`). Test: `billing/format_test.go`, `mail/renderer_test.go`, `mail/service_test.go`, `mail/e2e_integration_test.go`, `mail/smtp_mailer_test.go` (subjek uji tetap memuat karakter non-ASCII, mis. em dash, supaya uji RFC 2047 tetap bermakna), dan integration test billing yang mencocokkan tanggal/nominal di data email (`reminders_*`, `expire_*`, `webhook_processing_*`)
+- [ ] `docs/openapi.yaml` ke Inggris (0,3). Semua `summary`/`description` (±155) dan pengantar `info.description`; kalimat "`message` boleh berbahasa Indonesia" diganti: `message` berbahasa Inggris, untuk dibaca manusia, bukan bagian kontrak yang stabil; klien memetakan dari `code` dan `details.reason`. Path, field, enum, dan `$ref` tidak berubah, jadi `TestOpenAPI_*` lulus tanpa perubahan. Setelah ini frontend menjalankan `make web-api` (bila `web/` sudah ada)
+- [ ] Penjaga bahasa otomatis (0,2). `TestLanguage_CodeTemplatesAndContractAreEnglish` (`internal/app`, pola sama dengan `TestMailer_*` yang membaca kode sumber): membaca literal string di file `.go` non-test (`internal/`, `cmd/`), teks di `templates/`, dan `docs/openapi.yaml`, lalu gagal bila menemukan kata Indonesia yang umum (daftar kecil di test: `yang`, `tidak`, `sudah`, `belum`, `anda`, `untuk`, `dengan`, `berhasil`, `silakan`, `paket`, `langganan`, `anggota`, `tagihan`, `organisasi`, ...) dengan pesan yang menyebut file dan baris. Pengecualian, bila perlu, ditulis di test beserta alasannya
+- [ ] Dokumen pendamping (0,1). Root `CLAUDE.md` (bagian "Konvensi kode" sudah diperbarui saat perencanaan; perbarui "Status repo" setelah fase selesai), `README.md` dan `docs/demo.md` bila mengutip pesan atau isi email, `docs/issue.md` bila ada butir terkait. Spec (§2, §3, §8.7, §9.4, §10.2, §14) dan `web/docs/` sudah ditulis untuk keadaan sesudah fase ini
+
+**Selesai bila:** `make test`, `make test-integration`, dan `make lint` hijau; penjaga bahasa lulus; status, `code`, dan `details` semua endpoint tidak berubah (test e2e yang ada lulus setelah hanya teks yang disesuaikan).
+
+---
+
 ## Buffer (5 hari)
 
 Dipakai untuk bug, review, atau fase yang molor. Fase yang paling rawan molor: Fase 6 (gateway eksternal) dan Fase 4 (RLS, karena sekalian belajar).
@@ -223,4 +242,4 @@ Panel super admin · audit log · notifikasi in-app · 2FA · OAuth · upload fi
 
 - Billing: invoice dua fase (draft lalu kirim) supaya koneksi DB tidak tertahan selama panggilan gateway (Fase 6, spec §8.7) · `Cancel` tautan pembayaran di `PaymentProvider` · refund/chargeback otomatis · retry/backoff panggilan keluar ke gateway · gateway Xendit
 - Keamanan/operasi: rate limit webhook yang dapat disetel lewat config (kini konstanta) · `Idempotency-Key` Resend dengan ID job outbox · pembersihan `outbox_jobs` dan `payment_events` lama · tolak kredensial database default di production · `iss`/`aud` JWT · metrik dan tracing terdistribusi
-- Produk: rute produksi pertama yang digerbang fitur (`audit_log`, `export_csv` baru ada di test) · avatar/logo lewat upload, bukan URL
+- Produk: rute produksi pertama yang digerbang fitur (`audit_log`, `export_csv` baru ada di test) · avatar/logo lewat upload, bukan URL · email multi-bahasa sesuai preferensi user (butuh kolom locale di `users`; Fase 8 menetapkan semua email berbahasa Inggris)

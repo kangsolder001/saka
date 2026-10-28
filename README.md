@@ -141,4 +141,4 @@ Basis `/api/v1`, JSON, `Authorization: Bearer <access_token>`. Resource organisa
 
 ## Kontribusi
 
-Commit memakai Conventional Commits (`feat(auth): add ...`). Kode, komentar dan pesan log dalam bahasa Inggris; dokumen di `docs/` dan README dalam Bahasa Indonesia. Item di luar Tier 1 (spec §13) dicatat di backlog, bukan dikerjakan. Sebelum push: `make tidy mocks sqlc` tidak boleh menghasilkan selisih, `make lint` dan `make test-integration` lulus.
+Commit memakai Conventional Commits (`feat(auth): add ...`). Kode, komentar, pesan log, teks `message` API, isi email, dan `docs/openapi.yaml` dalam bahasa Inggris; dokumen lain di `docs/` dan README dalam Bahasa Indonesia. Item di luar Tier 1 (spec §13) dicatat di backlog, bukan dikerjakan. Sebelum push: `make tidy mocks sqlc` tidak boleh menghasilkan selisih, `make lint` dan `make test-integration` lulus.

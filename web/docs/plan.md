@@ -63,6 +63,7 @@ Dengan ±2 jam/hari, 1 hari efektif ≈ 3–4 hari kalender (total sekitar 2–2
 | Teks yang lupa diterjemahkan | Rendah | Test kesamaan kunci id/en; aturan "tidak ada teks hardcode" diperiksa saat review |
 | Midtrans sandbox belum pernah diuji (backend) | Sedang | Dev memakai provider `fake` dengan simulasi bayar; redirect URL Midtrans dicatat sebagai tugas manual pemilik repo |
 | Backend mewajibkan `organization_name` walau registrasi dari undangan | Rendah | Frontend mengisi otomatis (spec §6.4); usulan perubahan backend dicatat di todo |
+| Teks `message` backend berubah bahasa (Indonesia → Inggris, Fase 8 backend) | Rendah | Frontend tidak pernah menampilkan `message` kecuali fallback; semua teks dari i18n berdasarkan `code`/`reason` (spec §7.1) |
 
 ## 5. Cara kerja per tugas (untuk agent)
 

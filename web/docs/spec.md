@@ -332,7 +332,7 @@ Semua error API diubah menjadi:
 class ApiError extends Error {
   status: number;             // HTTP status; 0 untuk gangguan jaringan
   code: ErrorCode | 'NETWORK_ERROR';
-  serverMessage: string;      // error.message dari backend (Bahasa Indonesia), hanya fallback
+  serverMessage: string;      // error.message dari backend (Bahasa Inggris, bukan kontrak), hanya fallback
   details: Record<string, unknown>;
   retryAfterSeconds: number | null; // dari header Retry-After atau details.retry_after_seconds
   get reason(): string | null;      // details.reason bila ada
@@ -340,7 +340,7 @@ class ApiError extends Error {
 }
 ```
 
-`errorMessage(err)` mengembalikan pesan **terjemahan frontend** berdasarkan `code` (dan `reason` bila ada), bukan `serverMessage`, karena pesan backend hanya berbahasa Indonesia. `serverMessage` dipakai hanya bila kode tidak dikenal.
+`errorMessage(err)` mengembalikan pesan **terjemahan frontend** berdasarkan `code` (dan `reason` bila ada), bukan `serverMessage`, karena pesan backend hanya berbahasa Inggris dan teksnya bukan kontrak yang stabil (spec backend §3), sementara UI mendukung id/en. `serverMessage` dipakai hanya bila kode tidak dikenal.
 
 | Kode | Perlakuan default |
 |---|---|
@@ -548,7 +548,7 @@ Belum ada data bisnis (modul domain produk belum ada), jadi dashboard berisi kar
 - **Kunci pesan:** `snake_case` berawalan area, mis. `auth_login_title`, `members_invite_button`, `billing_banner_past_due`, `error_rate_limited`, `common_save`. Parameter memakai sintaks Paraglide (`"Trial {plan} berakhir dalam {days} hari"`).
 - Kedua file **harus punya kunci yang sama**; ada unit test yang gagal bila tidak (§11.1).
 - Tanggal dan uang memakai `Intl` dengan locale aktif (`id-ID` / `en-US`) dan zona waktu browser. Waktu dari API berupa UTC (RFC 3339).
-- Pesan error dari backend (`message`) berbahasa Indonesia, jadi frontend menerjemahkan berdasarkan `code`/`reason` (§7.1).
+- Pesan dari backend (`message`, error maupun sukses) berbahasa Inggris dan bukan kontrak, jadi frontend selalu menampilkan teks i18n sendiri berdasarkan `code`/`reason` (§7.1); teks backend tidak pernah ditampilkan apa adanya kecuali sebagai fallback kode yang tidak dikenal. Email transaksional dikirim backend dalam Bahasa Inggris (spec backend §10.2).
 
 ---
 
