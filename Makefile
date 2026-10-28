@@ -98,3 +98,41 @@ lint: $(GOLANGCI_LINT) ## Run golangci-lint
 .PHONY: tidy
 tidy: ## Tidy go.mod
 	go mod tidy
+
+##@ Frontend Web
+
+.PHONY: web-install
+web-install: ## Install frontend dependencies
+	pnpm --dir web install --frozen-lockfile
+
+.PHONY: web-dev
+web-dev: ## Run frontend dev server (port 3000, proxies /api to :8080)
+	pnpm --dir web dev
+
+.PHONY: web-build
+web-build: ## Build frontend SPA
+	pnpm --dir web build
+
+.PHONY: web-test
+web-test: ## Run frontend unit tests
+	pnpm --dir web test
+
+.PHONY: web-lint
+web-lint: ## Run frontend format check and linter
+	pnpm --dir web lint
+
+.PHONY: web-api
+web-api: ## Generate TypeScript types from docs/openapi.yaml
+	pnpm --dir web api:generate
+
+.PHONY: web-e2e
+web-e2e: ## Run frontend E2E tests
+	pnpm --dir web test:e2e
+
+.PHONY: web-check
+web-check: ## Run lint, type-check, test, and build for frontend
+	pnpm --dir web lint
+	pnpm --dir web check
+	pnpm --dir web test
+	pnpm --dir web build
+

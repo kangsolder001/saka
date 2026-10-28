@@ -52,7 +52,7 @@
   - **File:** `web/project.inlang/settings.json`, `web/messages/id.json`, `web/messages/en.json`, `web/src/lib/i18n/index.ts`
   - **Lakukan:** `baseLocale: "id"`, `locales: ["id", "en"]`. Strategi Paraglide `["localStorage", "preferredLanguage", "baseLocale"]` (§10). Tambah kunci `common_app_name`, `common_save`, `common_cancel`, `common_loading`. `lib/i18n/index.ts` mengekspor `getLocale`, `setLocale`, `locales`, dan `intlLocale()` (`id` → `id-ID`, `en` → `en-US`).
   - **Selesai bila:** `import { m } from '$lib/paraglide/messages'` lalu `m.common_save()` tampil sesuai bahasa; mengganti bahasa tidak me-reload halaman.
-- [ ] **W0.9 Target Makefile root** (0,1)
+- [x] **W0.9 Target Makefile root** (0,1)
   - **File:** `Makefile` (root)
   - **Lakukan:** tambah target dengan komentar `##` seperti target lain: `web-install` (`pnpm --dir web install --frozen-lockfile`), `web-dev`, `web-build`, `web-test`, `web-lint`, `web-api` (`pnpm --dir web api:generate`), `web-e2e`, `web-check` (lint + check + test + build berurutan).
   - **Selesai bila:** `make help` menampilkan target baru; `make web-check` hijau.
