@@ -1,4 +1,5 @@
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
+import path from 'node:path';
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import tailwindcss from '@tailwindcss/vite';
@@ -6,6 +7,11 @@ import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
+	resolve: {
+		alias: {
+			$lib: path.resolve(import.meta.dirname, './src/lib')
+		}
+	},
 	plugins: [
 		tailwindcss(),
 		sveltekit({
@@ -26,6 +32,7 @@ export default defineConfig({
 		paraglideVitePlugin({
 			project: './project.inlang',
 			outdir: './src/lib/paraglide',
+			strategy: ['localStorage', 'preferredLanguage', 'globalVariable', 'baseLocale'],
 			emitTsDeclarations: true
 		})
 	],

@@ -48,7 +48,7 @@
 - [x] **W0.7 Komponen shadcn-svelte awal dan icon SVG** (0,25)
   - **Lakukan:** pasang `lucide-svelte` (atau icon flaticon/tabler SVG) dan jalankan `pnpm dlx shadcn-svelte@latest add button input label card dialog alert-dialog dropdown-menu select table badge avatar separator skeleton sonner sheet tabs progress checkbox alert tooltip sidebar`. Pasang `<Toaster />` di layout root. **Aturan wajib:** dilarang keras memakai emotikon/emoji di UI (gunakan icon vektor SVG dari `lucide-svelte`).
   - **Selesai bila:** komponen ada di `src/lib/components/ui/`, `lucide-svelte` terpasang, `pnpm check` lulus.
-- [ ] **W0.8 i18n dasar** (0,25)
+- [x] **W0.8 i18n dasar** (0,25)
   - **File:** `web/project.inlang/settings.json`, `web/messages/id.json`, `web/messages/en.json`, `web/src/lib/i18n/index.ts`
   - **Lakukan:** `baseLocale: "id"`, `locales: ["id", "en"]`. Strategi Paraglide `["localStorage", "preferredLanguage", "baseLocale"]` (§10). Tambah kunci `common_app_name`, `common_save`, `common_cancel`, `common_loading`. `lib/i18n/index.ts` mengekspor `getLocale`, `setLocale`, `locales`, dan `intlLocale()` (`id` → `id-ID`, `en` → `en-US`).
   - **Selesai bila:** `import { m } from '$lib/paraglide/messages'` lalu `m.common_save()` tampil sesuai bahasa; mengganti bahasa tidak me-reload halaman.
