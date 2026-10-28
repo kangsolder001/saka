@@ -56,7 +56,7 @@
   - **File:** `Makefile` (root)
   - **Lakukan:** tambah target dengan komentar `##` seperti target lain: `web-install` (`pnpm --dir web install --frozen-lockfile`), `web-dev`, `web-build`, `web-test`, `web-lint`, `web-api` (`pnpm --dir web api:generate`), `web-e2e`, `web-check` (lint + check + test + build berurutan).
   - **Selesai bila:** `make help` menampilkan target baru; `make web-check` hijau.
-- [ ] **W0.10 CI frontend** (0,25)
+- [x] **W0.10 CI frontend** (0,25)
   - **File:** `.github/workflows/web.yml`
   - **Lakukan:** job dipicu perubahan `web/**` atau `docs/openapi.yaml`. Langkah: checkout, setup pnpm + Node 22 (cache pnpm), `pnpm install --frozen-lockfile`, `pnpm lint`, `pnpm check`, `pnpm test`, `pnpm build`, lalu `pnpm api:generate && git diff --exit-code src/lib/api/schema.d.ts` (aktifkan setelah W1.1).
   - **Selesai bila:** CI hijau di branch.
