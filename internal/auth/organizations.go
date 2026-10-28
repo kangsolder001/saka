@@ -40,6 +40,6 @@ type OrganizationProvisioner interface {
 // ErrOwnsSharedOrganization is the CONFLICT an OrganizationGuard returns when
 // deleting the account would orphan an organization that still has members.
 func ErrOwnsSharedOrganization() error {
-	return apperr.Conflict("Anda masih menjadi owner organisasi yang memiliki anggota lain. Transfer kepemilikan terlebih dahulu.").
+	return apperr.Conflict("You still own an organization that has other members. Transfer ownership first.").
 		WithDetails(map[string]any{"reason": "owns_shared_organization"})
 }

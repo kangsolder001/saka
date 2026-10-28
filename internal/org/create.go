@@ -99,7 +99,7 @@ func (s *Service) insertOrganization(ctx context.Context, q db.DBTX, id, ownerID
 			return orgdb.Organization{}, fmt.Errorf("org: insert organization: %w", err)
 		}
 		if explicit != "" {
-			return orgdb.Organization{}, apperr.Conflict("Slug sudah dipakai.")
+			return orgdb.Organization{}, apperr.Conflict("This slug is already taken.")
 		}
 		candidate = withSuffix(Slugify(name))
 	}

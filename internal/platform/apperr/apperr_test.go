@@ -24,11 +24,11 @@ func TestHTTPStatusMapping(t *testing.T) {
 		{apperr.TokenExpired(), http.StatusUnauthorized},
 		{apperr.Forbidden(), http.StatusForbidden},
 		{apperr.EmailNotVerified(), http.StatusForbidden},
-		{apperr.PlanFeatureUnavailable("Fitur tidak tersedia.", "audit_log", "free", nil), http.StatusForbidden},
+		{apperr.PlanFeatureUnavailable("Feature not available.", "audit_log", "free", nil), http.StatusForbidden},
 		{apperr.PlanLimitReached("Batas tercapai.", "members", 3, 3, "free", nil), http.StatusPaymentRequired},
 		{apperr.SubscriptionInactive(), http.StatusPaymentRequired},
 		{apperr.NotFound(), http.StatusNotFound},
-		{apperr.Conflict("email sudah terdaftar"), http.StatusConflict},
+		{apperr.Conflict("email already registered"), http.StatusConflict},
 		{apperr.RateLimited(), http.StatusTooManyRequests},
 		{apperr.PaymentProviderError(errors.New("boom")), http.StatusBadGateway},
 		{apperr.Internal(errors.New("boom")), http.StatusInternalServerError},
@@ -102,7 +102,7 @@ func TestResponse_InternalNeverLeaksCause(t *testing.T) {
 
 func TestFrom(t *testing.T) {
 	t.Run("keeps application errors, even when wrapped", func(t *testing.T) {
-		wrapped := fmt.Errorf("create user: %w", apperr.Conflict("email sudah terdaftar"))
+		wrapped := fmt.Errorf("create user: %w", apperr.Conflict("email already registered"))
 
 		got := apperr.From(wrapped)
 

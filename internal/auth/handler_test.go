@@ -88,7 +88,7 @@ func TestRegisterEndpoint_DuplicateEmailIs409(t *testing.T) {
 	f := newFixture(t)
 	f.expectTx()
 	f.users.EXPECT().Create(mock.Anything, mock.Anything, mock.Anything).
-		Return(user.User{}, apperr.Conflict("Email sudah terdaftar.")).Once()
+		Return(user.User{}, apperr.Conflict("This email is already registered.")).Once()
 
 	rec := postJSON(newRouter(f), "/api/v1/auth/register", registerBody)
 

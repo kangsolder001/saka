@@ -262,7 +262,7 @@ func TestRequestEmailChange_ServiceErrorsReachTheClient(t *testing.T) {
 		err    error
 		status int
 	}{
-		"taken":      {apperr.Conflict("Email sudah terdaftar."), http.StatusConflict},
+		"taken":      {apperr.Conflict("This email is already registered."), http.StatusConflict},
 		"rate limit": {apperr.RateLimitedAfter(time.Minute), http.StatusTooManyRequests},
 	}
 	for name, tt := range tests {

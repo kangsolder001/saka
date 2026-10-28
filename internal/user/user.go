@@ -90,7 +90,7 @@ func (s *Service) Create(ctx context.Context, q db.DBTX, in NewUser) (User, erro
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return User{}, apperr.Conflict("Email sudah terdaftar.")
+			return User{}, apperr.Conflict("This email is already registered.")
 		}
 		return User{}, fmt.Errorf("user: create: %w", err)
 	}
@@ -169,7 +169,7 @@ func (s *Service) ChangeEmail(ctx context.Context, q db.DBTX, id uuid.UUID, newE
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
-			return apperr.Conflict("Email sudah terdaftar.")
+			return apperr.Conflict("This email is already registered.")
 		}
 		return fmt.Errorf("user: change email: %w", err)
 	}

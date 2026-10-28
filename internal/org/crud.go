@@ -175,7 +175,7 @@ func (s *Service) Update(ctx context.Context, in Update) (Organization, error) {
 			case isNoRows(err):
 				return apperr.NotFound()
 			case errors.As(err, &pgErr) && pgErr.Code == "23505":
-				return apperr.Conflict("Slug sudah dipakai.")
+				return apperr.Conflict("This slug is already taken.")
 			}
 			return fmt.Errorf("org: update: %w", err)
 		}

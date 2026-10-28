@@ -153,7 +153,7 @@ func TestRecover_ReturnsStandardInternalErrorAndLogsPanic(t *testing.T) {
 	rec := do(r, http.MethodGet, "/panic", map[string]string{httpx.HeaderTraceparent: validTraceparent})
 
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
-	assert.JSONEq(t, `{"error":{"code":"INTERNAL_ERROR","message":"Terjadi kesalahan pada server.","details":{}}}`, rec.Body.String())
+	assert.JSONEq(t, `{"error":{"code":"INTERNAL_ERROR","message":"An internal server error occurred.","details":{}}}`, rec.Body.String())
 	assert.NotContains(t, rec.Body.String(), "secret")
 	assert.Contains(t, buf.String(), "secret internal detail")
 	assert.Contains(t, buf.String(), `"message":"handler panicked"`)

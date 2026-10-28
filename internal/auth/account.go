@@ -145,7 +145,7 @@ func (s *Service) RequestEmailChange(ctx context.Context, userID uuid.UUID, curr
 		return apperr.Validation(map[string]string{"new_email": "must be different from the current email"})
 	}
 	if _, err := s.Users.GetByEmail(ctx, s.Pool, newEmail); err == nil {
-		return apperr.Conflict("Email sudah terdaftar.")
+		return apperr.Conflict("This email is already registered.")
 	} else if !apperr.IsCode(err, apperr.CodeNotFound) {
 		return err
 	}

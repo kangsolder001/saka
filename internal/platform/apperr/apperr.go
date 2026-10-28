@@ -142,11 +142,11 @@ func (e *Error) Response() (int, Body) {
 	return e.HTTPStatus(), Body{Error: Payload{Code: e.Code, Message: message, Details: details}}
 }
 
-const defaultInternalMessage = "Terjadi kesalahan pada server."
+const defaultInternalMessage = "An internal server error occurred."
 
 // Validation reports invalid input; fields maps field name to a reason.
 func Validation(fields map[string]string) *Error {
-	e := New(CodeValidation, "Data yang dikirim tidak valid.")
+	e := New(CodeValidation, "The submitted data is invalid.")
 	if len(fields) > 0 {
 		e.Details = map[string]any{"fields": fields}
 	}
@@ -155,22 +155,22 @@ func Validation(fields map[string]string) *Error {
 
 // Unauthenticated reports missing or invalid credentials.
 func Unauthenticated() *Error {
-	return New(CodeUnauthenticated, "Autentikasi diperlukan.")
+	return New(CodeUnauthenticated, "Authentication is required.")
 }
 
 // TokenExpired reports an expired access token.
 func TokenExpired() *Error {
-	return New(CodeTokenExpired, "Token sudah kedaluwarsa.")
+	return New(CodeTokenExpired, "The token has expired.")
 }
 
 // Forbidden reports an authenticated user lacking permission.
 func Forbidden() *Error {
-	return New(CodeForbidden, "Anda tidak memiliki akses.")
+	return New(CodeForbidden, "You do not have permission to perform this action.")
 }
 
 // EmailNotVerified reports an action that requires a verified email.
 func EmailNotVerified() *Error {
-	return New(CodeEmailNotVerified, "Email belum diverifikasi.")
+	return New(CodeEmailNotVerified, "Email address is not verified.")
 }
 
 // PlanFeatureUnavailable reports a feature the current plan does not include
@@ -209,13 +209,13 @@ func nullable(s *string) any {
 
 // SubscriptionInactive reports a subscription that no longer grants access.
 func SubscriptionInactive() *Error {
-	return New(CodeSubscriptionInactive, "Langganan tidak aktif.")
+	return New(CodeSubscriptionInactive, "The subscription is not active.")
 }
 
 // NotFound reports a missing resource (also used to hide resources the
 // caller may not know about, e.g. other tenants).
 func NotFound() *Error {
-	return New(CodeNotFound, "Data tidak ditemukan.")
+	return New(CodeNotFound, "Resource not found.")
 }
 
 // Conflict reports a state conflict such as a duplicate email.
@@ -225,7 +225,7 @@ func Conflict(message string) *Error {
 
 // RateLimited reports too many requests.
 func RateLimited() *Error {
-	return New(CodeRateLimited, "Terlalu banyak permintaan. Coba lagi nanti.")
+	return New(CodeRateLimited, "Too many requests. Please try again later.")
 }
 
 // RateLimitedAfter reports too many requests and how long the client should
@@ -242,7 +242,7 @@ const DetailRetryAfterSeconds = "retry_after_seconds"
 // reached or refused the request. Nothing was created; the caller may retry.
 // The cause (never sent to clients) is kept for the log.
 func PaymentProviderError(cause error) *Error {
-	return &Error{Code: CodePaymentProvider, Message: "Penyedia pembayaran sedang tidak dapat dihubungi. Coba lagi nanti.", Cause: cause}
+	return &Error{Code: CodePaymentProvider, Message: "The payment provider is currently unavailable. Please try again later.", Cause: cause}
 }
 
 // Internal wraps an unexpected failure. The cause is for logs only.

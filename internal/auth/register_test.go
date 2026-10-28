@@ -105,7 +105,7 @@ func TestRegister_DuplicateEmailIsConflictAndSendsNothing(t *testing.T) {
 	f := newFixture(t)
 	f.expectTx()
 	f.users.EXPECT().Create(mock.Anything, mock.Anything, mock.Anything).
-		Return(user.User{}, apperr.Conflict("Email sudah terdaftar.")).Once()
+		Return(user.User{}, apperr.Conflict("This email is already registered.")).Once()
 
 	_, err := f.svc.Register(context.Background(), validRegistration())
 

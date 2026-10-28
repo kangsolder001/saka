@@ -96,14 +96,14 @@ func (s *Service) changePlan(ctx context.Context, tx pgx.Tx, pay *payments, sub 
 
 	switch {
 	case status == StatusExpired || status == StatusCanceled:
-		return ChangePlanResult{}, apperr.Conflict("Langganan sudah berakhir. Berlangganan lagi lewat checkout.").
+		return ChangePlanResult{}, apperr.Conflict("The subscription has ended. Subscribe again through checkout.").
 			WithDetails(map[string]any{"reason": "use_checkout"})
 	case !renewing(snap):
 		return buy() // Free: any paid plan is an upgrade
 	case sub.PlanID == plan.ID:
 		if status == StatusActive {
 			if sub.PendingPlanID == nil {
-				return ChangePlanResult{}, apperr.Conflict("Organisasi sudah berlangganan paket ini.").
+				return ChangePlanResult{}, apperr.Conflict("The organization is already subscribed to this plan.").
 					WithDetails(map[string]any{"reason": "already_subscribed"})
 			}
 			if err := s.saveSnapshot(ctx, tx, sub.ID, CancelDowngrade(snap)); err != nil {
@@ -216,9 +216,9 @@ func (s *Service) setCancellation(ctx context.Context, rule func(Snapshot) (Snap
 		}
 		next, err := rule(snapshotOf(sub))
 		if errors.Is(err, ErrNotRenewing) {
-			reason, msg := "nothing_to_resume", "Tidak ada langganan berbayar yang sedang dibatalkan."
+			reason, msg := "nothing_to_resume", "There is no canceled paid subscription to resume."
 			if cancel {
-				reason, msg = "nothing_to_cancel", "Tidak ada langganan berbayar yang bisa dibatalkan."
+				reason, msg = "nothing_to_cancel", "There is no paid subscription to cancel."
 			}
 			return apperr.Conflict(msg).WithDetails(map[string]any{"reason": reason})
 		}

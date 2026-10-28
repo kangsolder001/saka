@@ -225,7 +225,7 @@ func (s *Service) ResendVerification(ctx context.Context, userID uuid.UUID) erro
 		return err
 	}
 	if u.EmailVerified() {
-		return apperr.Conflict("Email sudah terverifikasi.")
+		return apperr.Conflict("This email is already verified.")
 	}
 	return s.Tx.WithTx(ctx, func(tx pgx.Tx) error {
 		return s.sendVerificationEmail(ctx, tx, u)
@@ -251,7 +251,7 @@ type LoginResult struct {
 // errInvalidCredentials is returned for every kind of failed login so the
 // response never reveals whether the email exists.
 func errInvalidCredentials() error {
-	return apperr.New(apperr.CodeUnauthenticated, "Email atau password salah.")
+	return apperr.New(apperr.CodeUnauthenticated, "Invalid email or password.")
 }
 
 // Login verifies the credentials and starts a session. Unknown email, wrong

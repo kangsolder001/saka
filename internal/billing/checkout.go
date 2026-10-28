@@ -126,7 +126,7 @@ func (s *Service) startPurchase(ctx context.Context, tx pgx.Tx, pay *payments, s
 		}
 	}
 	if sub.PlanID == plan.ID && status == StatusActive {
-		return CheckoutResult{}, apperr.Conflict("Organisasi sudah berlangganan paket ini.").WithDetails(map[string]any{"reason": "already_subscribed"})
+		return CheckoutResult{}, apperr.Conflict("The organization is already subscribed to this plan.").WithDetails(map[string]any{"reason": "already_subscribed"})
 	}
 	// Whatever else is still waiting for a payment of a checkout is replaced by this one.
 	if _, err := qs.VoidLiveInvoices(ctx, billingdb.VoidLiveInvoicesParams{

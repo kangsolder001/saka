@@ -142,7 +142,7 @@ func (s *Service) refuseExistingMember(ctx context.Context, tx pgx.Tx, orgID uui
 	_, err = orgdb.New(tx).GetMembership(ctx, orgdb.GetMembershipParams{OrganizationID: orgID, UserID: existing.ID})
 	switch {
 	case err == nil:
-		return apperr.Conflict("Pengguna ini sudah menjadi anggota organisasi.")
+		return apperr.Conflict("This user is already a member of the organization.")
 	case isNoRows(err):
 		return nil
 	default:
