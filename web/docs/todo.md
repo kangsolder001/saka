@@ -38,7 +38,7 @@
   - **File:** `web/tsconfig.json`, `web/eslint.config.js`, `web/.prettierrc`
   - **Lakukan:** `strict: true`, `noUncheckedIndexedAccess: true`. ESLint: aturan `@typescript-eslint/no-explicit-any: error`, `@typescript-eslint/ban-ts-comment` (izinkan `ts-expect-error` dengan deskripsi). Prettier dengan `prettier-plugin-svelte` dan `prettier-plugin-tailwindcss`. Abaikan `src/lib/api/schema.d.ts` dan `src/lib/paraglide` di lint/format.
   - **Selesai bila:** `pnpm lint` dan `pnpm check` lulus tanpa warning.
-- [ ] **W0.5 Script package.json** (0,1)
+- [x] **W0.5 Script package.json** (0,1)
   - **Lakukan:** pastikan script: `dev`, `build`, `preview`, `check` (`svelte-kit sync && svelte-check --fail-on-warnings`), `lint` (`prettier --check . && eslint .`), `format`, `test` (`vitest run`), `test:e2e` (`playwright test`), `api:generate` (lihat W1.1).
   - **Selesai bila:** semua script jalan (boleh gagal hanya `api:generate` sampai W1.1).
 - [ ] **W0.6 Design token dan dark mode** (0,5)
