@@ -41,7 +41,7 @@
 - [x] **W0.5 Script package.json** (0,1)
   - **Lakukan:** pastikan script: `dev`, `build`, `preview`, `check` (`svelte-kit sync && svelte-check --fail-on-warnings`), `lint` (`prettier --check . && eslint .`), `format`, `test` (`vitest run`), `test:e2e` (`playwright test`), `api:generate` (lihat W1.1).
   - **Selesai bila:** semua script jalan (boleh gagal hanya `api:generate` sampai W1.1).
-- [ ] **W0.6 Design token dan dark mode** (0,5)
+- [x] **W0.6 Design token dan dark mode** (0,5)
   - **File:** `web/src/app.css`, `web/src/routes/+layout.svelte`
   - **Lakukan:** inisialisasi shadcn-svelte (`pnpm dlx shadcn-svelte@latest init`). Ganti nilai variabel di `:root` dan `.dark` dengan tabel §4.1 **persis** (skema putih & biru untuk light mode, serta hitam & biru dark/midnight untuk dark mode, menghindari tema ungu AI generik). Tambah token `--success`, `--success-muted`, `--warning`, `--warning-muted`, `--danger-muted`, `--info`, `--info-muted` dan daftarkan di blok `@theme inline` (`--color-success: var(--success);` dst.). Pasang `@fontsource-variable/inter` dan set `font-family` dasar. Pasang `mode-watcher` (`<ModeWatcher />` di layout root, default `system`).
   - **Selesai bila:** halaman uji sementara dengan `bg-primary`, `text-success`, `bg-warning-muted` tampil benar di light dan dark (ganti lewat `setMode`); halaman uji dihapus sebelum commit.

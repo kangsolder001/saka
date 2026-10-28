@@ -3,12 +3,15 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { locales, localizeHref } from '#lib/paraglide/runtime.js';
-	import './layout.css';
+	import { ModeWatcher } from 'mode-watcher';
+	import '../app.css';
 	import favicon from '#lib/assets/favicon.svg';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
 </script>
+
+<ModeWatcher />
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
