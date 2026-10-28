@@ -40,7 +40,7 @@ func TestRequireFeature_FreeOrganizationsAreRefusedWithAnUpgradePath(t *testing.
 
 	require.Equal(t, http.StatusForbidden, res.Code, res.Body.String())
 	assert.Equal(t, "PLAN_FEATURE_UNAVAILABLE", errorOf(res)["code"])
-	assert.Equal(t, "Fitur ini tidak tersedia di paket Free.", errorOf(res)["message"])
+	assert.Equal(t, "This feature is not available on the Free plan.", errorOf(res)["message"])
 	assert.Equal(t, map[string]any{"feature": "export_csv", "plan": "free", "upgrade_to": "pro"}, detailsOf(res))
 	assert.Equal(t, "business", detailsOf(s.get(tm.auditLogPath(), bearer(tm.owner)))["upgrade_to"])
 }

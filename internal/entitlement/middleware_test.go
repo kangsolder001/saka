@@ -78,7 +78,7 @@ func TestRequireFeature_RefusesWithTheUpgradePathAndNeverReachesTheHandler(t *te
 	}
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &body))
 	assert.Equal(t, "PLAN_FEATURE_UNAVAILABLE", body.Error.Code)
-	assert.Equal(t, "Fitur ini tidak tersedia di paket Pro.", body.Error.Message)
+	assert.Equal(t, "This feature is not available on the Pro plan.", body.Error.Message)
 	assert.Equal(t, map[string]any{"feature": "audit_log", "plan": "pro", "upgrade_to": "business"}, body.Error.Details)
 }
 

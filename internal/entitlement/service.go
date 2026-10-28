@@ -106,7 +106,7 @@ func (s *Service) CheckFeature(ctx context.Context, q db.DBTX, orgID uuid.UUID, 
 		return err
 	}
 	return apperr.PlanFeatureUnavailable(
-		fmt.Sprintf("Fitur ini tidak tersedia di paket %s.", plan.Name), feature, plan.Code, upgrade)
+		fmt.Sprintf("This feature is not available on the %s plan.", plan.Name), feature, plan.Code, upgrade)
 }
 
 // CheckLimit fails with PLAN_LIMIT_REACHED when the organization's usage of
@@ -213,7 +213,7 @@ func (s *Service) cheapestPlan(ctx context.Context, q db.DBTX, currentCode strin
 
 // limitLabels name what a limit counts, for the message shown to users.
 var limitLabels = map[string]string{
-	"members": "anggota",
+	"members": "members",
 }
 
 func limitMessage(planName, limit string, maxAllowed int) string {
@@ -222,7 +222,7 @@ func limitMessage(planName, limit string, maxAllowed int) string {
 		label = l
 	}
 	if maxAllowed == 0 {
-		return fmt.Sprintf("Paket %s tidak mendukung %s.", planName, label)
+		return fmt.Sprintf("The %s plan does not include %s.", planName, label)
 	}
-	return fmt.Sprintf("Paket %s hanya mendukung %d %s.", planName, maxAllowed, label)
+	return fmt.Sprintf("The %s plan allows up to %d %s.", planName, maxAllowed, label)
 }

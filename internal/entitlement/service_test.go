@@ -113,7 +113,7 @@ func TestCheckFeature_NamesTheCheapestPlanThatHasIt(t *testing.T) {
 			assert.Equal(t, tt.feature, appErr.Details["feature"])
 			assert.Equal(t, tt.plan.Code, appErr.Details["plan"])
 			assert.Equal(t, tt.upgradeTo, appErr.Details["upgrade_to"])
-			assert.Equal(t, "Fitur ini tidak tersedia di paket "+tt.plan.Name+".", appErr.Message)
+			assert.Equal(t, "This feature is not available on the "+tt.plan.Name+" plan.", appErr.Message)
 		})
 	}
 }
@@ -150,10 +150,10 @@ func TestCheckLimit_RefusesWhatWouldExceedItAndSaysWhatToUpgradeTo(t *testing.T)
 		upgradeTo   any
 		message     string
 	}{
-		"free at the limit":     {free, 3, 1, "pro", "Paket Free hanya mendukung 3 anggota."},
-		"free, a batch too big": {free, 2, 2, "pro", "Paket Free hanya mendukung 3 anggota."},
-		"free needing more":     {free, 10, 1, "business", "Paket Free hanya mendukung 3 anggota."},
-		"pro at the limit":      {pro, 10, 1, "business", "Paket Pro hanya mendukung 10 anggota."},
+		"free at the limit":     {free, 3, 1, "pro", "The Free plan allows up to 3 members."},
+		"free, a batch too big": {free, 2, 2, "pro", "The Free plan allows up to 3 members."},
+		"free needing more":     {free, 10, 1, "business", "The Free plan allows up to 3 members."},
+		"pro at the limit":      {pro, 10, 1, "business", "The Pro plan allows up to 10 members."},
 	}
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -231,7 +231,7 @@ func TestCheckLimit_ALimitTheCurrentPlanDoesNotListIsZero(t *testing.T) {
 	var appErr *apperr.Error
 	require.ErrorAs(t, err, &appErr)
 	assert.Equal(t, apperr.CodePlanLimitReached, appErr.Code, "unconfigured means none allowed, not unlimited")
-	assert.Equal(t, "Paket Odd tidak mendukung anggota.", appErr.Message)
+	assert.Equal(t, "The Odd plan does not include members.", appErr.Message)
 	assert.Equal(t, 0, appErr.Details["max"])
 	assert.Equal(t, "free", appErr.Details["upgrade_to"])
 }

@@ -67,7 +67,7 @@ func TestInvite_BeyondTheFreeLimitIsRefusedWithUpgradeDetails(t *testing.T) {
 
 	require.Equal(t, http.StatusPaymentRequired, res.Code, res.Body.String())
 	assert.Equal(t, "PLAN_LIMIT_REACHED", errorOf(res)["code"])
-	assert.Equal(t, "Paket Free hanya mendukung 3 anggota.", errorOf(res)["message"])
+	assert.Equal(t, "The Free plan allows up to 3 members.", errorOf(res)["message"])
 	assert.Equal(t, map[string]any{
 		"limit": "members", "max": 3.0, "used": 3.0, "plan": "free", "upgrade_to": "pro",
 	}, detailsOf(res))
@@ -208,7 +208,7 @@ func TestInvite_UpgradingThePlanLiftsTheLimit(t *testing.T) {
 	res := s.inviteAs(tm.owner, tm, "eleventh@example.com")
 
 	require.Equal(t, http.StatusPaymentRequired, res.Code)
-	assert.Equal(t, "Paket Pro hanya mendukung 10 anggota.", errorOf(res)["message"])
+	assert.Equal(t, "The Pro plan allows up to 10 members.", errorOf(res)["message"])
 	assert.Equal(t, "business", detailsOf(res)["upgrade_to"])
 
 	s.setPlan(tm.orgID, "business", "active")

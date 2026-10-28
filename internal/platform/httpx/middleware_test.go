@@ -162,13 +162,13 @@ func TestRecover_ReturnsStandardInternalErrorAndLogsPanic(t *testing.T) {
 func TestError_WritesStandardFormat(t *testing.T) {
 	r, _ := newEngine(t, false)
 	r.GET("/limit", func(c *gin.Context) {
-		httpx.Error(c, apperr.PlanLimitReached("Batas paket tercapai.", "members", 3, 3, "free", nil))
+		httpx.Error(c, apperr.PlanLimitReached("Plan limit reached.", "members", 3, 3, "free", nil))
 	})
 
 	rec := do(r, http.MethodGet, "/limit", nil)
 
 	assert.Equal(t, http.StatusPaymentRequired, rec.Code)
-	assert.JSONEq(t, `{"error":{"code":"PLAN_LIMIT_REACHED","message":"Batas paket tercapai.","details":{"limit":"members","max":3,"used":3,"plan":"free","upgrade_to":null}}}`, rec.Body.String())
+	assert.JSONEq(t, `{"error":{"code":"PLAN_LIMIT_REACHED","message":"Plan limit reached.","details":{"limit":"members","max":3,"used":3,"plan":"free","upgrade_to":null}}}`, rec.Body.String())
 }
 
 func TestNotFound_UsesStandardFormat(t *testing.T) {
