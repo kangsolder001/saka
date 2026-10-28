@@ -30,7 +30,7 @@
   - **File:** `web/svelte.config.js`, `web/src/routes/+layout.ts`
   - **Lakukan:** pasang `@sveltejs/adapter-static` dengan `fallback: 'index.html'`. Di `+layout.ts` root: `export const ssr = false; export const prerender = false;`. Cek dokumentasi SvelteKit versi terpasang untuk opsi SPA yang benar.
   - **Selesai bila:** `pnpm build` menghasilkan `web/build/index.html`; membuka path acak di `pnpm preview` tetap memuat aplikasi.
-- [ ] **W0.3 Dev server dan proxy API** (0,1)
+- [x] **W0.3 Dev server dan proxy API** (0,1)
   - **File:** `web/vite.config.ts`
   - **Lakukan:** `server.port = 3000`, `strictPort: true`, `server.proxy['/api'] = { target: 'http://localhost:8080', changeOrigin: false }`. Sama untuk `preview`.
   - **Selesai bila:** dengan backend jalan (`make up migrate run`), `curl http://localhost:3000/api/v1/healthz` menjawab OK.
