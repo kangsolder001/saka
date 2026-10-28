@@ -45,7 +45,7 @@
   - **File:** `web/src/app.css`, `web/src/routes/+layout.svelte`
   - **Lakukan:** inisialisasi shadcn-svelte (`pnpm dlx shadcn-svelte@latest init`). Ganti nilai variabel di `:root` dan `.dark` dengan tabel §4.1 **persis** (skema putih & biru untuk light mode, serta hitam & biru dark/midnight untuk dark mode, menghindari tema ungu AI generik). Tambah token `--success`, `--success-muted`, `--warning`, `--warning-muted`, `--danger-muted`, `--info`, `--info-muted` dan daftarkan di blok `@theme inline` (`--color-success: var(--success);` dst.). Pasang `@fontsource-variable/inter` dan set `font-family` dasar. Pasang `mode-watcher` (`<ModeWatcher />` di layout root, default `system`).
   - **Selesai bila:** halaman uji sementara dengan `bg-primary`, `text-success`, `bg-warning-muted` tampil benar di light dan dark (ganti lewat `setMode`); halaman uji dihapus sebelum commit.
-- [ ] **W0.7 Komponen shadcn-svelte awal dan icon SVG** (0,25)
+- [x] **W0.7 Komponen shadcn-svelte awal dan icon SVG** (0,25)
   - **Lakukan:** pasang `lucide-svelte` (atau icon flaticon/tabler SVG) dan jalankan `pnpm dlx shadcn-svelte@latest add button input label card dialog alert-dialog dropdown-menu select table badge avatar separator skeleton sonner sheet tabs progress checkbox alert tooltip sidebar`. Pasang `<Toaster />` di layout root. **Aturan wajib:** dilarang keras memakai emotikon/emoji di UI (gunakan icon vektor SVG dari `lucide-svelte`).
   - **Selesai bila:** komponen ada di `src/lib/components/ui/`, `lucide-svelte` terpasang, `pnpm check` lulus.
 - [ ] **W0.8 i18n dasar** (0,25)

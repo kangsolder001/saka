@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { locales, localizeHref } from '#lib/paraglide/runtime.js';
 	import { ModeWatcher } from 'mode-watcher';
+	import { Toaster } from '$lib/components/ui/sonner';
 	import '../app.css';
 	import favicon from '#lib/assets/favicon.svg';
 	import type { LayoutProps } from './$types';
@@ -12,6 +13,7 @@
 </script>
 
 <ModeWatcher />
+<Toaster />
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
