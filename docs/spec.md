@@ -865,7 +865,7 @@ Pertanyaan yang semula terbuka dan jawaban finalnya (v1.0).
 | 1 | Gateway pertama: Midtrans atau Xendit? | **Midtrans**, di balik interface `PaymentProvider` (§8.1); Xendit masuk backlog Tier 2 | Final. Implementasi belum diverifikasi ke sandbox sungguhan (menunggu akun, §8.7 dan §12) |
 | 2 | Registrasi langsung trial Pro atau Free? | **Free**; trial 14 hari dipicu saat organisasi memilih plan berbayar (sekali per organisasi, §8.7) | Final |
 | 3 | Pakai RLS PostgreSQL sejak awal? | **Ya**, sebagai lapisan isolasi kedua (role `saka_app`, `docs/rls.md`) | Final |
-| 4 | Frontend: SPA terpisah atau server-rendered? | **Belum ditentukan**; API agnostik (CORS dengan credentials untuk SPA di origin lain, token lewat cookie atau body, §5.6, §11.3) | Sengaja terbuka, di luar Tier 1 |
+| 4 | Frontend: SPA terpisah atau server-rendered? | **SPA SvelteKit** (mode statis) di `web/`; API tetap agnostik (CORS dengan credentials, token lewat cookie atau body, §5.6, §11.3). Rincian di `web/docs/spec.md` | Final (di luar Tier 1 backend) |
 | 5 | Penomoran invoice per organisasi atau global? | **Global** (`INV-<tahun>-<sequence>`, §8.7) | Final |
 | 6 | Provider email produksi? | **Resend** direkomendasikan dan diimplementasikan (`mail.driver = "resend"`); interface `Mailer` memudahkan penggantian (Brevo, SES, SMTP) | **Menunggu konfirmasi pemilik** beserta akun dan DNS SPF/DKIM/DMARC (`docs/email.md`) |
 | 7 | Konkurensi dan goroutine | Hanya lewat `platform/safego` (§11.2) | Final |

@@ -46,7 +46,7 @@ Karena dikerjakan di sela waktu luang, tiap fase sengaja berakhir pada milestone
 | 1 | Gateway pembayaran | **Midtrans** (diputuskan) |
 | 2 | Registrasi Free atau trial Pro | **Free**, trial dipicu saat pilih plan (diputuskan) |
 | 3 | RLS PostgreSQL sejak awal | **Ya**, sekalian belajar (diputuskan) |
-| 4 | Frontend | **Belum ditentukan, API agnostik**; tidak memblokir Tier 1 |
+| 4 | Frontend | **SPA SvelteKit di `web/`** (diputuskan; rencana terpisah di `web/docs/plan.md`); API tetap agnostik |
 | 5 | Penomoran invoice | **Global** (diputuskan) |
 
 **Database (diputuskan):** PostgreSQL 18 (UUID v7 lewat `uuidv7()` bawaan).
