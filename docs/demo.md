@@ -36,7 +36,7 @@ register() {  # register EMAIL NAMA ORGANISASI
 
 verify() {  # verify EMAIL: buka tautan verifikasi dari email
   curl -s -X POST "$API/auth/verify-email" -H 'Content-Type: application/json' \
-    -d "{\"token\":\"$(mail_token "$1" Verifikasi)\"}" | jq -r '.email_verified'
+    -d "{\"token\":\"$(mail_token "$1" Verify)\"}" | jq -r '.email_verified'
 }
 
 login() {  # login EMAIL -> access token (15 menit; panggil lagi bila kedaluwarsa)
@@ -71,7 +71,7 @@ ANN=$(login ann@example.com)
 
 ```bash
 api $ANN POST /orgs/$ORG/invitations '{"email":"bob@example.com","role":"member"}' | jq -r '.invitation.email'
-TOKEN_BOB=$(mail_token bob@example.com mengundang)
+TOKEN_BOB=$(mail_token bob@example.com invited)
 curl -s "$API/invitations/$TOKEN_BOB" | jq -r '.invitation.account_exists'         # false -> frontend mengarahkan ke registrasi
 register bob@example.com Bob Bobsorg
 verify bob@example.com                                                            # membuktikan alamat = menerima undangan
@@ -79,7 +79,7 @@ verify bob@example.com                                                          
 register carol@example.com Carol Carolco
 verify carol@example.com
 api $ANN POST /orgs/$ORG/invitations '{"email":"carol@example.com","role":"member"}' > /dev/null
-TOKEN_CAROL=$(mail_token carol@example.com mengundang)
+TOKEN_CAROL=$(mail_token carol@example.com invited)
 CAROL=$(login carol@example.com)
 curl -s -X POST "$API/invitations/$TOKEN_CAROL/accept" -H "Authorization: Bearer $CAROL" | jq -r '.organization.role'   # member
 api $ANN GET /orgs/$ORG/members | jq -r '.items | length'                          # 3: Ann, Bob, Carol
