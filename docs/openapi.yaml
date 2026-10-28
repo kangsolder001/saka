@@ -2,33 +2,35 @@ openapi: 3.1.0
 info:
   title: Saka API
   version: 1.0.0
-  summary: Boilerplate SaaS multi-tenant (auth, user, organisasi, billing, feature gating).
+  summary: Multi-tenant SaaS boilerplate (auth, users, organizations, billing, feature gating).
   description: |
-    Referensi API Tier 1. Sumber kebenaran perilaku ada di `docs/spec.md`; berkas ini ditulis tangan dan dijaga
-    oleh test (`TestOpenAPI_*` di `internal/app`): setiap route yang didaftarkan router harus ada di sini dengan
-    method yang sama, dan sebaliknya.
+    Tier 1 API reference. The source of truth for behavior is `docs/spec.md`; this file is hand-written and
+    guarded by tests (`TestOpenAPI_*` in `internal/app`): every route registered by the router must appear here
+    with the same method, and vice versa.
 
-    **Autentikasi.** `Authorization: Bearer <access_token>` (JWT 15 menit dari `POST /auth/login`). Refresh token
-    berupa cookie `refresh_token` (`HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth`) untuk klien web atau
-    ada di body untuk klien mobile (`token_delivery: body`). Role dan organisasi tidak ada di token: dicek ke
-    database tiap request.
+    **Authentication.** `Authorization: Bearer <access_token>` (a 15-minute JWT from `POST /auth/login`). The
+    refresh token is a `refresh_token` cookie (`HttpOnly`, `SameSite=Strict`, `Path=/api/v1/auth`) for web
+    clients, or is returned in the body for mobile clients (`token_delivery: body`). Role and organization are
+    not in the token: they are checked against the database on every request.
 
-    **Organisasi.** Semua resource organisasi ada di `/orgs/{orgId}/...`. Bukan anggota, atau `orgId` yang
-    tidak dikenal/dihapus/bukan UUID, selalu `404` (keberadaan organisasi tidak bocor).
+    **Organizations.** All organization resources live under `/orgs/{orgId}/...`. A non-member, or an `orgId`
+    that is unknown, deleted or not a UUID, always gets `404` (the existence of an organization never leaks).
 
-    **Format error.** Semua error memakai `{"error": {"code", "message", "details"}}` (skema `Error`); kode dan
-    status HTTP-nya di skema `ErrorCode`. `message` boleh berbahasa Indonesia; `code` tetap Inggris dan stabil.
+    **Error format.** Every error uses `{"error": {"code", "message", "details"}}` (schema `Error`); the codes
+    and their HTTP statuses are in schema `ErrorCode`. `message` is in English, meant for humans, and is not
+    part of the stable contract; clients map from `code` and `details.reason`.
 
-    **Paginasi.** Daftar memakai cursor: `?limit=` (1-100, default 20) dan `?cursor=` (opaque, dari
-    `next_cursor` respons sebelumnya). Respons `{"items": [...], "next_cursor": "..."|null}`.
+    **Pagination.** Lists use a cursor: `?limit=` (1-100, default 20) and `?cursor=` (opaque, taken from the
+    previous response's `next_cursor`). Response: `{"items": [...], "next_cursor": "..."|null}`.
 
-    **Batas laju.** Beberapa endpoint dibatasi (spec §5.4); melebihi batas menjawab `429 RATE_LIMITED` dengan
-    header `Retry-After` (detik).
+    **Rate limits.** Some endpoints are rate limited (spec §5.4); exceeding the limit returns `429 RATE_LIMITED`
+    with a `Retry-After` header (seconds).
 
-    **Header respons.** Setiap respons membawa `X-Request-ID` dan `X-Trace-ID`; kirim `traceparent` (W3C)
-    untuk melanjutkan trace.
+    **Response headers.** Every response carries `X-Request-ID` and `X-Trace-ID`; send `traceparent` (W3C) to
+    continue a trace.
 
-    **Waktu dan uang.** Waktu RFC 3339 UTC. Uang berupa integer satuan terkecil (IDR: rupiah, tanpa desimal).
+    **Time and money.** Times are RFC 3339 UTC. Money is an integer in the smallest currency unit (IDR: rupiah,
+    no decimals).
 servers:
   - url: /api/v1
 tags:
@@ -47,11 +49,12 @@ paths:
     post:
       tags: [Auth]
       operationId: register
-      summary: Daftar user baru beserta organisasi pertamanya (plan Free)
+      summary: Register a new user together with their first organization (Free plan)
       description: |
-        Membuat user, organisasi, membership `owner`, subscription `free` dan job email verifikasi dalam satu
-        transaksi. Tidak mengembalikan token: lanjutkan ke `/auth/login`. Bila email punya undangan yang masih
-        berlaku, organisasi baru tidak dibuat dan keanggotaan diberikan saat email terverifikasi.
+        Creates the user, the organization, an `owner` membership, a `free` subscription and the verification
+        email job in a single transaction. Returns no tokens: continue with `/auth/login`. If the email has a
+        pending invitation, no new organization is created and the membership is granted once the email is
+        verified.
       security: []
       requestBody:
         required: true
@@ -60,7 +63,7 @@ paths:
             schema: { $ref: '#/components/schemas/RegisterRequest' }
       responses:
         '201':
-          description: User dibuat.
+          description: User created.
           content:
             application/json:
               schema:
@@ -75,7 +78,7 @@ paths:
     post:
       tags: [Auth]
       operationId: verifyEmail
-      summary: Verifikasi email dengan token dari tautan
+      summary: Verify an email address with the token from the link
       security: []
       requestBody:
         required: true
@@ -84,7 +87,7 @@ paths:
             schema: { $ref: '#/components/schemas/TokenRequest' }
       responses:
         '200':
-          description: Email terverifikasi.
+          description: Email verified.
           content:
             application/json:
               schema:
@@ -98,11 +101,11 @@ paths:
     post:
       tags: [Auth]
       operationId: login
-      summary: Login, mendapat access token dan refresh token
+      summary: Log in and receive an access token and a refresh token
       description: |
-        Email tidak dikenal, password salah dan user dihapus/ditangguhkan memberi respons sama (`401`).
-        Dengan `token_delivery: cookie` (default) refresh token dikirim lewat cookie `refresh_token`; dengan
-        `body` ada di respons. Percobaan gagal dibatasi 5 per 15 menit per (email + IP).
+        An unknown email, a wrong password and a deleted/suspended user all get the same response (`401`).
+        With `token_delivery: cookie` (the default) the refresh token is sent in the `refresh_token` cookie; with
+        `body` it is in the response. Failed attempts are limited to 5 per 15 minutes per (email + IP).
       security: []
       requestBody:
         required: true
@@ -111,10 +114,10 @@ paths:
             schema: { $ref: '#/components/schemas/LoginRequest' }
       responses:
         '200':
-          description: Login berhasil.
+          description: Logged in.
           headers:
             Set-Cookie:
-              description: Cookie `refresh_token` (hanya bila `token_delivery` = `cookie`).
+              description: The `refresh_token` cookie (only when `token_delivery` = `cookie`).
               schema: { type: string }
           content:
             application/json:
@@ -126,10 +129,11 @@ paths:
     post:
       tags: [Auth]
       operationId: refreshToken
-      summary: Tukar refresh token (rotasi)
+      summary: Exchange a refresh token (rotation)
       description: |
-        Token dibaca dari cookie `refresh_token` atau dari body. Cara token datang menentukan cara token
-        baru dikembalikan. Memakai ulang token yang sudah dirotasi mencabut seluruh sesi (`401`).
+        The token is read from the `refresh_token` cookie or from the body. The way the token arrives determines
+        the way the new token is returned. Reusing a token that was already rotated revokes the whole session
+        (`401`).
       security: []
       requestBody:
         required: false
@@ -138,10 +142,10 @@ paths:
             schema: { $ref: '#/components/schemas/RefreshRequest' }
       responses:
         '200':
-          description: Token baru.
+          description: New tokens.
           headers:
             Set-Cookie:
-              description: Cookie `refresh_token` baru (bila token datang lewat cookie).
+              description: The new `refresh_token` cookie (when the token arrived in the cookie).
               schema: { type: string }
           content:
             application/json:
@@ -152,19 +156,19 @@ paths:
     post:
       tags: [Auth]
       operationId: logout
-      summary: Akhiri sesi saat ini
+      summary: End the current session
       responses:
-        '204': { description: Sesi dicabut dan cookie dihapus. }
+        '204': { description: Session revoked and cookie cleared. }
         '401': { $ref: '#/components/responses/Unauthenticated' }
   /auth/resend-verification:
     post:
       tags: [Auth]
       operationId: resendVerification
-      summary: Kirim ulang email verifikasi
-      description: 3 per jam per user. Token verifikasi lama yang belum dipakai dibatalkan.
+      summary: Resend the verification email
+      description: 3 per hour per user. Older unused verification tokens are invalidated.
       responses:
         '200':
-          description: Email diantre.
+          description: Email queued.
           content:
             application/json:
               schema:
@@ -179,8 +183,8 @@ paths:
     post:
       tags: [Auth]
       operationId: forgotPassword
-      summary: Minta email reset password
-      description: Selalu `200` dengan pesan yang sama, terdaftar atau tidak (mencegah user enumeration). 3 per jam per email.
+      summary: Request a password reset email
+      description: Always `200` with the same message, whether or not the email is registered (prevents user enumeration). 3 per hour per email.
       security: []
       requestBody:
         required: true
@@ -200,8 +204,8 @@ paths:
     post:
       tags: [Auth]
       operationId: resetPassword
-      summary: Atur password baru dengan token reset
-      description: Berhasil mencabut semua sesi user.
+      summary: Set a new password with a reset token
+      description: On success, revokes all of the user's sessions.
       security: []
       requestBody:
         required: true
@@ -222,10 +226,10 @@ paths:
     get:
       tags: [Me]
       operationId: getMe
-      summary: Profil dan daftar organisasi yang diikuti
+      summary: Profile and the organizations the user belongs to
       responses:
         '200':
-          description: Profil.
+          description: Profile.
           content:
             application/json:
               schema:
@@ -240,8 +244,8 @@ paths:
     patch:
       tags: [Me]
       operationId: updateMe
-      summary: Ubah nama atau avatar
-      description: "Body tidak boleh kosong. `avatar_url: null` menghapus avatar. Upload file tidak ada di Tier 1."
+      summary: Update name or avatar
+      description: "The body must not be empty. `avatar_url: null` removes the avatar. File upload is not part of Tier 1."
       requestBody:
         required: true
         content:
@@ -255,7 +259,7 @@ paths:
                 avatar_url: { type: [string, 'null'], format: uri, maxLength: 2048 }
       responses:
         '200':
-          description: Profil terbaru.
+          description: Updated profile.
           content:
             application/json:
               schema:
@@ -268,18 +272,18 @@ paths:
     delete:
       tags: [Me]
       operationId: deleteMe
-      summary: Hapus akun (soft delete)
+      summary: Delete the account (soft delete)
       description: |
-        Butuh `current_password`. Ditolak `409` (`details.reason = owns_shared_organization`) bila user masih
-        owner organisasi yang punya anggota lain. Organisasi yang hanya berisi user ikut dihapus dan
-        subscription-nya dibatalkan. Email dianonimkan.
+        Requires `current_password`. Rejected with `409` (`details.reason = owns_shared_organization`) while the
+        user still owns an organization that has other members. Organizations where the user is the only member
+        are deleted too and their subscriptions canceled. The email is anonymized.
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/PasswordConfirmation' }
       responses:
-        '204': { description: Akun dihapus dan semua sesi dicabut. }
+        '204': { description: Account deleted and all sessions revoked. }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '409': { $ref: '#/components/responses/Conflict' }
@@ -288,8 +292,8 @@ paths:
     post:
       tags: [Me]
       operationId: changePassword
-      summary: Ganti password
-      description: Mencabut semua sesi lain kecuali sesi saat ini. Password lama yang salah `400` pada `current_password`; percobaan gagal 5 per 15 menit.
+      summary: Change password
+      description: Revokes all other sessions except the current one. A wrong current password returns `400` on `current_password`; failed attempts are limited to 5 per 15 minutes.
       requestBody:
         required: true
         content:
@@ -310,8 +314,8 @@ paths:
     post:
       tags: [Me]
       operationId: requestEmailChange
-      summary: Minta ganti email (konfirmasi dikirim ke email baru)
-      description: Email akun tidak berubah sampai tautan di email baru dibuka. 3 per jam per user.
+      summary: Request an email change (confirmation is sent to the new address)
+      description: The account email does not change until the link sent to the new address is opened. 3 per hour per user.
       requestBody:
         required: true
         content:
@@ -333,8 +337,8 @@ paths:
     post:
       tags: [Me]
       operationId: confirmEmailChange
-      summary: Konfirmasi email baru dengan token
-      description: "Tidak butuh login: tautan dibuka dari inbox baru, mungkin di perangkat lain."
+      summary: Confirm the new email address with a token
+      description: "No login required: the link is opened from the new inbox, possibly on another device."
       security: []
       requestBody:
         required: true
@@ -343,7 +347,7 @@ paths:
             schema: { $ref: '#/components/schemas/TokenRequest' }
       responses:
         '200':
-          description: Email diganti dan terverifikasi.
+          description: Email changed and verified.
           content:
             application/json:
               schema:
@@ -359,10 +363,10 @@ paths:
     get:
       tags: [Me]
       operationId: listSessions
-      summary: Daftar sesi aktif (maksimum 100)
+      summary: List active sessions (at most 100)
       responses:
         '200':
-          description: Sesi, dari yang terakhir dipakai.
+          description: Sessions, most recently used first.
           content:
             application/json:
               schema:
@@ -377,25 +381,25 @@ paths:
     delete:
       tags: [Me]
       operationId: revokeSession
-      summary: Cabut satu sesi
-      description: ID yang bukan milik user, tidak ada, sudah berakhir atau bukan UUID semuanya `404`. Mencabut sesi saat ini berarti logout.
+      summary: Revoke a single session
+      description: An ID that belongs to another user, does not exist, has already ended or is not a UUID always returns `404`. Revoking the current session logs out.
       parameters:
         - { $ref: '#/components/parameters/Id' }
       responses:
-        '204': { description: Sesi dicabut. }
+        '204': { description: Session revoked. }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '404': { $ref: '#/components/responses/NotFound' }
   /orgs:
     get:
       tags: [Organizations]
       operationId: listOrganizations
-      summary: Organisasi milik user (berpaginasi)
+      summary: The user's organizations (paginated)
       parameters:
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Cursor' }
       responses:
         '200':
-          description: Satu halaman, dari keanggotaan tertua.
+          description: One page, oldest membership first.
           content:
             application/json:
               schema:
@@ -411,8 +415,8 @@ paths:
     post:
       tags: [Organizations]
       operationId: createOrganization
-      summary: Buat organisasi baru (pemanggil menjadi owner)
-      description: Mendapat subscription Free. 10 per jam per user.
+      summary: Create a new organization (the caller becomes owner)
+      description: Starts on a Free subscription. 10 per hour per user.
       requestBody:
         required: true
         content:
@@ -426,7 +430,7 @@ paths:
                 slug: { $ref: '#/components/schemas/Slug' }
       responses:
         '201':
-          description: Organisasi dibuat.
+          description: Organization created.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OrganizationEnvelope' }
@@ -440,10 +444,10 @@ paths:
     get:
       tags: [Organizations]
       operationId: getOrganization
-      summary: Detail organisasi (semua anggota)
+      summary: Organization details (all members)
       responses:
         '200':
-          description: Organisasi beserta role pemanggil.
+          description: The organization with the caller's role.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OrganizationEnvelope' }
@@ -452,7 +456,7 @@ paths:
     patch:
       tags: [Organizations]
       operationId: updateOrganization
-      summary: Ubah nama, slug atau logo (owner dan admin)
+      summary: Update name, slug or logo (owner and admin)
       requestBody:
         required: true
         content:
@@ -464,10 +468,10 @@ paths:
               properties:
                 name: { type: string, maxLength: 200 }
                 slug: { $ref: '#/components/schemas/Slug' }
-                logo_url: { type: [string, 'null'], format: uri, description: '`null` menghapus logo; hanya URL http(s) absolut.' }
+                logo_url: { type: [string, 'null'], format: uri, description: '`null` removes the logo; absolute http(s) URLs only.' }
       responses:
         '200':
-          description: Organisasi terbaru.
+          description: Updated organization.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OrganizationEnvelope' }
@@ -479,10 +483,10 @@ paths:
     delete:
       tags: [Organizations]
       operationId: deleteOrganization
-      summary: Hapus organisasi (owner; soft delete)
-      description: Anggota langsung kehilangan akses, undangan terbuka dicabut, subscription dibatalkan dan invoice terbuka di-void dalam transaksi yang sama.
+      summary: Delete the organization (owner; soft delete)
+      description: Members lose access immediately; open invitations are revoked, the subscription is canceled and open invoices are voided in the same transaction.
       responses:
-        '204': { description: Organisasi dihapus. }
+        '204': { description: Organization deleted. }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -492,13 +496,13 @@ paths:
     get:
       tags: [Members]
       operationId: listMembers
-      summary: Daftar anggota (berpaginasi, semua anggota)
+      summary: List members (paginated; all members)
       parameters:
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Cursor' }
       responses:
         '200':
-          description: Satu halaman anggota, owner paling awal.
+          description: One page of members, owner first.
           content:
             application/json:
               schema:
@@ -519,7 +523,7 @@ paths:
     patch:
       tags: [Members]
       operationId: changeMemberRole
-      summary: Ubah role anggota (matriks izin spec §7.2)
+      summary: Change a member's role (permission matrix in spec §7.2)
       requestBody:
         required: true
         content:
@@ -529,10 +533,10 @@ paths:
               required: [role]
               additionalProperties: false
               properties:
-                role: { type: string, enum: [admin, member], description: '`owner` ditolak `400`; kepemilikan pindah lewat transfer-ownership.' }
+                role: { type: string, enum: [admin, member], description: '`owner` is rejected with `400`; ownership moves via transfer-ownership.' }
       responses:
         '200':
-          description: Anggota terbaru.
+          description: Updated member.
           content:
             application/json:
               schema:
@@ -547,9 +551,9 @@ paths:
     delete:
       tags: [Members]
       operationId: removeMember
-      summary: Keluarkan anggota
+      summary: Remove a member
       responses:
-        '204': { description: Anggota dikeluarkan. }
+        '204': { description: Member removed. }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -559,10 +563,10 @@ paths:
     post:
       tags: [Members]
       operationId: leaveOrganization
-      summary: Keluar dari organisasi
-      description: Owner `403` (`details.reason = owner_must_transfer_ownership`).
+      summary: Leave the organization
+      description: The owner gets `403` (`details.reason = owner_must_transfer_ownership`).
       responses:
-        '204': { description: Pemanggil tidak lagi anggota. }
+        '204': { description: The caller is no longer a member. }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -572,8 +576,8 @@ paths:
     post:
       tags: [Members]
       operationId: transferOwnership
-      summary: Pindahkan kepemilikan (owner; atomik, butuh password)
-      description: Target jadi `owner`, owner lama jadi `admin`. Target diri sendiri `400`; bukan anggota `404`.
+      summary: Transfer ownership (owner; atomic, requires password)
+      description: The target becomes `owner` and the previous owner becomes `admin`. Targeting yourself returns `400`; a non-member target returns `404`.
       requestBody:
         required: true
         content:
@@ -586,7 +590,7 @@ paths:
                 user_id: { type: string, format: uuid }
                 current_password: { type: string, maxLength: 1024 }
       responses:
-        '204': { description: Kepemilikan pindah. }
+        '204': { description: Ownership transferred. }
         '400': { $ref: '#/components/responses/ValidationError' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -598,13 +602,13 @@ paths:
     get:
       tags: [Invitations]
       operationId: listInvitations
-      summary: Undangan aktif (owner dan admin; berpaginasi)
+      summary: Active invitations (owner and admin; paginated)
       parameters:
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Cursor' }
       responses:
         '200':
-          description: Undangan yang terbuka dan belum kedaluwarsa.
+          description: Invitations that are open and not expired.
           content:
             application/json:
               schema:
@@ -622,10 +626,11 @@ paths:
     post:
       tags: [Invitations]
       operationId: createInvitation
-      summary: Undang via email (owner dan admin; pengundang harus terverifikasi)
+      summary: Invite by email (owner and admin; the inviter must be verified)
       description: |
-        Mengundang email yang sudah punya undangan terbuka memperbarui undangan itu (`200`; token baru, 7 hari).
-        Dihitung terhadap limit `members` (anggota + undangan aktif): melebihi limit `402 PLAN_LIMIT_REACHED`.
+        Inviting an email that already has an open invitation refreshes that invitation (`200`; new token, 7
+        days). Counts against the `members` limit (members + active invitations): exceeding it returns
+        `402 PLAN_LIMIT_REACHED`.
       requestBody:
         required: true
         content:
@@ -639,12 +644,12 @@ paths:
                 role: { type: string, enum: [admin, member] }
       responses:
         '200':
-          description: Undangan terbuka diperbarui.
+          description: Open invitation refreshed.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/InvitationEnvelope' }
         '201':
-          description: Undangan baru.
+          description: New invitation.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/InvitationEnvelope' }
@@ -661,9 +666,9 @@ paths:
     delete:
       tags: [Invitations]
       operationId: revokeInvitation
-      summary: Batalkan undangan
+      summary: Revoke an invitation
       responses:
-        '204': { description: Tautan undangan mati. }
+        '204': { description: The invitation link no longer works. }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
@@ -674,11 +679,11 @@ paths:
     post:
       tags: [Invitations]
       operationId: resendInvitation
-      summary: Kirim ulang undangan (token dan masa berlaku baru)
-      description: Mengirim ulang undangan yang kedaluwarsa mengambil kursi lagi (limit `members`).
+      summary: Resend an invitation (new token and expiry)
+      description: Resending an expired invitation takes up a seat again (`members` limit).
       responses:
         '200':
-          description: Undangan diperbarui.
+          description: Invitation refreshed.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/InvitationEnvelope' }
@@ -690,16 +695,16 @@ paths:
     get:
       tags: [Invitations]
       operationId: getInvitation
-      summary: Info undangan lewat token tautan (publik)
+      summary: Invitation details by link token (public)
       description: |
-        Tautan yang tidak lagi berlaku `404` dengan `details.reason` (`expired`, `revoked`, `accepted`,
-        `declined`, `organization_deleted`); token tidak dikenal `404` tanpa alasan.
+        A link that is no longer valid returns `404` with `details.reason` (`expired`, `revoked`, `accepted`,
+        `declined`, `organization_deleted`); an unknown token returns `404` without a reason.
       security: []
       parameters:
         - { $ref: '#/components/parameters/InvitationToken' }
       responses:
         '200':
-          description: Isi undangan.
+          description: Invitation details.
           content:
             application/json:
               schema:
@@ -713,13 +718,13 @@ paths:
     post:
       tags: [Invitations]
       operationId: acceptInvitation
-      summary: Terima undangan (login dan email terverifikasi; email harus sama dengan undangan)
-      description: Email berbeda `403` (`details.reason = invitation_email_mismatch`) dan undangan tidak terpakai.
+      summary: Accept an invitation (logged in with a verified email; the email must match the invitation)
+      description: A different email returns `403` (`details.reason = invitation_email_mismatch`) and the invitation stays unused.
       parameters:
         - { $ref: '#/components/parameters/InvitationToken' }
       responses:
         '200':
-          description: Pemanggil kini anggota.
+          description: The caller is now a member.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/OrganizationEnvelope' }
@@ -731,23 +736,23 @@ paths:
     post:
       tags: [Invitations]
       operationId: declineInvitation
-      summary: Tolak undangan (publik)
+      summary: Decline an invitation (public)
       security: []
       parameters:
         - { $ref: '#/components/parameters/InvitationToken' }
       responses:
-        '204': { description: Undangan ditolak. }
+        '204': { description: Invitation declined. }
         '404': { $ref: '#/components/responses/NotFound' }
         '429': { $ref: '#/components/responses/RateLimited' }
   /plans:
     get:
       tags: [Billing]
       operationId: listPlans
-      summary: Katalog plan aktif (publik)
+      summary: Catalog of active plans (public)
       security: []
       responses:
         '200':
-          description: Plan berurutan `sort_order`.
+          description: Plans ordered by `sort_order`.
           content:
             application/json:
               schema:
@@ -764,10 +769,10 @@ paths:
     get:
       tags: [Billing]
       operationId: getSubscription
-      summary: Status langganan dan pemakaian vs limit (semua anggota)
+      summary: Subscription status and usage against limits (all members)
       responses:
         '200':
-          description: Langganan.
+          description: Subscription.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SubscriptionEnvelope' }
@@ -779,12 +784,12 @@ paths:
     post:
       tags: [Billing]
       operationId: checkout
-      summary: Buat invoice dan payment link untuk sebuah plan (owner, email terverifikasi)
+      summary: Create an invoice and payment link for a plan (owner, verified email)
       description: |
-        Nominal dan periode selalu dari tabel `plans`. Organisasi Free yang belum pernah trial mendapat trial
-        plan yang punya `trial_days` (`trial_started: true`) tanpa pembayaran. Idempoten: memanggil lagi untuk
-        plan yang sama mengembalikan invoice yang masih bisa dibayar (`200`). Gateway gagal `502`, tidak ada
-        yang tersimpan.
+        Amount and period always come from the `plans` table. A Free organization that has never had a trial
+        gets a trial of a plan with `trial_days` (`trial_started: true`) without payment. Idempotent: calling
+        again for the same plan returns the invoice that can still be paid (`200`). A gateway failure returns
+        `502` and nothing is stored.
       requestBody:
         required: true
         content:
@@ -792,12 +797,12 @@ paths:
             schema: { $ref: '#/components/schemas/PlanRequest' }
       responses:
         '200':
-          description: Invoice yang masih bisa dibayar untuk plan yang sama.
+          description: The still-payable invoice for the same plan.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CheckoutResponse' }
         '201':
-          description: Invoice baru.
+          description: New invoice.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/CheckoutResponse' }
@@ -813,11 +818,11 @@ paths:
     post:
       tags: [Billing]
       operationId: changePlan
-      summary: Upgrade lewat invoice, downgrade dijadwalkan di akhir periode (owner)
+      summary: Upgrade through an invoice; downgrade is scheduled for the end of the period (owner)
       description: |
-        Upgrade: seperti checkout (invoice, plan berganti setelah dibayar). Downgrade: dicatat di
-        `pending_plan` (`scheduled: true`) dengan `warnings` untuk limit yang akan terlampaui. Meminta plan
-        yang sedang dipakai membatalkan downgrade terjadwal (`cleared: true`). `expired`/`canceled`: `409`
+        Upgrade: like checkout (an invoice; the plan changes once it is paid). Downgrade: recorded in
+        `pending_plan` (`scheduled: true`) with `warnings` for limits that would be exceeded. Requesting the
+        current plan cancels a scheduled downgrade (`cleared: true`). `expired`/`canceled`: `409`
         (`details.reason = use_checkout`).
       requestBody:
         required: true
@@ -826,12 +831,12 @@ paths:
             schema: { $ref: '#/components/schemas/PlanRequest' }
       responses:
         '200':
-          description: Perubahan dijadwalkan, dibatalkan, atau invoice yang ada dikembalikan.
+          description: Change scheduled or canceled, or the existing invoice returned.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ChangePlanResponse' }
         '201':
-          description: Invoice baru untuk upgrade.
+          description: New invoice for the upgrade.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/ChangePlanResponse' }
@@ -847,11 +852,11 @@ paths:
     post:
       tags: [Billing]
       operationId: cancelSubscription
-      summary: Berhenti di akhir periode (owner; idempoten)
-      description: Akses berlanjut sampai periode habis, tanpa refund.
+      summary: Cancel at the end of the period (owner; idempotent)
+      description: Access continues until the period ends; no refund.
       responses:
         '200':
-          description: Langganan dengan `cancel_at_period_end = true`.
+          description: The subscription with `cancel_at_period_end = true`.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SubscriptionEnvelope' }
@@ -865,10 +870,10 @@ paths:
     post:
       tags: [Billing]
       operationId: resumeSubscription
-      summary: Batalkan pembatalan (owner; idempoten)
+      summary: Undo a pending cancellation (owner; idempotent)
       responses:
         '200':
-          description: Langganan dengan `cancel_at_period_end = false`.
+          description: The subscription with `cancel_at_period_end = false`.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/SubscriptionEnvelope' }
@@ -882,13 +887,13 @@ paths:
     get:
       tags: [Billing]
       operationId: listInvoices
-      summary: Riwayat invoice (owner; berpaginasi, terbaru dulu)
+      summary: Invoice history (owner; paginated, newest first)
       parameters:
         - { $ref: '#/components/parameters/Limit' }
         - { $ref: '#/components/parameters/Cursor' }
       responses:
         '200':
-          description: Satu halaman invoice.
+          description: One page of invoices.
           content:
             application/json:
               schema:
@@ -910,8 +915,8 @@ paths:
     get:
       tags: [Billing]
       operationId: getInvoice
-      summary: Detail invoice (owner)
-      description: Invoice organisasi lain `404`. `payment_url` hanya berisi tautan selama invoice `open`.
+      summary: Invoice details (owner)
+      description: Another organization's invoice returns `404`. `payment_url` holds a link only while the invoice is `open`.
       responses:
         '200':
           description: Invoice.
@@ -929,12 +934,13 @@ paths:
     post:
       tags: [Webhooks]
       operationId: paymentWebhook
-      summary: Notifikasi pembayaran dari gateway (publik; signature adalah kredensialnya)
+      summary: Payment notification from the gateway (public; the signature is the credential)
       description: |
-        Signature diperiksa kode gateway sebelum apa pun (`401` bila salah, tidak ada yang disimpan). Body
-        maksimum 1 MiB, provider tidak terdaftar `404`. Event diproses idempoten (`UNIQUE(provider, event_id)`);
-        pengiriman ulang dijawab `200`. Gagal diproses `500` supaya gateway mengirim ulang. 600 per menit per IP.
-        Format body dan header signature ditentukan gateway (Midtrans: JSON dengan `signature_key`).
+        The signature is verified by the gateway code before anything else (`401` when invalid; nothing is
+        stored). The body is at most 1 MiB; an unregistered provider returns `404`. Events are processed
+        idempotently (`UNIQUE(provider, event_id)`); redeliveries get `200`. A processing failure returns `500`
+        so the gateway redelivers. 600 per minute per IP. The body format and signature header are defined by
+        the gateway (Midtrans: JSON with `signature_key`).
       security: []
       parameters:
         - name: provider
@@ -948,7 +954,7 @@ paths:
             schema: { type: object, additionalProperties: true }
       responses:
         '200':
-          description: Diterima (juga untuk pengiriman ulang).
+          description: Accepted (also for redeliveries).
           content:
             application/json:
               schema:
@@ -965,13 +971,13 @@ paths:
     get:
       tags: [Health]
       operationId: healthz
-      summary: Liveness (di luar /api/v1)
+      summary: Liveness (outside /api/v1)
       security: []
       servers:
         - url: /
       responses:
         '200':
-          description: Proses hidup.
+          description: The process is alive.
           content:
             application/json:
               schema:
@@ -983,18 +989,18 @@ paths:
     get:
       tags: [Health]
       operationId: readyz
-      summary: "Readiness: memeriksa PostgreSQL dan Redis (di luar /api/v1)"
+      summary: "Readiness: checks PostgreSQL and Redis (outside /api/v1)"
       security: []
       servers:
         - url: /
       responses:
         '200':
-          description: Semua dependensi sehat.
+          description: All dependencies are healthy.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Readiness' }
         '503':
-          description: Ada dependensi yang mati (penyebab hanya di log).
+          description: A dependency is down (the cause is only in the logs).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Readiness' }
@@ -1004,13 +1010,13 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: Access token dari `POST /auth/login` atau `/auth/refresh`. Kedaluwarsa menjawab `401 TOKEN_EXPIRED`.
+      description: Access token from `POST /auth/login` or `/auth/refresh`. An expired token returns `401 TOKEN_EXPIRED`.
   parameters:
     OrgId:
       name: orgId
       in: path
       required: true
-      description: ID organisasi (UUID). Bukan anggota atau tidak dikenal `404`.
+      description: Organization ID (UUID). A non-member or unknown ID returns `404`.
       schema: { type: string, format: uuid }
     UserId:
       name: userId
@@ -1026,7 +1032,7 @@ components:
       name: token
       in: path
       required: true
-      description: Token mentah dari tautan email undangan.
+      description: The raw token from the invitation email link.
       schema: { type: string }
     Limit:
       name: limit
@@ -1035,11 +1041,11 @@ components:
     Cursor:
       name: cursor
       in: query
-      description: Nilai `next_cursor` dari halaman sebelumnya (opaque).
+      description: The `next_cursor` value from the previous page (opaque).
       schema: { type: string }
   responses:
     Message:
-      description: Pesan konfirmasi.
+      description: Confirmation message.
       content:
         application/json:
           schema:
@@ -1048,12 +1054,12 @@ components:
             properties:
               message: { type: string }
     ValidationError:
-      description: "`400 VALIDATION_ERROR`; `details` memetakan field ke pesan."
+      description: "`400 VALIDATION_ERROR`; `details` maps fields to messages."
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     Unauthenticated:
-      description: "`401 UNAUTHENTICATED` atau `TOKEN_EXPIRED`."
+      description: "`401 UNAUTHENTICATED` or `TOKEN_EXPIRED`."
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1063,17 +1069,17 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     Forbidden:
-      description: "`403 FORBIDDEN`, `EMAIL_NOT_VERIFIED` atau `PLAN_FEATURE_UNAVAILABLE`."
+      description: "`403 FORBIDDEN`, `EMAIL_NOT_VERIFIED` or `PLAN_FEATURE_UNAVAILABLE`."
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     NotFound:
-      description: "`404 NOT_FOUND` (juga untuk bukan anggota organisasi)."
+      description: "`404 NOT_FOUND` (also for non-members of the organization)."
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     Conflict:
-      description: "`409 CONFLICT`; `details.reason` menyebut sebabnya bila ada."
+      description: "`409 CONFLICT`; `details.reason` names the cause when there is one."
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1081,18 +1087,18 @@ components:
       description: "`429 RATE_LIMITED`."
       headers:
         Retry-After:
-          description: Detik sampai boleh mencoba lagi.
+          description: Seconds until a retry is allowed.
           schema: { type: integer }
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     PaymentProviderError:
-      description: "`502 PAYMENT_PROVIDER_ERROR`: gateway tidak terjangkau atau menolak; tidak ada yang tersimpan, boleh dicoba lagi."
+      description: "`502 PAYMENT_PROVIDER_ERROR`: the gateway is unreachable or rejected the request; nothing is stored and it is safe to retry."
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     InternalError:
-      description: "`500 INTERNAL_ERROR`: pesan generik, penyebab hanya di log."
+      description: "`500 INTERNAL_ERROR`: generic message; the cause is only in the logs."
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
@@ -1110,11 +1116,11 @@ components:
             details:
               type: object
               additionalProperties: true
-              description: Bergantung kode; mis. peta field ke pesan untuk `VALIDATION_ERROR`, `retry_after_seconds` untuk `RATE_LIMITED`.
+              description: Depends on the code; e.g. a map of fields to messages for `VALIDATION_ERROR`, `retry_after_seconds` for `RATE_LIMITED`.
     ErrorCode:
       type: string
       description: |
-        Kode stabil dan status HTTP-nya: `VALIDATION_ERROR` 400; `UNAUTHENTICATED` 401; `TOKEN_EXPIRED` 401;
+        Stable codes and their HTTP statuses: `VALIDATION_ERROR` 400; `UNAUTHENTICATED` 401; `TOKEN_EXPIRED` 401;
         `FORBIDDEN` 403; `EMAIL_NOT_VERIFIED` 403; `PLAN_FEATURE_UNAVAILABLE` 403; `PLAN_LIMIT_REACHED` 402;
         `SUBSCRIPTION_INACTIVE` 402; `NOT_FOUND` 404; `CONFLICT` 409; `RATE_LIMITED` 429;
         `PAYMENT_PROVIDER_ERROR` 502; `INTERNAL_ERROR` 500.
@@ -1137,19 +1143,19 @@ components:
       required: [items, next_cursor]
       properties:
         items: { type: array, items: {} }
-        next_cursor: { type: [string, 'null'], description: '`null` pada halaman terakhir.' }
+        next_cursor: { type: [string, 'null'], description: '`null` on the last page.' }
     Slug:
       type: string
       minLength: 3
       maxLength: 48
-      description: Huruf kecil, angka dan tanda hubung tunggal; unik tanpa peka huruf besar-kecil. Kosong pada pembuatan berarti diturunkan dari nama.
+      description: Lowercase letters, digits and single hyphens; unique, case-insensitive. Left empty on creation, it is derived from the name.
     RegisterRequest:
       type: object
       required: [email, password, name, organization_name]
       additionalProperties: false
       properties:
         email: { type: string, format: email, maxLength: 254 }
-        password: { type: string, minLength: 8, maxLength: 72, description: Tidak boleh sama dengan email. }
+        password: { type: string, minLength: 8, maxLength: 72, description: Must not equal the email. }
         name: { type: string, maxLength: 100 }
         organization_name: { type: string, maxLength: 100 }
     TokenRequest:
@@ -1192,8 +1198,8 @@ components:
       properties:
         access_token: { type: string }
         token_type: { type: string, const: Bearer }
-        expires_in: { type: integer, description: Detik. }
-        refresh_token: { type: string, description: Hanya bila token dikirim lewat body. }
+        expires_in: { type: integer, description: Seconds. }
+        refresh_token: { type: string, description: Only when the token is delivered in the body. }
         user: { $ref: '#/components/schemas/AuthUser' }
     Profile:
       type: object
@@ -1225,7 +1231,7 @@ components:
         created_at: { type: string, format: date-time }
         last_used_at: { type: string, format: date-time }
         expires_at: { type: string, format: date-time }
-        current: { type: boolean, description: Sesi yang membuat request ini. }
+        current: { type: boolean, description: The session that made this request. }
     Organization:
       type: object
       required: [id, name, slug, logo_url, owner_id, created_at, updated_at]
@@ -1288,14 +1294,14 @@ components:
             logo_url: { type: [string, 'null'] }
         inviter_name: { type: string }
         expires_at: { type: string, format: date-time }
-        account_exists: { type: boolean, description: Frontend memilih login atau registrasi. }
+        account_exists: { type: boolean, description: Lets the frontend choose between login and registration. }
     Plan:
       type: object
       required: [code, name, price_amount, currency, interval, trial_days, features, limits]
       properties:
         code: { type: string, examples: [free, pro, business] }
         name: { type: string }
-        price_amount: { type: integer, format: int64, description: Satuan terkecil (rupiah). }
+        price_amount: { type: integer, format: int64, description: Smallest currency unit (rupiah). }
         currency: { type: string, examples: [IDR] }
         interval: { type: string, enum: [month, year] }
         trial_days: { type: integer }
@@ -1303,13 +1309,13 @@ components:
         limits:
           type: object
           additionalProperties: { type: integer }
-          description: '`-1` = tak terbatas.'
+          description: '`-1` = unlimited.'
     LimitUsage:
       type: object
       required: [used, max]
       properties:
         used: { type: integer }
-        max: { type: integer, description: '`-1` = tak terbatas.' }
+        max: { type: integer, description: '`-1` = unlimited.' }
     SubscriptionStatus:
       type: string
       enum: [trialing, active, past_due, expired, canceled]
@@ -1317,15 +1323,15 @@ components:
       type: object
       required: [plan, status, trial_ends_at, current_period_start, current_period_end, cancel_at_period_end, pending_plan, grace_until, effective_plan, usage]
       properties:
-        plan: { type: string, description: Kode plan subscription itu sendiri. }
+        plan: { type: string, description: The code of the subscription's own plan. }
         status: { $ref: '#/components/schemas/SubscriptionStatus' }
         trial_ends_at: { type: [string, 'null'], format: date-time }
         current_period_start: { type: string, format: date-time }
-        current_period_end: { type: [string, 'null'], format: date-time, description: '`null` untuk Free.' }
+        current_period_end: { type: [string, 'null'], format: date-time, description: '`null` for Free.' }
         cancel_at_period_end: { type: boolean }
-        pending_plan: { type: [string, 'null'], description: Downgrade terjadwal. }
+        pending_plan: { type: [string, 'null'], description: Scheduled downgrade. }
         grace_until: { type: [string, 'null'], format: date-time }
-        effective_plan: { type: string, description: Plan yang sedang boleh dipakai; `free` bila akses sudah berakhir. }
+        effective_plan: { type: string, description: The plan currently in effect; `free` once access has ended. }
         usage:
           type: object
           additionalProperties: { $ref: '#/components/schemas/LimitUsage' }
@@ -1339,13 +1345,13 @@ components:
       required: [plan]
       additionalProperties: false
       properties:
-        plan: { type: string, maxLength: 64, description: Kode plan. Nominal tidak pernah dari klien. }
+        plan: { type: string, maxLength: 64, description: Plan code. The amount never comes from the client. }
     Invoice:
       type: object
       required: [id, number, kind, plan, plan_name, amount, currency, status, period_start, period_end, due_at, paid_at, payment_url, created_at]
       properties:
         id: { type: string, format: uuid }
-        number: { type: string, examples: [INV-2026-000123], description: Nomor global. }
+        number: { type: string, examples: [INV-2026-000123], description: Globally unique number. }
         kind: { type: string, enum: [checkout, renewal] }
         plan: { type: string }
         plan_name: { type: string }
@@ -1356,7 +1362,7 @@ components:
         period_end: { type: string, format: date-time }
         due_at: { type: string, format: date-time }
         paid_at: { type: [string, 'null'], format: date-time }
-        payment_url: { type: [string, 'null'], description: Tautan bayar; `null` bila tidak bisa dibayar lagi. }
+        payment_url: { type: [string, 'null'], description: Payment link; `null` when the invoice can no longer be paid. }
         created_at: { type: string, format: date-time }
     CheckoutResponse:
       type: object
@@ -1374,8 +1380,8 @@ components:
           oneOf:
             - $ref: '#/components/schemas/Invoice'
             - type: 'null'
-        scheduled: { type: boolean, description: Downgrade dijadwalkan di akhir periode. }
-        cleared: { type: boolean, description: Downgrade terjadwal dibatalkan. }
+        scheduled: { type: boolean, description: Downgrade scheduled for the end of the period. }
+        cleared: { type: boolean, description: Scheduled downgrade canceled. }
         trial_started: { type: boolean }
         warnings:
           type: array
