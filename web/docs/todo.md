@@ -43,11 +43,11 @@
   - **Selesai bila:** semua script jalan (boleh gagal hanya `api:generate` sampai W1.1).
 - [ ] **W0.6 Design token dan dark mode** (0,5)
   - **File:** `web/src/app.css`, `web/src/routes/+layout.svelte`
-  - **Lakukan:** inisialisasi shadcn-svelte (`pnpm dlx shadcn-svelte@latest init`, base color zinc). Ganti nilai variabel di `:root` dan `.dark` dengan tabel §4.1 **persis** (hex). Tambah token `--success`, `--success-muted`, `--warning`, `--warning-muted`, `--danger-muted`, `--info`, `--info-muted` dan daftarkan di blok `@theme inline` (`--color-success: var(--success);` dst.). Pasang `@fontsource-variable/inter` dan set `font-family` dasar. Pasang `mode-watcher` (`<ModeWatcher />` di layout root, default `system`).
+  - **Lakukan:** inisialisasi shadcn-svelte (`pnpm dlx shadcn-svelte@latest init`). Ganti nilai variabel di `:root` dan `.dark` dengan tabel §4.1 **persis** (skema putih & biru untuk light mode, serta hitam & biru dark/midnight untuk dark mode, menghindari tema ungu AI generik). Tambah token `--success`, `--success-muted`, `--warning`, `--warning-muted`, `--danger-muted`, `--info`, `--info-muted` dan daftarkan di blok `@theme inline` (`--color-success: var(--success);` dst.). Pasang `@fontsource-variable/inter` dan set `font-family` dasar. Pasang `mode-watcher` (`<ModeWatcher />` di layout root, default `system`).
   - **Selesai bila:** halaman uji sementara dengan `bg-primary`, `text-success`, `bg-warning-muted` tampil benar di light dan dark (ganti lewat `setMode`); halaman uji dihapus sebelum commit.
-- [ ] **W0.7 Komponen shadcn-svelte awal** (0,25)
-  - **Lakukan:** `pnpm dlx shadcn-svelte@latest add button input label card dialog alert-dialog dropdown-menu select table badge avatar separator skeleton sonner sheet tabs progress checkbox alert tooltip sidebar`. Pasang `<Toaster />` di layout root.
-  - **Selesai bila:** komponen ada di `src/lib/components/ui/`, `pnpm check` lulus.
+- [ ] **W0.7 Komponen shadcn-svelte awal dan icon SVG** (0,25)
+  - **Lakukan:** pasang `lucide-svelte` (atau icon flaticon/tabler SVG) dan jalankan `pnpm dlx shadcn-svelte@latest add button input label card dialog alert-dialog dropdown-menu select table badge avatar separator skeleton sonner sheet tabs progress checkbox alert tooltip sidebar`. Pasang `<Toaster />` di layout root. **Aturan wajib:** dilarang keras memakai emotikon/emoji di UI (gunakan icon vektor SVG dari `lucide-svelte`).
+  - **Selesai bila:** komponen ada di `src/lib/components/ui/`, `lucide-svelte` terpasang, `pnpm check` lulus.
 - [ ] **W0.8 i18n dasar** (0,25)
   - **File:** `web/project.inlang/settings.json`, `web/messages/id.json`, `web/messages/en.json`, `web/src/lib/i18n/index.ts`
   - **Lakukan:** `baseLocale: "id"`, `locales: ["id", "en"]`. Strategi Paraglide `["localStorage", "preferredLanguage", "baseLocale"]` (§10). Tambah kunci `common_app_name`, `common_save`, `common_cancel`, `common_loading`. `lib/i18n/index.ts` mengekspor `getLocale`, `setLocale`, `locales`, dan `intlLocale()` (`id` → `id-ID`, `en` → `en-US`).
@@ -127,10 +127,10 @@
 - [ ] **W2.4 Data `me` dan organisasi aktif** (0,25)
   - **File:** `web/src/lib/features/account/api.ts`, `web/src/lib/features/org/api.ts`
   - **Lakukan:** `createMeQuery()` (`GET /me`), `createOrganizationQuery(orgId)` (`GET /orgs/{orgId}`). Fungsi `lastOrgId` get/set di `localStorage` (dibungkus try/catch).
-- [ ] **W2.5 App shell: sidebar, pemilih organisasi, menu user** (0,5)
+- [ ] **W2.5 App shell responsif: sidebar desktop, drawer mobile, pemilih organisasi, menu user** (0,5)
   - **File:** `web/src/lib/components/app/AppShell.svelte`, `OrgSwitcher.svelte`, `UserMenu.svelte`, `web/src/routes/(app)/orgs/[orgId]/+layout.svelte`
-  - **Lakukan:** komponen `sidebar` shadcn-svelte; navigasi §5.3 dengan item aktif; di mobile menjadi `sheet`. `OrgSwitcher` dari `me.organizations`. `UserMenu`: nama/email, Akun, Tema, Bahasa, Keluar (logout §6.4 termasuk `BroadcastChannel`). Layout `orgs/[orgId]` mengambil organisasi; `404` → `ErrorState` "Organisasi tidak ditemukan".
-  - **Selesai bila:** navigasi bekerja di desktop dan lebar 375px.
+  - **Lakukan:** komponen `sidebar` shadcn-svelte; navigasi §5.3 dengan item aktif; di mobile (<768px) berubah menjadi drawer off-canvas (`Sheet`) dengan backdrop overlay redup, tombol close SVG, dan auto-close saat item ditekan; touch target tombol & navigasi minimum 44px (§4.4). `OrgSwitcher` dari `me.organizations`. `UserMenu`: nama/email, Akun, Tema, Bahasa, Keluar (logout §6.4 termasuk `BroadcastChannel`). Layout `orgs/[orgId]` mengambil organisasi; `404` → `ErrorState` "Organisasi tidak ditemukan".
+  - **Selesai bila:** navigasi dan layout bekerja mulus tanpa overflow horizontal di desktop, tablet, dan mobile (320px–375px).
 - [ ] **W2.6 Komponen keadaan** (0,25)
   - **File:** `web/src/lib/components/app/EmptyState.svelte`, `ErrorState.svelte`, `PageHeader.svelte`, `PageSkeleton.svelte`, `LoadMore.svelte`
   - **Lakukan:** `ErrorState` menerima `error: unknown`, memakai `errorMessage`, menampilkan `traceId` untuk `INTERNAL_ERROR`, dan tombol "Coba lagi" opsional.
@@ -261,10 +261,10 @@ Halaman akun memakai sub-navigasi (tab) Profil / Keamanan / Sesi / Hapus akun di
   - **File:** `web/tests/e2e/helpers/mailpit.ts` (ambil email terbaru untuk alamat tertentu lewat `http://localhost:8025/api/v1/search?query=to:<email>` lalu ekstrak tautan), `helpers/users.ts` (email unik per test), `playwright.config.ts` (`baseURL: http://localhost:3000`, `webServer` menjalankan `pnpm dev`).
 - [ ] **W7.2 Skenario E2E §11.2 nomor 1–4** (0,5)
 - [ ] **W7.3 Skenario E2E §11.2 nomor 5–8** (0,5)
-- [ ] **W7.4 Audit teks dan warna** (0,25)
-  - **Lakukan:** pastikan tidak ada teks UI hardcode (cek manual tiap `.svelte` di `routes` dan `features`) dan `grep -rnE "(bg|text|border)-(red|green|blue|indigo|zinc|gray|slate|amber|emerald)-[0-9]" src/routes src/lib/features src/lib/components/app` kosong.
-- [ ] **W7.5 Audit aksesibilitas** (0,25) — §11.4
-  - **Lakukan:** navigasi seluruh alur dengan keyboard saja; cek label, fokus dialog, `aria-label` ikon.
+- [ ] **W7.4 Audit teks, warna, dan icon** (0,25)
+  - **Lakukan:** pastikan tidak ada teks UI hardcode (cek manual tiap `.svelte` di `routes` dan `features`), tidak ada emotikon/emoji di komponen (hanya SVG icon), dan `grep -rnE "(bg|text|border)-(red|green|blue|indigo|zinc|gray|slate|amber|emerald)-[0-9]" src/routes src/lib/features src/lib/components/app` kosong.
+- [ ] **W7.5 Audit aksesibilitas dan responsivitas (mobile & desktop)** (0,25) — §4.4, §11.4
+  - **Lakukan:** navigasi seluruh alur dengan keyboard saja; cek label, fokus dialog, `aria-label` ikon. Uji audit responsivitas pada viewport 320px (iPhone SE), 375px/390px, 768px (tablet), dan 1280px+ (desktop): pastikan *zero horizontal overflow* pada body, tabel tidak terpotong (tersedia scroll horizontal atau mode tumpuk), touch target minimum 44px di mobile, modal dialog pas di viewport, dan banner membungkus rapi.
 - [ ] **W7.6 Panduan deploy dan README** (0,25)
   - **File:** `web/docs/deploy.md` (contoh Nginx/Caddy same-origin dengan proxy `/api`, fallback SPA ke `index.html`, header keamanan termasuk CSP, varian subdomain dengan `PUBLIC_API_BASE_URL` + `app.cors_allowed_origins`), `web/README.md` (setup singkat, perintah), tautan dari `README.md` root.
 - [ ] **W7.7 Centang kriteria selesai §12 spec** (0,1)

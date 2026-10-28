@@ -153,43 +153,43 @@ Semua daftar backend memakai cursor (`?limit=&cursor=`, respons `{items, next_cu
 
 ## 4. Tema dan Design Token
 
-Tema **netral**: dasar abu-abu zinc, satu aksen **indigo**, light dan dark mode. Semua warna didefinisikan sebagai CSS variable di `src/app.css`. Nama token mengikuti konvensi shadcn-svelte supaya komponen bawaannya langsung cocok, ditambah token status sendiri.
+Tema mengusung estetika enterprise profesional dan bersih: **perpaduan warna putih dan biru (Light Mode)** serta **hitam dan biru dark / midnight blue (Dark Mode)**. Pendekatan ini sengaja dipilih untuk menghindari kesan visual "AI generated" (seperti gradien ungu/indigo/violet klise). Semua warna didefinisikan sebagai CSS variable di `src/app.css`. Nama token mengikuti konvensi shadcn-svelte supaya komponen bawaannya langsung cocok, ditambah token status sendiri.
 
-> Hati-hati dengan penamaan shadcn: token `--accent` di shadcn berarti **latar hover netral**, bukan warna brand. Warna brand (indigo) ada di `--primary`.
+> Hati-hati dengan penamaan shadcn: token `--accent` di shadcn berarti **latar hover netral**, bukan warna brand. Warna brand (biru) ada di `--primary`.
 
 ### 4.1 Nilai token
 
-| Token | Fungsi | Light | Dark |
+| Token | Fungsi | Light (Putih & Biru) | Dark (Hitam & Biru Dark) |
 |---|---|---|---|
-| `--background` | latar halaman | `#FFFFFF` | `#09090B` |
-| `--foreground` | teks utama | `#18181B` | `#FAFAFA` |
-| `--card` / `--card-foreground` | kartu | `#FFFFFF` / `#18181B` | `#18181B` / `#FAFAFA` |
-| `--popover` / `--popover-foreground` | dropdown, dialog | `#FFFFFF` / `#18181B` | `#18181B` / `#FAFAFA` |
-| `--primary` / `--primary-foreground` | aksi utama, link, menu aktif | `#4F46E5` / `#FFFFFF` | `#818CF8` / `#09090B` |
-| `--secondary` / `--secondary-foreground` | tombol sekunder | `#F4F4F5` / `#18181B` | `#27272A` / `#FAFAFA` |
-| `--muted` / `--muted-foreground` | latar redup / teks sekunder | `#F4F4F5` / `#71717A` | `#27272A` / `#A1A1AA` |
-| `--accent` / `--accent-foreground` | latar hover netral | `#F4F4F5` / `#18181B` | `#27272A` / `#FAFAFA` |
-| `--destructive` / `--destructive-foreground` | bahaya, hapus | `#DC2626` / `#FFFFFF` | `#F87171` / `#09090B` |
-| `--border` | garis | `#E4E4E7` | `#27272A` |
-| `--input` | garis input | `#E4E4E7` | `#3F3F46` |
-| `--ring` | focus ring | `#6366F1` | `#818CF8` |
-| `--sidebar` / `--sidebar-foreground` | sidebar | `#FAFAFA` / `#18181B` | `#18181B` / `#FAFAFA` |
-| `--sidebar-primary` / `--sidebar-primary-foreground` | item aktif sidebar | `#4F46E5` / `#FFFFFF` | `#818CF8` / `#09090B` |
-| `--sidebar-accent` / `--sidebar-accent-foreground` | hover sidebar | `#F4F4F5` / `#18181B` | `#27272A` / `#FAFAFA` |
-| `--sidebar-border` / `--sidebar-ring` | | `#E4E4E7` / `#6366F1` | `#27272A` / `#818CF8` |
+| `--background` | latar halaman | `#FFFFFF` | `#030712` |
+| `--foreground` | teks utama | `#0F172A` | `#F8FAFC` |
+| `--card` / `--card-foreground` | kartu | `#FFFFFF` / `#0F172A` | `#0B132B` / `#F8FAFC` |
+| `--popover` / `--popover-foreground` | dropdown, dialog | `#FFFFFF` / `#0F172A` | `#0F172A` / `#F8FAFC` |
+| `--primary` / `--primary-foreground` | aksi utama, link, menu aktif | `#1D4ED8` / `#FFFFFF` | `#3B82F6` / `#030712` |
+| `--secondary` / `--secondary-foreground` | tombol sekunder | `#F1F5F9` / `#0F172A` | `#1E293B` / `#F8FAFC` |
+| `--muted` / `--muted-foreground` | latar redup / teks sekunder | `#F1F5F9` / `#64748B` | `#1E293B` / `#94A3B8` |
+| `--accent` / `--accent-foreground` | latar hover netral/biru lembut | `#EFF6FF` / `#1D4ED8` | `#1E293B` / `#60A5FA` |
+| `--destructive` / `--destructive-foreground` | bahaya, hapus | `#DC2626` / `#FFFFFF` | `#F87171` / `#030712` |
+| `--border` | garis | `#E2E8F0` | `#1E293B` |
+| `--input` | garis input | `#E2E8F0` | `#334155` |
+| `--ring` | focus ring | `#2563EB` | `#3B82F6` |
+| `--sidebar` / `--sidebar-foreground` | sidebar | `#F8FAFC` / `#0F172A` | `#070D1A` / `#F8FAFC` |
+| `--sidebar-primary` / `--sidebar-primary-foreground` | item aktif sidebar | `#1D4ED8` / `#FFFFFF` | `#3B82F6` / `#030712` |
+| `--sidebar-accent` / `--sidebar-accent-foreground` | hover sidebar | `#EFF6FF` / `#1D4ED8` | `#1E293B` / `#60A5FA` |
+| `--sidebar-border` / `--sidebar-ring` | garis sidebar & focus | `#E2E8F0` / `#2563EB` | `#1E293B` / `#3B82F6` |
 | `--success` / `--success-muted` | teks / latar sukses | `#047857` / `#ECFDF5` | `#34D399` / `#052E22` |
 | `--warning` / `--warning-muted` | teks / latar peringatan | `#B45309` / `#FFFBEB` | `#FBBF24` / `#2D1F05` |
 | `--danger-muted` | latar bahaya (teksnya `--destructive`) | `#FEF2F2` | `#2D0B0B` |
-| `--info` / `--info-muted` | teks / latar info | `#4F46E5` / `#EEF2FF` | `#818CF8` / `#1E1B4B` |
+| `--info` / `--info-muted` | teks / latar info (aksen biru) | `#1D4ED8` / `#EFF6FF` | `#60A5FA` / `#172554` |
 | `--radius` | radius dasar | `0.5rem` | `0.5rem` |
 
 Token tambahan (`success`, `warning`, `danger-muted`, `info`) didaftarkan ke Tailwind lewat `@theme inline` supaya kelas seperti `text-success`, `bg-warning-muted` tersedia.
 
 ### 4.2 Aturan pemakaian
 
-- Komponen **hanya** memakai kelas token: `bg-background`, `text-muted-foreground`, `bg-primary`, `text-success`, `bg-warning-muted`, `border-border`, dan seterusnya. **Dilarang** kelas warna mentah seperti `bg-indigo-600`, `text-red-500`, `bg-zinc-100`, atau nilai hex di komponen.
-- Warna primer dipakai hemat: satu aksi utama per layar, link, menu aktif, focus ring.
-- Kedalaman di dark mode dibuat dengan lapisan (`background` lebih gelap dari `card`), bukan bayangan.
+- Komponen **hanya** memakai kelas token: `bg-background`, `text-muted-foreground`, `bg-primary`, `text-success`, `bg-warning-muted`, `border-border`, dan seterusnya. **Dilarang** kelas warna mentah seperti `bg-blue-600`, `text-red-500`, `bg-zinc-100`, atau nilai hex di komponen.
+- Warna primer (biru) dipakai hemat: satu aksi utama per layar, link, menu aktif, focus ring.
+- Kedalaman di dark mode dibuat dengan lapisan (`background` hitam pekat `#030712` lebih gelap dari `card` biru gelap `#0B132B`), bukan bayangan.
 - Semua pasangan teks/latar di tabel di atas memenuhi kontras WCAG AA. Jangan membuat kombinasi baru di luar tabel.
 - Mode: `light`, `dark`, `system` (default `system`), dipilih di menu user dan di halaman publik. Pilihan disimpan `mode-watcher` di `localStorage`.
 
@@ -207,12 +207,53 @@ Satu komponen `StatusBadge` memetakan status backend ke varian warna:
 
 Role ditampilkan sebagai badge netral: `owner`, `admin`, `member` (label diterjemahkan).
 
-### 4.4 Tipografi dan layout
+### 4.4 Tipografi, Layout, dan Desain Responsif (Mobile & Desktop)
 
-- Font Inter (variable). Ukuran dasar 14px untuk isi aplikasi, 16px untuk halaman publik.
-- **Halaman publik** (auth, tautan email): kartu di tengah layar, lebar maks 400px, logo dan nama aplikasi di atas, pemilih bahasa dan tema di pojok.
-- **Halaman aplikasi:** sidebar kiri (lebar 240px) berisi pemilih organisasi di atas, navigasi, dan menu user di bawah. Di bawah breakpoint `md` sidebar menjadi drawer yang dibuka tombol menu. Konten maks 1024px, padding 24px (16px di mobile).
-- Banner global (email belum terverifikasi, status langganan; §8.5) tampil di atas konten, di bawah header.
+Aplikasi dirancang **sepenuhnya responsif** dan nyaman digunakan di berbagai ukuran layar: mulai dari ponsel berlayar sempit (min 320px seperti iPhone SE), tablet (iPad/portrait), hingga desktop monitor lebar (1440px+).
+
+#### 1. Tipografi
+- Font Inter (variable).
+- Ukuran teks dasar: 14px untuk aplikasi internal (dashboard, pengaturan, tabel), 16px untuk halaman publik (login, register). Teks judul menggunakan skala modular (`text-xl` hingga `text-2xl` di mobile, `text-3xl` di desktop) dengan perataan line-height yang nyaman dibaca.
+
+#### 2. Layout Halaman Publik (Auth, Tautan Email)
+- Kartu form berada di tengah layar (`min-h-screen flex items-center justify-center p-4`).
+- Lebar maksimum kartu: 400px di desktop; di mobile (`< 640px`) kartu melebar proporsional (`w-full`) dengan padding yang pas agar form tidak tertekan.
+- Logo dan judul aplikasi di atas kartu; pemilih tema dan bahasa terletak di sudut kanan atas atau footer form.
+
+#### 3. Layout Aplikasi (App Shell)
+- **Desktop (`>= 768px` / `md` breakpoint):**
+  - Sidebar tetap (*fixed*) di sisi kiri selebar 240px (`w-60`).
+  - Pemilih organisasi di bagian atas sidebar, menu navigasi di tengah, menu profil pengguna di bagian bawah.
+  - Konten utama memiliki margin kiri 240px, padding 24px (`p-6`), lebar maksimum konten 1024px (`max-w-5xl`) terpusat rapi di tengah layar.
+- **Mobile & Tablet Portrait (`< 768px`):**
+  - Header sticky di atas setinggi 56px (`h-14`) dengan tombol hamburger menu (kiri), nama organisasi / breadcrumb ringkas (tengah), dan status / aksi cepat (kanan).
+  - Sidebar berubah menjadi **off-canvas drawer (Sheet)** yang meluncur mulus dari sisi kiri dengan **backdrop overlay redup**.
+  - Drawer otomatis menutup ketika pengguna menekan tautan navigasi, tombol close (✕ via icon SVG), atau menekan area backdrop luar.
+  - Padding konten menjadi 16px (`p-4`), margin kiri dinonaktifkan (`ml-0`), dan lebar kontainer 100% tanpa adanya horizontal scrollbar liar (*no horizontal scroll on body*).
+
+#### 4. Pola Komponen Responsif
+- **Grid Kartu:** 1 kolom tumpuk di mobile (`grid-cols-1`), 2 kolom di tablet (`sm:grid-cols-2`), dan 3 kolom di desktop (`lg:grid-cols-3`).
+- **Tabel Data (Anggota, Invoice, Sesi):**
+  - Selalu dibungkus kontainer scroll horizontal (`overflow-x-auto`) dengan indikator bayangan atau border rapi, ATAU beralih menjadi kartu tumpuk (*stacked cards*) di mobile agar kolom-kolom data penting tidak terpotong.
+- **Formulir & Input:**
+  - Area sentuh (*touch target*) input, tombol, dan switch minimum setinggi **44px** (mengikuti standar WCAG 2.5.5 Target Size) agar mudah ditekan jari di layar sentuh.
+  - Tombol aksi utama pada form (Simpan, Undang, Bayar) tampil selebar kontainer (*full-width* / `w-full`) di mobile dan otomatis kembali proporsional (*inline*) di desktop.
+- **Modal & Dialog Konfirmasi:**
+  - Di desktop berupa dialog modal di tengah layar (`max-w-lg`). Di layar mobile (`< 640px`) dialog menyesuaikan diri menjadi modal bawah (*bottom drawer/sheet*) atau modal tengah dengan batas tinggi layar maksimum `max-h-[90vh]` dan scroll mandiri di dalam konten dialog.
+- **Banner Global:**
+  - Teks banner membungkus (*text-wrap*) dengan alami di layar sempit; tombol aksi di dalam banner bertumpuk vertikal (*flex-col*) di mobile dan sejajar (*flex-row*) di desktop.
+
+### 4.5 Aturan Icon dan Larangan Emotikon
+
+- **Dilarang keras memakai emotikon/emoji** di antarmuka pengguna (seperti 🚀, 💡, 🌙, ☀️, ✕, dsb.) pada tombol, status, banner, empty-state, header, atau tabel. Penggunaan emoji membuat aplikasi terkesan tidak profesional dan seperti boilerplate AI generik.
+- **Wajib menggunakan Icon Vektor SVG Profesional**:
+  - Gunakan pustaka icon vektor seperti **Lucide Svelte** (`lucide-svelte`, standar resmi pasangan shadcn-svelte) atau SVG dari **Flaticon** / **Tabler Icons**.
+  - Gaya icon harus konsisten: stroke width 1.5px hingga 2px (outline style).
+  - Skala ukuran standar:
+    - `14px - 16px`: icon inline di tombol kecil (`btn-sm`), status badge, atau tabel.
+    - `18px - 20px`: icon navigasi sidebar dan item menu header.
+    - `32px - 48px`: icon ilustratif pada `EmptyState` atau `ErrorState`.
+  - Icon yang memiliki arti fungsional wajib diberi atribut aksesibilitas yang tepat (misalnya `aria-hidden="true"` bila sudah ada teks pendamping, atau `aria-label` bila berupa tombol icon saja).
 
 ---
 

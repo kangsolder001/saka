@@ -25,12 +25,12 @@ Alasan urutan:
 |---|---|---|---|
 | W0 | Setup proyek | 2 hari | `pnpm dev` jalan di port 3000 dengan proxy ke API, token tema light/dark, i18n id/en, lint/check/test/build hijau, target `make web-*`, CI frontend |
 | W1 | Fondasi API & sesi | 3 hari | Tipe dari OpenAPI, client dengan Bearer + refresh single-flight + Web Locks, `ApiError`, form helper, formatter; semuanya ber-unit-test |
-| W2 | App shell & komponen bersama | 2 hari | Layout publik dan aplikasi, sidebar + drawer, pemilih organisasi, menu user, tema, bahasa, banner, `StatusBadge`, `EmptyState`, `ErrorState`, `ConfirmDialog`, `LoadMore` |
+| W2 | App shell & komponen bersama | 2 hari | Layout publik dan aplikasi responsif (sidebar desktop + drawer mobile), pemilih organisasi, menu user, tema, bahasa, banner, `StatusBadge`, `EmptyState`, `ErrorState`, `ConfirmDialog`, `LoadMore` |
 | W3 | Auth publik & tautan email | 2,5 hari | Login, registrasi (biasa dan dari undangan), lupa/reset password, verifikasi email, konfirmasi ganti email, terima undangan, logout |
 | W4 | Akun | 1,5 hari | Profil, ganti password, ganti email, sesi, hapus akun |
 | W5 | Organisasi, anggota & undangan | 3 hari | Buat/pilih organisasi, pengaturan, transfer, keluar, hapus, anggota, undangan, dialog upgrade, dashboard ringkasan |
 | W6 | Billing | 3 hari | Halaman billing, plan, checkout, ganti plan, batal/lanjutkan, invoice, return page, banner, simulasi bayar dev |
-| W7 | Penyelesaian & acceptance | 2 hari | E2E §11.2 lulus, audit aksesibilitas dan teks, panduan deploy, kriteria §12 spec tercentang |
+| W7 | Penyelesaian & acceptance | 2 hari | E2E §11.2 lulus, audit aksesibilitas, teks, dan responsivitas (mobile 320px & desktop), panduan deploy, kriteria §12 spec tercentang |
 | – | Buffer | 2 hari | Cadangan |
 | | **Total** | **19 hari efektif + 2 buffer** | |
 
@@ -43,7 +43,7 @@ Dengan ±2 jam/hari, 1 hari efektif ≈ 3–4 hari kalender (total sekitar 2–2
 | 1 | Framework | **SvelteKit + Svelte 5**, mode **SPA statis** | Ringan, rapi; auth sudah di Go sehingga tidak perlu server Node |
 | 2 | Lokasi kode | `web/` di repo yang sama (monorepo) | Perubahan OpenAPI dan frontend bisa satu commit; CI menjaga keduanya cocok |
 | 3 | Dokumentasi | `web/docs/` (terpisah dari `docs/` backend) | Dokumen frontend dan backend tidak tercampur |
-| 4 | Tema | Netral (zinc) + aksen **indigo**, light/dark/system | Titik awal boilerplate yang mudah diganti brand lewat token |
+| 4 | Tema | **Putih & Biru** (light) serta **Hitam & Biru Dark** (dark), light/dark/system | Estetika enterprise bersih & tegas; menghindari tampilan klise AI generator (spec §4) |
 | 5 | Bahasa | **Indonesia (dasar) + Inggris**, Paraglide, tanpa prefix URL | Aplikasi di balik login; ganti bahasa tanpa reload |
 | 6 | Komponen | shadcn-svelte (disalin ke repo) | Bebas diubah, bukan dependency tertutup |
 | 7 | Data | TanStack Query (runes) | Cache, loading/error, invalidasi tanpa store buatan sendiri |
@@ -52,6 +52,8 @@ Dengan ±2 jam/hari, 1 hari efektif ≈ 3–4 hari kalender (total sekitar 2–2
 | 10 | Token | Access token di memori, refresh lewat cookie `HttpOnly` | Mengikuti kontrak backend (spec backend §5.6) |
 | 11 | Deploy | Same-origin (reverse proxy `/api`) disarankan; subdomain didukung | Cookie `SameSite=Strict` |
 | 12 | E2E | Playwright terhadap backend lokal asli, belum di CI | Butuh seluruh backend; CI menyusul |
+| 13 | Icon | **Icon vektor SVG** (`lucide-svelte` / Flaticon SVG / Tabler), **dilarang emotikon/emoji** | Tampilan profesional; emoji membuat aplikasi terkesan murahan dan AI template |
+| 14 | Responsif | **Mobile-first & Desktop fluid** (viewport 320px – 1440px+), drawer Sheet di mobile | Pengalaman nyaman di ponsel dan layar monitor desktop tanpa horizontal overflow (spec §4.4) |
 
 ## 4. Risiko
 

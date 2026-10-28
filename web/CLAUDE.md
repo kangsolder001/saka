@@ -17,7 +17,7 @@ Dokumen ditulis dalam Bahasa Indonesia; ikuti bahasa yang sama saat mengubahnya.
 
 ## Keputusan final (jangan diulang tanyakan)
 
-SvelteKit + Svelte 5 (runes) mode SPA statis, TypeScript strict, pnpm, Tailwind v4 + shadcn-svelte, TanStack Query, openapi-typescript + openapi-fetch, Zod + helper form sendiri (bukan superforms), Paraglide (id dasar + en, tanpa prefix URL), mode-watcher (light/dark/system), Vitest + Playwright. Tema netral zinc + aksen indigo (token di spec §4.1).
+SvelteKit + Svelte 5 (runes) mode SPA statis, TypeScript strict, pnpm, Tailwind v4 + shadcn-svelte, TanStack Query, openapi-typescript + openapi-fetch, Zod + helper form sendiri (bukan superforms), Paraglide (id dasar + en, tanpa prefix URL), mode-watcher (light/dark/system), Vitest + Playwright. Tema putih & biru (light) serta hitam & biru dark (dark), menghindari tampilan klise AI generator (token di spec §4.1). Icon vektor SVG (lucide-svelte / flaticon / SVG); dilarang keras memakai emotikon/emoji di UI.
 
 ## Perintah
 
@@ -33,7 +33,9 @@ Dari root repo: `make web-install`, `make web-dev` (port 3000, proxy `/api` ke `
 - **Tidak ada `fetch` di komponen.** Semua panggilan API lewat `src/lib/api/client.ts` dan fungsi di `src/lib/features/<fitur>/api.ts`. Query key hanya dari `src/lib/api/query-keys.ts`.
 - **Tidak ada tipe API tulisan tangan.** Pakai alias di `src/lib/api/types.ts` (dari `schema.d.ts` hasil generate). Jangan edit `schema.d.ts`; jalankan `make web-api`.
 - **Tidak ada teks hardcode.** Tambahkan kunci ke `messages/id.json` **dan** `messages/en.json` (kunci `snake_case` berawalan area, mis. `members_invite_button`).
-- **Tidak ada warna mentah.** Hanya kelas token (`bg-primary`, `text-muted-foreground`, `text-success`, `bg-warning-muted`, ...). Dilarang `bg-indigo-600`, `text-red-500`, hex di komponen.
+- **Dilarang memakai emotikon/emoji di UI:** Jangan gunakan emoji (mis. 🚀, 💡, 🌙, ☀️, ✕, dsb.) pada tombol, status badge, empty state, header, atau ilustrasi. Seluruh icon visual wajib berupa icon vektor SVG profesional (mis. `lucide-svelte` bawaan shadcn-svelte, Flaticon SVG, atau Tabler SVG) dengan ukuran dan stroke konsisten.
+- **Tidak ada warna mentah.** Hanya kelas token (`bg-primary`, `text-muted-foreground`, `text-success`, `bg-warning-muted`, ...). Dilarang `bg-blue-600`, `text-red-500`, hex di komponen. Gunakan skema token putih-biru (light) dan hitam-biru dark (dark).
+- **Desain responsif wajib (mobile & desktop):** Seluruh halaman, form, modal, dan tabel harus pas di viewport mobile (min 320px seperti iPhone SE) hingga desktop lebar tanpa horizontal scroll pada body (`overflow-x-hidden`). Gunakan drawer (`Sheet`) untuk navigasi mobile, tombol aksi touch target minimum 44px, grid adaptif (1 kolom di mobile, 2-3 di desktop), dan scroll horizontal atau tumpukan kartu untuk tabel data (spec §4.4).
 - **Izin lewat `can()`** (`src/lib/features/org/permissions.ts`), bukan `role === 'owner'` di komponen. Backend tetap otoritas; UI hanya menyembunyikan.
 - **`orgId` hanya dari parameter route** (`page.params.orgId`).
 - **Setiap halaman punya keadaan memuat, error, kosong, dan berisi.** Pakai `PageSkeleton`, `ErrorState`, `EmptyState`.

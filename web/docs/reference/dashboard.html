@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="id" class="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Saka — Dashboard Referensi (Spec §4 & §9.5 - Anti-Slop)</title>
+  <!-- Load font dealt oleh taste-skill: DM Sans -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&display=swap" rel="stylesheet">
+
+  <style>
+    /* CSS Variables: Putih & Biru (Light) serta Hitam & Biru Dark (Dark) sesuai web/docs/spec.md §4.1 */
+    :root {
+      --background: #FFFFFF;
+      --foreground: #0F172A;
+      --card: #FFFFFF;
+      --card-foreground: #0F172A;
+      --popover: #FFFFFF;
+      --popover-foreground: #0F172A;
+      --primary: #1D4ED8;
+      --primary-foreground: #FFFFFF;
+      --secondary: #F1F5F9;
+      --secondary-foreground: #0F172A;
+      --muted: #F8FAFC;
+      --muted-foreground: #475569;
+      --accent: #EFF6FF;
+      --accent-foreground: #1D4ED8;
+      --destructive: #DC2626;
+      --destructive-foreground: #FFFFFF;
+      --border: #E2E8F0;
+      --input: #CBD5E1;
+      --ring: #2563EB;
+      --sidebar: #F8FAFC;
+      --sidebar-foreground: #0F172A;
+      --sidebar-primary: #1D4ED8;
+      --sidebar-primary-foreground: #FFFFFF;
+      --sidebar-accent: #EFF6FF;
+      --sidebar-accent-foreground: #1D4ED8;
+      --sidebar-border: #E2E8F0;
+      --sidebar-ring: #2563EB;
+      --success: #047857;
+      --success-muted: #ECFDF5;
+      --warning: #92400E;
+      --warning-muted: #FFFBEB;
+      --danger-muted: #FEF2F2;
+      --info: #1D4ED8;
+      --info-muted: #EFF6FF;
+      --radius: 0.5rem;
+    }
+
+    html.dark {
+      --background: #030712;
+      --foreground: #F8FAFC;
+      --card: #0B132B;
+      --card-foreground: #F8FAFC;
+      --popover: #0F172A;
+      --popover-foreground: #F8FAFC;
+      --primary: #3B82F6;
+      --primary-foreground: #030712;
+      --secondary: #1E293B;
+      --secondary-foreground: #F8FAFC;
+      --muted: #111827;
+      --muted-foreground: #94A3B8;
+      --accent: #1E293B;
+      --accent-foreground: #60A5FA;
+      --destructive: #F87171;
+      --destructive-foreground: #030712;
+      --border: #1E293B;
+      --input: #334155;
+      --ring: #3B82F6;
+      --sidebar: #070D1A;
+      --sidebar-foreground: #F8FAFC;
+      --sidebar-primary: #3B82F6;
+      --sidebar-primary-foreground: #030712;
+      --sidebar-accent: #1E293B;
+      --sidebar-accent-foreground: #60A5FA;
+      --sidebar-border: #1E293B;
+      --sidebar-ring: #3B82F6;
+      --success: #34D399;
+      --success-muted: #052E22;
+      --warning: #FBBF24;
+      --warning-muted: #2D1F05;
+      --danger-muted: #2D0B0B;
+      --info: #60A5FA;
+      --info-muted: #172554;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+    }
+
+    body {
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      background-color: var(--background);
+      color: var(--foreground);
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+    }
+
+    /* Layout structure */
+    .app-layout {
+      display: flex;
+      width: 100%;
+      min-height: 100vh;
+      position: relative;
+    }
+
+    /* Mobile Backdrop Overlay (flat, tanpa blur berat) */
+    .sidebar-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background-color: rgba(3, 7, 18, 0.6);
+      z-index: 38;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+
+    .sidebar-backdrop.active {
+      display: block;
+      opacity: 1;
+    }
+
+    /* Sidebar spec §4.4 (lebar 240px desktop, drawer di mobile) */
+    .sidebar {
+      width: 240px;
+      background-color: var(--sidebar);
+      border-right: 1px solid var(--sidebar-border);
+      display: flex;
+      flex-direction: column;
+      position: fixed;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 40;
+    }
+
+    .sidebar-header {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--sidebar-border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .org-selector {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 10px;
+      background-color: var(--background);
+      border: 1px solid var(--sidebar-border);
+      border-radius: var(--radius);
+      color: var(--sidebar-foreground);
+      font-size: 13.5px;
+      font-weight: 600;
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .org-selector:hover {
+      background-color: var(--sidebar-accent);
+      color: var(--sidebar-accent-foreground);
+    }
+
+    .org-avatar-badge {
+      width: 26px;
+      height: 26px;
+      border-radius: 4px;
+      background: var(--primary);
+      color: var(--primary-foreground);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      margin-right: 8px;
+      flex-shrink: 0;
+    }
+
+    .sidebar-nav {
+      flex: 1;
+      padding: 16px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      overflow-y: auto;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: var(--radius);
+      color: var(--muted-foreground);
+      text-decoration: none;
+      font-size: 13.5px;
+      font-weight: 500;
+      min-height: 38px;
+    }
+
+    .nav-item:hover {
+      background-color: var(--sidebar-accent);
+      color: var(--sidebar-accent-foreground);
+    }
+
+    .nav-item.active {
+      background-color: var(--sidebar-primary);
+      color: var(--sidebar-primary-foreground);
+      font-weight: 600;
+    }
+
+    .nav-badge {
+      margin-left: auto;
+      padding: 2px 7px;
+      border-radius: 9999px;
+      font-size: 11px;
+      background-color: var(--secondary);
+      color: var(--foreground);
+      font-weight: 600;
+    }
+
+    .sidebar-footer {
+      padding: 12px 10px;
+      border-top: 1px solid var(--sidebar-border);
+    }
+
+    .user-profile-btn {
+      width: 100%;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px;
+      border-radius: var(--radius);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      color: var(--sidebar-foreground);
+      text-align: left;
+    }
+
+    .user-profile-btn:hover {
+      background-color: var(--sidebar-accent);
+      color: var(--sidebar-accent-foreground);
+    }
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 9999px;
+      background-color: var(--secondary);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+
+    .user-info {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .user-name {
+      font-size: 13px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .user-email {
+      font-size: 11px;
+      color: var(--muted-foreground);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Main Area */
+    .main-wrapper {
+      margin-left: 240px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+
+    /* Header */
+    .app-header {
+      height: 56px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      background-color: var(--background);
+      position: sticky;
+      top: 0;
+      z-index: 30;
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13.5px;
+      color: var(--muted-foreground);
+    }
+
+    .breadcrumb-current {
+      color: var(--foreground);
+      font-weight: 600;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Global Banner spec §4.4 & §8.5 */
+    .banner {
+      padding: 10px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 13px;
+      border-bottom: 1px solid;
+    }
+
+    .banner.warning {
+      background-color: var(--warning-muted);
+      color: var(--warning);
+      border-color: rgba(146, 64, 14, 0.2);
+    }
+
+    .banner.info {
+      background-color: var(--info-muted);
+      color: var(--info);
+      border-color: rgba(29, 78, 216, 0.2);
+    }
+
+    .banner-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    /* Content Area spec §4.4 (maks 1024px, padding 24px desktop, 16px mobile) */
+    .content-container {
+      max-width: 1024px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    .page-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+    }
+
+    .page-title {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .page-subtitle {
+      font-size: 14px;
+      color: var(--muted-foreground);
+      margin-top: 4px;
+    }
+
+    /* Cards spec §4.1 & §9.5 (Flat, 1px hairline border) */
+    .grid-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .card {
+      background-color: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    /* Card title: sentence-case, readable size (taste-skill anti-micro-label) */
+    .card-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--foreground);
+    }
+
+    .card-value {
+      font-size: 24px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 6px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .card-meta {
+      font-size: 13px;
+      color: var(--muted-foreground);
+      margin-bottom: 16px;
+      line-height: 1.5;
+    }
+
+    .card-actions {
+      margin-top: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border-radius: var(--radius);
+      font-size: 13px;
+      font-weight: 500;
+      padding: 8px 14px;
+      cursor: pointer;
+      text-decoration: none;
+      border: 1px solid transparent;
+      line-height: 1;
+      touch-action: manipulation;
+    }
+
+    .btn-primary {
+      background-color: var(--primary);
+      color: var(--primary-foreground);
+    }
+
+    .btn-primary:hover {
+      opacity: 0.92;
+    }
+
+    .btn-secondary {
+      background-color: var(--secondary);
+      color: var(--secondary-foreground);
+      border-color: var(--border);
+    }
+
+    .btn-secondary:hover {
+      background-color: var(--accent);
+      color: var(--accent-foreground);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--muted-foreground);
+    }
+
+    .btn-ghost:hover {
+      background-color: var(--accent);
+      color: var(--foreground);
+    }
+
+    .btn-sm {
+      padding: 6px 10px;
+      font-size: 12.5px;
+    }
+
+    /* StatusBadge spec §4.3 (Kontras teks tinggi WCAG AA) */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 8px;
+      border-radius: 9999px;
+      font-size: 11.5px;
+      font-weight: 600;
+      line-height: 1.3;
+      text-transform: capitalize;
+    }
+
+    .status-badge.success {
+      background-color: var(--success-muted);
+      color: var(--success);
+    }
+
+    .status-badge.info {
+      background-color: var(--info-muted);
+      color: var(--info);
+    }
+
+    .status-badge.warning {
+      background-color: var(--warning-muted);
+      color: var(--warning);
+    }
+
+    .status-badge.neutral {
+      background-color: var(--secondary);
+      color: var(--foreground);
+      border: 1px solid var(--border);
+    }
+
+    /* Progress bar */
+    .progress-bar-bg {
+      width: 100%;
+      height: 6px;
+      background-color: var(--secondary);
+      border-radius: 9999px;
+      overflow: hidden;
+      margin: 8px 0;
+    }
+
+    .progress-bar-fill {
+      height: 100%;
+      background-color: var(--primary);
+      border-radius: 9999px;
+    }
+
+    /* Domain Module EmptyState spec §9.5 butir 5 */
+    .empty-state-section {
+      background-color: var(--card);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 44px 24px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .empty-state-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      background-color: var(--secondary);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary);
+      margin-bottom: 16px;
+    }
+
+    .empty-state-title {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 6px;
+    }
+
+    .empty-state-description {
+      font-size: 13.5px;
+      color: var(--muted-foreground);
+      max-width: 500px;
+      margin-bottom: 20px;
+      line-height: 1.6;
+    }
+
+    /* Close button on mobile sidebar */
+    .mobile-sidebar-close {
+      display: none;
+    }
+
+    /* Floating control bar for reference viewer (no emojis, pure SVG icons) */
+    .reference-controls {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      background-color: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      padding: 6px 14px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      z-index: 50;
+      font-size: 12px;
+      font-weight: 500;
+    }
+
+    .control-divider {
+      width: 1px;
+      height: 16px;
+      background-color: var(--border);
+    }
+
+    /* ============================================================ */
+    /* RESPONSIVE DESIGN (Tablet 768px - 1024px & Mobile < 768px)   */
+    /* ============================================================ */
+    
+    /* Tablet layout (768px - 1023px) */
+    @media (min-width: 768px) and (max-width: 1023px) {
+      .grid-cards {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    /* Mobile layout (< 768px) */
+    @media (max-width: 767px) {
+      .sidebar {
+        width: 280px;
+        transform: translateX(-100%);
+        transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+        border-right: 1px solid var(--sidebar-border);
+      }
+
+      .sidebar.open {
+        transform: translateX(0);
+      }
+
+      .mobile-sidebar-close {
+        display: inline-flex;
+      }
+
+      .main-wrapper {
+        margin-left: 0;
+      }
+
+      .app-header {
+        padding: 0 16px;
+      }
+
+      .content-container {
+        padding: 16px;
+        gap: 16px;
+        /* Tambahkan padding bawah agar floating bar tidak menutupi teks/tombol (taste-skill covered-text fix) */
+        padding-bottom: 90px;
+      }
+
+      .page-title {
+        font-size: 20px;
+      }
+
+      .grid-cards {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .nav-item {
+        min-height: 44px; /* WCAG 2.5.5 minimum touch target */
+      }
+
+      .btn {
+        min-height: 40px;
+      }
+
+      .banner {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px 16px;
+      }
+
+      .banner-actions {
+        width: 100%;
+        display: flex;
+        justify-content: flex-end;
+      }
+
+      .empty-state-section {
+        padding: 32px 16px;
+      }
+
+      /* Bar kontrol demo responsif di mobile */
+      .reference-controls {
+        bottom: 12px;
+        right: 12px;
+        left: 12px;
+        border-radius: var(--radius);
+        justify-content: space-between;
+        padding: 8px 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Backdrop overlay untuk mobile drawer -->
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
+
+  <div class="app-layout">
+    <!-- Sidebar spec §4.4 (lebar 240px di desktop, drawer di mobile) -->
+    <aside class="sidebar" id="appSidebar">
+      <!-- Pemilih Organisasi di atas (Data riil SaaS Saka) -->
+      <div class="sidebar-header">
+        <button class="org-selector" onclick="alert('Dropdown Pemilih Organisasi: Daftar organisasi user + opsi Buat Organisasi baru')">
+          <div style="display: flex; align-items: center; overflow: hidden;">
+            <div class="org-avatar-badge">ND</div>
+            <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+              PT Nusantara Digital
+            </div>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+
+        <!-- Tombol Close drawer di layar mobile -->
+        <button class="btn btn-ghost btn-sm mobile-sidebar-close" onclick="toggleSidebar()" aria-label="Tutup menu navigasi">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+
+      <!-- Navigasi sidebar spec §5.3 -->
+      <nav class="sidebar-nav">
+        <a href="#" class="nav-item active" onclick="if(window.innerWidth < 768) toggleSidebar();">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg>
+          Ringkasan
+        </a>
+        <a href="#" class="nav-item" onclick="if(window.innerWidth < 768) toggleSidebar();">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          Anggota
+          <span class="nav-badge">4</span>
+        </a>
+        <a href="#" class="nav-item" onclick="if(window.innerWidth < 768) toggleSidebar();">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect width="20" height="14" x="2" y="5" rx="2"/><line x1="2" x2="22" y1="10" y2="10"/></svg>
+          Billing
+          <span class="nav-badge" id="billingBadge" style="background-color: var(--warning-muted); color: var(--warning);">1</span>
+        </a>
+        <a href="#" class="nav-item" onclick="if(window.innerWidth < 768) toggleSidebar();">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+          Pengaturan
+        </a>
+      </nav>
+
+      <!-- Menu user di bawah spec §5.3 -->
+      <div class="sidebar-footer">
+        <button class="user-profile-btn" onclick="alert('Menu User: Akun, Keamanan, Tema (Light/Dark/System), Bahasa (ID/EN), Keluar')">
+          <div class="avatar">BS</div>
+          <div class="user-info">
+            <div class="user-name">Budi Santoso</div>
+            <div class="user-email">budi@nusantara.co.id</div>
+          </div>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Wrapper -->
+    <div class="main-wrapper">
+      <!-- Header -->
+      <header class="app-header">
+        <div style="display: flex; align-items: center; gap: 12px; min-width: 0;">
+          <!-- Mobile toggle -->
+          <button class="btn btn-ghost btn-sm" onclick="toggleSidebar()" style="display: none; padding: 6px;" id="mobileMenuBtn" aria-label="Buka menu navigasi">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="4" x2="20" y1="12" y2="12"/><line x1="4" x2="20" y1="6" y2="6"/><line x1="4" x2="20" y1="18" y2="18"/></svg>
+          </button>
+          
+          <div class="breadcrumb" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+            <span>Nusantara Digital</span>
+            <span>/</span>
+            <span class="breadcrumb-current">Ringkasan</span>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <span class="status-badge neutral" id="roleBadge">Role: Owner</span>
+        </div>
+      </header>
+
+      <!-- Banner Status spec §4.4 & §8.5 (Contoh banner responsif) -->
+      <div class="banner warning" id="globalBanner">
+        <div style="display: flex; align-items: flex-start; gap: 8px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true" style="flex-shrink: 0; margin-top: 1px;"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+          <span>Masa uji coba (Trial) paket <strong>Starter</strong> Anda akan berakhir dalam <strong>3 hari</strong>.</span>
+        </div>
+        <div class="banner-actions">
+          <button class="btn btn-primary btn-sm" onclick="alert('Navigasi ke /billing/plans')">Upgrade Sekarang</button>
+          <button class="btn btn-ghost btn-sm" onclick="document.getElementById('globalBanner').style.display='none'" aria-label="Tutup banner">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Content Container spec §4.4 (maks 1024px) -->
+      <main class="content-container">
+        <!-- Page Title -->
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Ringkasan Organisasi</h1>
+            <p class="page-subtitle">Ikhtisar langganan, kuota tim, dan tagihan aktif workspace Anda.</p>
+          </div>
+        </div>
+
+        <!-- 3 Kartu spec §9.5 (Responsif: 1 kolom mobile, 2 tablet, 3 desktop) -->
+        <div class="grid-cards">
+          <!-- Kartu 1: Plan & Langganan -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Paket Langganan</span>
+              <span class="status-badge info">Trialing</span>
+            </div>
+            <div class="card-value">Paket Starter</div>
+            <div class="card-meta">
+              Periode trial berakhir pada 15 Nov 2026. Siklus billing bulanan terhubung dengan Midtrans Virtual Account.
+            </div>
+            <div class="card-actions">
+              <a href="#" class="btn btn-secondary btn-sm" style="width: 100%;">Kelola Langganan</a>
+            </div>
+          </div>
+
+          <!-- Kartu 2: Anggota & Kuota -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">Kapasitas Kursi Tim</span>
+              <span class="status-badge success">4 / 10 Kursi</span>
+            </div>
+            <div class="card-value">4 Anggota Aktif</div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" style="width: 40%;"></div>
+            </div>
+            <div class="card-meta">
+              Terdiri dari 1 Pemilik, 1 Admin, dan 2 Anggota. Tersedia 6 kuota kursi tersisa untuk workspace ini.
+            </div>
+            <div class="card-actions">
+              <button class="btn btn-secondary btn-sm" id="inviteBtn" style="width: 100%;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>
+                Undang Anggota
+              </button>
+            </div>
+          </div>
+
+          <!-- Kartu 3: Tagihan / Invoice Belum Dibayar (Owner saja) spec §9.5 butir 3 -->
+          <div class="card" id="invoiceCard">
+            <div class="card-header">
+              <span class="card-title">Tagihan Berjalan</span>
+              <span class="status-badge warning">Open</span>
+            </div>
+            <div class="card-value">Rp 150.000</div>
+            <div class="card-meta">
+              Invoice INV-2026-10-04 perpanjangan paket starter jatuh tempo pada 31 Okt 2026.
+            </div>
+            <div class="card-actions">
+              <button class="btn btn-primary btn-sm" style="width: 100%;" onclick="alert('Buka dialog bayar Midtrans / status polling')">
+                Bayar Sekarang
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Section Modul Domain Bisnis spec §9.5 butir 5 -->
+        <div class="empty-state-section">
+          <div class="empty-state-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m7.5 4.27 9 5.15"/><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
+          </div>
+          <h2 class="empty-state-title">Area Modul Domain Produk</h2>
+          <p class="empty-state-description">
+            Saka menyediakan fondasi multi-tenant, autentikasi, izin role, dan billing. Modul domain bisnis aplikasi Anda (misal CRM, Manajemen Proyek, atau ERP) akan ditautkan di area ini.
+          </p>
+          <div style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;">
+            <a href="../../../../docs/panduan-modul-baru.md" target="_blank" class="btn btn-secondary btn-sm">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+              Baca Panduan Modul Baru
+            </a>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- Interactive Controls Bar untuk demo & inspeksi token (Zero Emojis, pure SVG) -->
+  <div class="reference-controls">
+    <div style="display: flex; align-items: center; gap: 6px;">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+      <strong style="display: inline-block;">Demo:</strong>
+    </div>
+    
+    <!-- Mode Switcher -->
+    <button class="btn btn-secondary btn-sm" onclick="toggleTheme()" id="themeBtn">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="themeIcon" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+      <span id="themeLabel">Dark</span>
+    </button>
+
+    <div class="control-divider"></div>
+
+    <!-- Role Switcher (can() permission simulation) -->
+    <label style="display: flex; align-items: center; gap: 6px; cursor: pointer;">
+      <span style="color: var(--muted-foreground); font-size: 11px;">Role:</span>
+      <select onchange="switchRole(this.value)" style="background: var(--background); color: var(--foreground); border: 1px solid var(--border); border-radius: 4px; padding: 3px 6px; font-size: 11.5px;">
+        <option value="owner" selected>Owner</option>
+        <option value="admin">Admin</option>
+        <option value="member">Member</option>
+      </select>
+    </label>
+  </div>
+
+  <script>
+    // Theme toggle (No emojis)
+    function toggleTheme() {
+      const html = document.documentElement;
+      const themeIcon = document.getElementById('themeIcon');
+      const themeLabel = document.getElementById('themeLabel');
+      
+      if (html.classList.contains('dark')) {
+        html.classList.remove('dark');
+        html.classList.add('light');
+        themeIcon.innerHTML = '<path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/>';
+        themeLabel.textContent = 'Dark';
+      } else {
+        html.classList.remove('light');
+        html.classList.add('dark');
+        themeIcon.innerHTML = '<circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/>';
+        themeLabel.textContent = 'Light';
+      }
+    }
+
+    // Role switcher simulation: test can('billing.view'), can('invitations.manage')
+    function switchRole(role) {
+      const invoiceCard = document.getElementById('invoiceCard');
+      const inviteBtn = document.getElementById('inviteBtn');
+      const billingBadge = document.getElementById('billingBadge');
+      const roleBadge = document.getElementById('roleBadge');
+
+      roleBadge.textContent = 'Role: ' + role.charAt(0).toUpperCase() + role.slice(1);
+
+      if (role === 'owner') {
+        invoiceCard.style.display = 'flex';
+        billingBadge.style.display = 'inline-block';
+        inviteBtn.style.display = 'inline-flex';
+      } else if (role === 'admin') {
+        invoiceCard.style.display = 'none'; // Invoice open hanya owner (spec §9.5 butir 3)
+        billingBadge.style.display = 'none';
+        inviteBtn.style.display = 'inline-flex'; // Admin bisa undang
+      } else {
+        // Member
+        invoiceCard.style.display = 'none';
+        billingBadge.style.display = 'none';
+        inviteBtn.style.display = 'none'; // Member biasa tidak bisa undang
+      }
+    }
+
+    // Mobile sidebar drawer & backdrop toggle
+    function toggleSidebar() {
+      const sidebar = document.getElementById('appSidebar');
+      const backdrop = document.getElementById('sidebarBackdrop');
+      sidebar.classList.toggle('open');
+      backdrop.classList.toggle('active');
+    }
+
+    // Responsive layout watcher
+    function handleResize() {
+      const btn = document.getElementById('mobileMenuBtn');
+      const sidebar = document.getElementById('appSidebar');
+      const backdrop = document.getElementById('sidebarBackdrop');
+      
+      if (window.innerWidth < 768) {
+        btn.style.display = 'inline-flex';
+      } else {
+        btn.style.display = 'none';
+        sidebar.classList.remove('open');
+        backdrop.classList.remove('active');
+      }
+    }
+    window.addEventListener('resize', handleResize);
+    handleResize();
+  </script>
+</body>
+</html>

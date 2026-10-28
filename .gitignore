@@ -13,3 +13,6 @@ coverage.*
 .idea/
 .vscode/
 .DS_Store
+
+# taste-skill
+.taste-skill/
