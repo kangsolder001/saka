@@ -34,7 +34,7 @@
   - **File:** `web/vite.config.ts`
   - **Lakukan:** `server.port = 3000`, `strictPort: true`, `server.proxy['/api'] = { target: 'http://localhost:8080', changeOrigin: false }`. Sama untuk `preview`.
   - **Selesai bila:** dengan backend jalan (`make up migrate run`), `curl http://localhost:3000/api/v1/healthz` menjawab OK.
-- [ ] **W0.4 TypeScript strict dan lint** (0,25)
+- [x] **W0.4 TypeScript strict dan lint** (0,25)
   - **File:** `web/tsconfig.json`, `web/eslint.config.js`, `web/.prettierrc`
   - **Lakukan:** `strict: true`, `noUncheckedIndexedAccess: true`. ESLint: aturan `@typescript-eslint/no-explicit-any: error`, `@typescript-eslint/ban-ts-comment` (izinkan `ts-expect-error` dengan deskripsi). Prettier dengan `prettier-plugin-svelte` dan `prettier-plugin-tailwindcss`. Abaikan `src/lib/api/schema.d.ts` dan `src/lib/paraglide` di lint/format.
   - **Selesai bila:** `pnpm lint` dan `pnpm check` lulus tanpa warning.
