@@ -268,7 +268,7 @@ func newServer(t *testing.T, status int, body string) *midtransServer {
 
 func paymentRequest() payment.PaymentRequest {
 	return payment.PaymentRequest{
-		InvoiceNumber: "INV-2026-000001", Amount: 99000, Currency: "IDR", Description: "Pro - 1 bulan",
+		InvoiceNumber: "INV-2026-000001", Amount: 99000, Currency: "IDR", Description: "Pro plan - 1 month",
 		Customer:  payment.Customer{Name: "Ann", Email: "ann@example.com"},
 		ExpiresAt: now.Add(72 * time.Hour),
 	}
@@ -297,7 +297,7 @@ func TestCreatePayment_PostsASnapTransactionAndReturnsTheRedirectURL(t *testing.
 	assert.JSONEq(t, `{
 		"transaction_details": {"order_id": "INV-2026-000001", "gross_amount": 99000},
 		"customer_details": {"first_name": "Ann", "email": "ann@example.com"},
-		"item_details": [{"id": "INV-2026-000001", "price": 99000, "quantity": 1, "name": "Pro - 1 bulan"}],
+		"item_details": [{"id": "INV-2026-000001", "price": 99000, "quantity": 1, "name": "Pro plan - 1 month"}],
 		"expiry": {"start_time": "2026-06-01 03:00:00 +0000", "unit": "minutes", "duration": 4320}
 	}`, call.body)
 }

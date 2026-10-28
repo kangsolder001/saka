@@ -197,7 +197,7 @@ func (s *Service) issueInvoice(ctx context.Context, tx pgx.Tx, pay *payments, in
 
 	session, err := provider.CreatePayment(ctx, payment.PaymentRequest{
 		InvoiceNumber: number, Amount: in.Plan.PriceAmount, Currency: in.Plan.Currency,
-		Description: fmt.Sprintf("Paket %s - %s", in.Plan.Name, intervalLabel(in.Plan.Interval)),
+		Description: fmt.Sprintf("%s plan - %s", in.Plan.Name, intervalLabel(in.Plan.Interval)),
 		Customer:    payment.Customer{Name: contact.OwnerName, Email: contact.OwnerEmail},
 		ExpiresAt:   pay.linkExpiry(in.Kind, in.DueAt),
 	})
@@ -235,9 +235,9 @@ func (s *Service) issueInvoice(ctx context.Context, tx pgx.Tx, pay *payments, in
 
 func intervalLabel(interval string) string {
 	if interval == "year" {
-		return "1 tahun"
+		return "1 year"
 	}
-	return "1 bulan"
+	return "1 month"
 }
 
 func ptr[T any](v T) *T { return &v }
