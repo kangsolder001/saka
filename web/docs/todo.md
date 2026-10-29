@@ -92,7 +92,7 @@
   - **File:** `web/src/lib/api/query-keys.ts`, `web/src/lib/api/query-client.ts`, `web/src/routes/+layout.svelte`
   - **Lakukan:** `queryKeys` persis contoh §3.2. `QueryClient` dengan `staleTime: 30_000`, `retry` hanya untuk `NETWORK_ERROR` (maks 2), tanpa retry untuk 4xx. Pasang `QueryClientProvider` di layout root.
   - **Selesai bila:** `pnpm check` lulus.
-- [ ] **W1.7 Pesan error terjemahan** (0,25)
+- [x] **W1.7 Pesan error terjemahan** (0,25)
   - **File:** `web/src/lib/api/error-message.ts`, `error-message.test.ts`, `messages/*.json`
   - **Lakukan:** `errorMessage(err: unknown): string` sesuai tabel §7.1 dan §7.3 (kunci i18n `error_<code_lower>` dan `error_reason_<reason>`). Untuk `RATE_LIMITED` sertakan durasi (menit dibulatkan ke atas, atau detik bila < 60).
   - **Selesai bila:** test tiap kode dan reason menghasilkan kunci yang benar.
