@@ -100,7 +100,7 @@
   - **File:** `web/src/lib/forms/form.svelte.ts`, `web/src/lib/forms/field-errors.ts`, test untuk keduanya
   - **Lakukan:** `createForm({ schema, initial, onSubmit })` sesuai §7.2 (nilai `$state`, `errors`, `formError`, `submitting`, `submit(event)`, `reset()`, `setFieldError(field, message)`). `fieldErrorMessage(field, reason)` memetakan tabel §7.2. Fokus ke field error pertama memakai `document.querySelector('[name="<field>"]')`.
   - **Selesai bila:** test: Zod gagal → tidak memanggil `onSubmit`; `VALIDATION_ERROR` → `errors` terisi; reason tidak dikenal → pesan umum; error lain → `formError`; `submitting` true selama proses.
-- [ ] **W1.9 Formatter** (0,25)
+- [x] **W1.9 Formatter** (0,25)
   - **File:** `web/src/lib/format/money.ts`, `date.ts`, test
   - **Lakukan:** `formatMoney(amount, currency, locale)`, `formatDate(iso, locale)`, `formatDateTime(iso, locale)`, `formatRelative(iso, now, locale)` (pakai `Intl.RelativeTimeFormat`, satuan hari/jam/menit).
   - **Selesai bila:** test: `formatMoney(99000, 'IDR', 'id-ID')` mengandung `99.000`; tanpa desimal; relatif "dalam 3 hari" / "in 3 days".
