@@ -8,6 +8,7 @@ export type Profile = components['schemas']['Profile'];
 export type AuthUser = components['schemas']['AuthUser'];
 export type OrganizationRef = components['schemas']['OrganizationRef'];
 export type MemberOrganization = components['schemas']['MemberOrganization'];
+export type OrganizationEnvelope = components['schemas']['OrganizationEnvelope'];
 export type Organization = components['schemas']['Organization'];
 export type Member = components['schemas']['Member'];
 export type Invitation = components['schemas']['Invitation'];

@@ -124,7 +124,7 @@
 - [x] **W2.3 Pemilih tema dan bahasa** (0,25)
   - **File:** `web/src/lib/components/app/ThemeSwitcher.svelte`, `LanguageSwitcher.svelte`
   - **Selesai bila:** keduanya bertahan setelah reload.
-- [ ] **W2.4 Data `me` dan organisasi aktif** (0,25)
+- [x] **W2.4 Data `me` dan organisasi aktif** (0,25)
   - **File:** `web/src/lib/features/account/api.ts`, `web/src/lib/features/org/api.ts`
   - **Lakukan:** `createMeQuery()` (`GET /me`), `createOrganizationQuery(orgId)` (`GET /orgs/{orgId}`). Fungsi `lastOrgId` get/set di `localStorage` (dibungkus try/catch).
 - [ ] **W2.5 App shell responsif: sidebar desktop, drawer mobile, pemilih organisasi, menu user** (0,5)
