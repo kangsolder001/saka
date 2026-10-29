@@ -197,26 +197,26 @@ Halaman akun memakai sub-navigasi (tab) Profil / Keamanan / Sesi / Hapus akun di
 
 ## W5 — Organisasi, Anggota & Undangan (3 hari) — §9.1–§9.3, §9.5
 
-- [ ] **W5.1 `can()`** (0,25)
+- [x] **W5.1 `can()`** (0,25)
   - **File:** `features/org/permissions.ts`, `permissions.test.ts`
   - **Selesai bila:** test mencakup setiap sel matriks §9.1 termasuk target owner/admin/member dan diri sendiri.
-- [ ] **W5.2 Daftar dan buat organisasi** (0,5)
+- [x] **W5.2 Daftar dan buat organisasi** (0,5)
   - **File:** `routes/(app)/orgs/+page.svelte`, `routes/(app)/orgs/new/+page.svelte`, `features/org/schemas.ts` (`slugSchema`: `^[a-z0-9]+(-[a-z0-9]+)*$`, 3–48)
-- [ ] **W5.3 Pengaturan umum organisasi** (0,25)
+- [x] **W5.3 Pengaturan umum organisasi** (0,25)
   - **File:** `routes/(app)/orgs/[orgId]/settings/+page.svelte`, `features/org/components/OrganizationGeneralForm.svelte`
   - **Lakukan:** read-only untuk role tanpa `org.update`.
-- [ ] **W5.4 Transfer, keluar, hapus organisasi** (0,5)
+- [x] **W5.4 Transfer, keluar, hapus organisasi** (0,5)
   - **File:** `features/org/components/TransferOwnershipCard.svelte`, `LeaveOrganizationCard.svelte`, `DeleteOrganizationCard.svelte` (dipasang di halaman settings sesuai `can()`)
   - **Selesai bila:** hapus butuh mengetik nama organisasi; setelah keluar/hapus, `lastOrgId` dibersihkan dan user diarahkan ke `/`.
-- [ ] **W5.5 Daftar anggota** (0,5)
+- [x] **W5.5 Daftar anggota** (0,5)
   - **File:** `routes/(app)/orgs/[orgId]/members/+page.svelte`, `features/members/api.ts` (`createMembersQuery` infinite, `changeRole`, `removeMember`), `features/members/components/MemberRow.svelte`, `MemberUsage.svelte`
-- [ ] **W5.6 Undangan** (0,5)
+- [x] **W5.6 Undangan** (0,5)
   - **File:** `routes/(app)/orgs/[orgId]/members/invitations/+page.svelte`, `features/invitations/components/InviteDialog.svelte`, `InvitationRow.svelte`
   - **Selesai bila:** `201`/`200`/`409`/`402`/`403 EMAIL_NOT_VERIFIED` ditangani sesuai §9.3.
-- [ ] **W5.7 Dialog upgrade** (0,25)
+- [x] **W5.7 Dialog upgrade** (0,25)
   - **File:** `web/src/lib/components/app/UpgradeDialog.svelte`, `web/src/lib/features/billing/upgrade.svelte.ts` (`showUpgrade(err: ApiError)`)
   - **Lakukan:** dipanggil untuk `PLAN_LIMIT_REACHED` dan `PLAN_FEATURE_UNAVAILABLE` (§7.1).
-- [ ] **W5.8 Dashboard ringkasan** (0,25)
+- [x] **W5.8 Dashboard ringkasan** (0,25)
   - **File:** `routes/(app)/orgs/[orgId]/+page.svelte`, `features/org/components/*Card.svelte`
   - **Lakukan:** kartu §9.5 (kartu invoice ditambahkan setelah W6.1 bila belum ada query invoice).
 

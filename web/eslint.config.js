@@ -16,6 +16,7 @@ export default defineConfig(
 			'project.inlang/**',
 			'src/lib/api/schema.d.ts',
 			'src/lib/paraglide/**',
+			'src/paraglide/**',
 			'.svelte-kit/**',
 			'build/**'
 		]
