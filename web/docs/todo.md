@@ -226,28 +226,28 @@ Halaman akun memakai sub-navigasi (tab) Profil / Keamanan / Sesi / Hapus akun di
 
 ## W6 — Billing (3 hari) — §8
 
-- [ ] **W6.1 API billing** (0,25)
+- [x] **W6.1 API billing** (0,25)
   - **File:** `features/billing/api.ts`
   - **Lakukan:** `createPlansQuery`, `createSubscriptionQuery(orgId)`, `createInvoicesQuery(orgId)` (infinite), `createInvoiceQuery(orgId, id)`, mutation `checkout`, `changePlan`, `cancelSubscription`, `resumeSubscription`; semua mutation meng-invalidate `subscription` dan `invoices`.
-- [ ] **W6.2 `resolvePlanAction()`** (0,25)
+- [x] **W6.2 `resolvePlanAction()`** (0,25)
   - **File:** `features/billing/plan-actions.ts`, `plan-actions.test.ts`
   - **Selesai bila:** satu test per baris tabel §8.2 (termasuk urutan pengecekan).
-- [ ] **W6.3 `subscriptionBanner()` + pemasangan banner** (0,25)
+- [x] **W6.3 `subscriptionBanner()` + pemasangan banner** (0,25)
   - **File:** `features/billing/banners.ts`, `banners.test.ts`, `features/billing/components/SubscriptionBanner.svelte` (dipasang di layout `orgs/[orgId]`)
   - **Selesai bila:** satu test per baris tabel §8.5; non-owner tanpa tombol.
-- [ ] **W6.4 Halaman billing** (0,5) — §8.7
+- [x] **W6.4 Halaman billing** (0,5) — §8.7
   - **File:** `routes/(app)/orgs/[orgId]/billing/+layout.svelte` (tab Ringkasan / Plan / Invoice), `+page.svelte`, `features/billing/components/UsageMeter.svelte`
-- [ ] **W6.5 Halaman plan dan alur checkout/ganti plan** (0,75) — §8.2, §8.3
+- [x] **W6.5 Halaman plan dan alur checkout/ganti plan** (0,75) — §8.2, §8.3
   - **File:** `routes/(app)/orgs/[orgId]/billing/plans/+page.svelte`, `features/billing/components/PlanCard.svelte`, `features/billing/purchase.ts` (`handlePurchaseResult(result)` dan `goToPayment({ orgId, invoice })`)
   - **Selesai bila:** trial, jadwal downgrade + warnings, batal downgrade, dan redirect ke `payment_url` bekerja.
-- [ ] **W6.6 Simulasi pembayaran dev** (0,25) — §8.6
+- [x] **W6.6 Simulasi pembayaran dev** (0,25) — §8.6
   - **File:** `web/src/lib/dev/fake-payment.ts`, `features/billing/components/FakePaymentDialog.svelte`
   - **Lakukan:** HMAC-SHA256 lewat `crypto.subtle`; body `{event_id, invoice_number, provider_ref, state: "paid", amount, currency}` (lihat `docs/demo.md` Langkah 5). Import dinamis hanya di dalam `if (import.meta.env.DEV)`.
   - **Selesai bila:** di dev, checkout Pro → bayar simulasi → status `active`; `pnpm build && grep -r "fake-webhook-secret" build/` kosong.
-- [ ] **W6.7 Halaman kembali dari pembayaran** (0,25) — §8.4
+- [x] **W6.7 Halaman kembali dari pembayaran** (0,25) — §8.4
   - **File:** `routes/(public)/billing/return/+page.svelte`
   - **Selesai bila:** polling berhenti saat `paid`, waktu habis menampilkan pesan "sedang diproses", tanpa `saka.pendingPayment` diarahkan ke `/`.
-- [ ] **W6.8 Invoice** (0,5)
+- [x] **W6.8 Invoice** (0,5)
   - **File:** `routes/(app)/orgs/[orgId]/billing/invoices/+page.svelte`, `invoices/[invoiceId]/+page.svelte`
   - **Lakukan:** termasuk kartu "Invoice belum dibayar" di dashboard (W5.8).
 

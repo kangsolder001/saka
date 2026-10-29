@@ -32,7 +32,10 @@
 	// First open invoice for owner
 	let openInvoice = $derived.by(() => {
 		if (!can(role, 'invoices.view')) return null;
-		const items = invQuery.data?.items ?? [];
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const data = invQuery.data as any;
+		// eslint-disable-next-line @typescript-eslint/no-explicit-any
+		const items: any[] = data?.pages?.[0]?.items ?? data?.items ?? [];
 		return items.find((inv) => inv.status === 'open') ?? null;
 	});
 

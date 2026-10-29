@@ -23,6 +23,7 @@ describe('ConfirmDialog', () => {
 			title: 'Delete Organization',
 			description: 'Type delete to proceed',
 			confirmText: 'delete',
+			confirmLabel: 'Continue',
 			onConfirm
 		});
 

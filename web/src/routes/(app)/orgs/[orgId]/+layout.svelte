@@ -2,6 +2,7 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { createOrganizationQuery, setLastOrgId } from '$lib/features/org/api';
+	import SubscriptionBanner from '$lib/features/billing/components/SubscriptionBanner.svelte';
 	import AppShell from '$lib/components/app/AppShell.svelte';
 	import ErrorState from '$lib/components/app/ErrorState.svelte';
 	import PageSkeleton from '$lib/components/app/PageSkeleton.svelte';
@@ -19,6 +20,7 @@
 			setLastOrgId(orgQuery.data.organization.id);
 		}
 	});
+	let org = $derived(orgQuery.data?.organization);
 </script>
 
 {#if orgQuery.isPending}
@@ -49,6 +51,9 @@
 	</div>
 {:else}
 	<AppShell activeOrgId={orgId}>
+		{#if org}
+			<SubscriptionBanner orgId={org.id} role={org.role} class="mb-6" />
+		{/if}
 		{@render children()}
 	</AppShell>
 {/if}
