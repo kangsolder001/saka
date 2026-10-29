@@ -35,11 +35,21 @@ pnpm install
 
 ### Menjalankan Development Server
 
+#### Opsi 1: Secara Lokal
+
 ```bash
 pnpm dev
 ```
 
 Aplikasi dapat diakses di `http://localhost:3000`. Permintaan `/api/*` secara otomatis di-proxy ke `http://localhost:8080`.
+
+#### Opsi 2: Menggunakan Docker Compose (dari root direktori)
+
+```bash
+docker compose up -d --wait web
+```
+
+Aplikasi akan berjalan di container dengan port 3000 dan memproksi `/api/*` ke Go backend via `host.docker.internal:8080`.
 
 ---
 

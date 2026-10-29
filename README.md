@@ -18,7 +18,8 @@ Status: Tier 1 (spesifikasi v1.0). Pengecualian yang masih menunggu tindakan pem
 ## Kebutuhan
 
 - Go 1.26 atau lebih baru (disarankan patch terbaru: lihat catatan `govulncheck` di [spec §11.3](docs/spec.md))
-- Docker dan Docker Compose (PostgreSQL 18, Redis, Mailpit untuk pengembangan; juga dipakai `testcontainers-go` pada integration test)
+- Docker dan Docker Compose (PostgreSQL 18, Redis, Mailpit, dan Web Frontend untuk pengembangan; juga dipakai `testcontainers-go` pada integration test)
+- Node.js 22+ & pnpm (opsional, bila menjalankan/mengembangkan frontend di luar Docker)
 - `make`
 
 Semua alat pembangkit kode (`goose`, `sqlc`, `mockery`) dipanggil lewat `go tool`, tidak perlu dipasang terpisah. `golangci-lint` diunduh otomatis ke `bin/` oleh `make lint`.
@@ -26,7 +27,7 @@ Semua alat pembangkit kode (`goose`, `sqlc`, `mockery`) dipanggil lewat `go tool
 ## Mulai cepat
 
 ```bash
-make up           # PostgreSQL 18 (port 5433), Redis (6380), Mailpit (SMTP 1025, UI http://localhost:8025)
+make up           # Layanan lokal: PostgreSQL (5433), Redis (6380), Mailpit (1025/8025), Web Frontend (3000)
 make config       # salin config.example.json menjadi config.json (hanya bila belum ada)
 make migrate      # terapkan migrasi
 make seed         # periksa plan default dan buat akun demo (demo@example.com; password dicetak)
@@ -34,7 +35,12 @@ make run          # API di http://localhost:8080
 make run-worker   # worker: kirim email (outbox) dan job billing; jalankan di terminal lain
 ```
 
-Periksa: `curl localhost:8080/healthz` dan `curl localhost:8080/readyz`. Email yang dikirim worker muncul di Mailpit (http://localhost:8025). Skenario lengkap dari daftar sampai langganan berakhir, dengan perintah `curl`, ada di [docs/demo.md](docs/demo.md).
+Periksa:
+- **Web Frontend:** buka `http://localhost:3000` di peramban
+- **API Health:** `curl localhost:8080/healthz` dan `curl localhost:8080/readyz`
+- **Mailpit:** email yang dikirim worker muncul di `http://localhost:8025`
+
+Skenario lengkap dari daftar sampai langganan berakhir, dengan perintah `curl`, ada di [docs/demo.md](docs/demo.md).
 
 `make help` menampilkan semua target. Beberapa yang sering dipakai:
 
@@ -140,11 +146,34 @@ Frontend antarmuka pengguna berada di folder `web/`, dibangun sebagai Single Pag
 - **Spesifikasi Teknis Frontend:** [web/docs/spec.md](web/docs/spec.md)
 - **Panduan Deployment Produksi (Nginx / Caddy, CSP, SSL):** [web/docs/deploy.md](web/docs/deploy.md)
 
-Jalankan server dev frontend:
-```bash
-cd web && pnpm install && pnpm dev
-```
-Aplikasi frontend akan berjalan di `http://localhost:3000` dengan proxy otomatis ke backend Go (`localhost:8080`).
+### Menjalankan Frontend
+
+Frontend dapat dijalankan dengan dua cara:
+
+1. **Lewat Docker Compose (Terintegrasi):**
+   ```bash
+   # Otomatis berjalan bersama PostgreSQL, Redis, dan Mailpit
+   make up
+   # Atau jalankan service web saja:
+   docker compose up -d --wait web
+   ```
+   Layanan frontend akan tersedia di `http://localhost:3000` dan secara otomatis memproksi panggilan `/api/*` ke backend Go di `host.docker.internal:8080`.
+
+2. **Secara Lokal (Pengembangan dengan HMR langsung):**
+   ```bash
+   make web-dev
+   # Atau:
+   cd web && pnpm install && pnpm dev
+   ```
+   Frontend akan berjalan di `http://localhost:3000` dengan Vite HMR dan memproksi `/api/*` ke `http://localhost:8080`.
+
+3. **Build Produksi SPA:**
+   ```bash
+   make web-build
+   # Atau:
+   cd web && pnpm build
+   ```
+   Artefak statis siap saji akan dibuat di direktori `web/build/`.
 
 ## API sekilas
 

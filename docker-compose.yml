@@ -38,5 +38,28 @@ services:
       - "1025:1025" # SMTP
       - "8025:8025" # web UI
 
+  # Saka Web Frontend SPA (SvelteKit + Vite). Proxy /api requests to Go backend on host:8080.
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      target: dev
+    ports:
+      - "3000:3000"
+    environment:
+      - BACKEND_URL=http://host.docker.internal:8080
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+      - /app/.svelte-kit
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/ > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
 volumes:
   saka_pgdata:

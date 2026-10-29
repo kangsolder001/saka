@@ -17,7 +17,7 @@ config: ## Create config.json from config.example.json (only if missing)
 	@test -f config.json && echo "config.json already exists" || (cp config.example.json config.json && echo "created config.json")
 
 .PHONY: up
-up: ## Start PostgreSQL and Mailpit (docker compose)
+up: ## Start local services: PostgreSQL, Redis, Mailpit, and Web (docker compose)
 	docker compose up -d --wait
 
 .PHONY: down
