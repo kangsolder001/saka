@@ -88,7 +88,7 @@
   - **File:** `web/src/lib/api/client.ts`, `client.test.ts`
   - **Lakukan:** `createClient<paths>({ baseUrl: API_BASE, credentials: 'include' })` dari `openapi-fetch`. `API_BASE` = `PUBLIC_API_BASE_URL` (dari `$env/static/public`, default `/api/v1`). Middleware `onRequest`: lewati path publik (`/auth/login`, `/auth/refresh`, `/auth/register`, `/auth/verify-email`, `/auth/forgot-password`, `/auth/reset-password`, `/me/email/confirm`, `/plans`, `/invitations/{token}` GET dan decline); selain itu refresh proaktif bila `isExpiringSoon`, lalu pasang `Authorization: Bearer`. Helper `call()` yang membungkus panggilan: bila respons `401 TOKEN_EXPIRED` → `refreshSession()` lalu ulang sekali; error → lempar `ApiError`; sukses → kembalikan `data` bertipe. Bila sesi berakhir, panggil callback `onSessionEnded` (diset oleh layout, §6.3).
   - **Selesai bila:** unit test (fetch tiruan): Bearer terpasang; `TOKEN_EXPIRED` → refresh lalu retry sekali; gagal dua kali → `ApiError` dan `onSessionEnded` terpanggil; endpoint publik tanpa Bearer.
-- [ ] **W1.6 Query client dan query key** (0,25)
+- [x] **W1.6 Query client dan query key** (0,25)
   - **File:** `web/src/lib/api/query-keys.ts`, `web/src/lib/api/query-client.ts`, `web/src/routes/+layout.svelte`
   - **Lakukan:** `queryKeys` persis contoh §3.2. `QueryClient` dengan `staleTime: 30_000`, `retry` hanya untuk `NETWORK_ERROR` (maks 2), tanpa retry untuk 4xx. Pasang `QueryClientProvider` di layout root.
   - **Selesai bila:** `pnpm check` lulus.

@@ -5,6 +5,8 @@
 	import { locales, localizeHref } from '#lib/paraglide/runtime.js';
 	import { ModeWatcher } from 'mode-watcher';
 	import { Toaster } from '$lib/components/ui/sonner';
+	import { QueryClientProvider } from '@tanstack/svelte-query';
+	import { queryClient } from '$lib/api/query-client';
 	import '../app.css';
 	import favicon from '#lib/assets/favicon.svg';
 	import type { LayoutProps } from './$types';
@@ -12,17 +14,19 @@
 	let { children }: LayoutProps = $props();
 </script>
 
-<ModeWatcher />
-<Toaster />
-
 <svelte:head>
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
-{@render children()}
+<ModeWatcher />
+<Toaster />
 
-<div style="display:none">
-	{#each locales as locale (locale)}
-		<a href={resolve(localizeHref(page.url.pathname, { locale }) as Path)}>{locale}</a>
-	{/each}
-</div>
+<QueryClientProvider client={queryClient}>
+	{@render children()}
+
+	<div style="display:none">
+		{#each locales as locale (locale)}
+			<a href={resolve(localizeHref(page.url.pathname, { locale }) as Path)}>{locale}</a>
+		{/each}
+	</div>
+</QueryClientProvider>
