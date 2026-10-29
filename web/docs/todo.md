@@ -72,7 +72,7 @@
   - **Lakukan:** script `api:generate` = `openapi-typescript ../docs/openapi.yaml -o src/lib/api/schema.d.ts`. `types.ts` berisi alias: `Profile`, `AuthUser`, `OrganizationRef`, `MemberOrganization`, `Member`, `Invitation`, `InvitationInfo`, `Plan`, `Subscription`, `SubscriptionStatus`, `Invoice`, `Session`, `Role`, `ErrorCode`, `CheckoutResponse`, `ChangePlanResponse` (bentuk `components['schemas']['X']`).
   - **Selesai bila:** `schema.d.ts` di-commit; langkah drift di CI aktif.
   - **Prasyarat:** Fase 8 backend (`docs/todo.md`) sudah menerjemahkan `docs/openapi.yaml` ke Bahasa Inggris, supaya komentar JSDoc di `schema.d.ts` berbahasa Inggris. Bila belum, tetap jalan; cukup jalankan ulang `make web-api` setelah Fase 8 (tipe tidak berubah, hanya komentar).
-- [ ] **W1.2 `ApiError` dan `toApiError`** (0,5)
+- [x] **W1.2 `ApiError` dan `toApiError`** (0,5)
   - **File:** `web/src/lib/api/errors.ts`, `errors.test.ts`
   - **Lakukan:** kelas `ApiError` persis seperti §7.1. `toApiError(response: Response | null, body: unknown, cause?: unknown): ApiError` menangani: body format `{error:{code,message,details}}`, body bukan JSON (pakai status → `INTERNAL_ERROR`), `response === null` (jaringan → `NETWORK_ERROR`, status 0), header `Retry-After` dan `details.retry_after_seconds`, header `X-Trace-ID` (simpan di properti `traceId`).
   - **Selesai bila:** unit test untuk tiap kasus di atas lulus.
