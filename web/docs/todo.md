@@ -76,7 +76,7 @@
   - **File:** `web/src/lib/api/errors.ts`, `errors.test.ts`
   - **Lakukan:** kelas `ApiError` persis seperti §7.1. `toApiError(response: Response | null, body: unknown, cause?: unknown): ApiError` menangani: body format `{error:{code,message,details}}`, body bukan JSON (pakai status → `INTERNAL_ERROR`), `response === null` (jaringan → `NETWORK_ERROR`, status 0), header `Retry-After` dan `details.retry_after_seconds`, header `X-Trace-ID` (simpan di properti `traceId`).
   - **Selesai bila:** unit test untuk tiap kasus di atas lulus.
-- [ ] **W1.3 State sesi** (0,25)
+- [x] **W1.3 State sesi** (0,25)
   - **File:** `web/src/lib/auth/session.svelte.ts`
   - **Lakukan:** objek `session` dengan `$state`: `status: SessionStatus`, `accessToken: string | null`, `expiresAt: number | null`, `user: AuthUser | null`. Fungsi `setSession(tokenResponse, now = Date.now())`, `clearSession()`, `isExpiringSoon(now, marginMs = 30_000)`.
   - **Selesai bila:** unit test `setSession`/`clearSession`/`isExpiringSoon`.
