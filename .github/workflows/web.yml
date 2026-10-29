@@ -61,8 +61,7 @@ jobs:
       - name: Build static SPA
         run: pnpm build
 
-      # Drift check for OpenAPI schema types (will be active after W1.1 generates and commits schema.d.ts)
-      # - name: Verify OpenAPI schema drift
-      #   run: |
-      #     pnpm api:generate
-      #     git diff --exit-code src/lib/api/schema.d.ts
+      - name: Verify OpenAPI schema drift
+        run: |
+          pnpm api:generate
+          git diff --exit-code src/lib/api/schema.d.ts

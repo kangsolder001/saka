@@ -67,7 +67,7 @@
 
 ## W1 — Fondasi API & Sesi (3 hari)
 
-- [ ] **W1.1 Generate tipe dari OpenAPI** (0,25)
+- [x] **W1.1 Generate tipe dari OpenAPI** (0,25)
   - **File:** `web/package.json` (script), `web/src/lib/api/schema.d.ts` (hasil), `web/src/lib/api/types.ts`
   - **Lakukan:** script `api:generate` = `openapi-typescript ../docs/openapi.yaml -o src/lib/api/schema.d.ts`. `types.ts` berisi alias: `Profile`, `AuthUser`, `OrganizationRef`, `MemberOrganization`, `Member`, `Invitation`, `InvitationInfo`, `Plan`, `Subscription`, `SubscriptionStatus`, `Invoice`, `Session`, `Role`, `ErrorCode`, `CheckoutResponse`, `ChangePlanResponse` (bentuk `components['schemas']['X']`).
   - **Selesai bila:** `schema.d.ts` di-commit; langkah drift di CI aktif.
