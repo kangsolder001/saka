@@ -179,15 +179,15 @@ Pola halaman form: `+page.svelte` di `routes/(public)/<path>/`, skema Zod di `fe
 
 Halaman akun memakai sub-navigasi (tab) Profil / Keamanan / Sesi / Hapus akun di `routes/(app)/account/+layout.svelte`.
 
-- [ ] **W4.1 Profil** (0,25)
+- [x] **W4.1 Profil** (0,25)
   - **File:** `routes/(app)/account/+page.svelte`, `features/account/schemas.ts`, `features/account/api.ts`, `components/app/UserAvatar.svelte` (fallback inisial, hanya URL `http(s)`)
   - **Lakukan:** kirim hanya field yang berubah; avatar kosong → `null`. Sukses → invalidate `me`, toast.
-- [ ] **W4.2 Ganti password dan ganti email** (0,5)
+- [x] **W4.2 Ganti password dan ganti email** (0,5)
   - **File:** `routes/(app)/account/security/+page.svelte`, `features/account/components/ChangePasswordForm.svelte`, `ChangeEmailForm.svelte`
-- [ ] **W4.3 Sesi** (0,5)
+- [x] **W4.3 Sesi** (0,5)
   - **File:** `routes/(app)/account/sessions/+page.svelte`, `features/account/user-agent.ts` (`describeUserAgent()` + test: Chrome/Firefox/Safari/Edge × Windows/macOS/Linux/Android/iOS, fallback)
   - **Selesai bila:** cabut sesi lain menghilangkan baris; cabut sesi ini = logout.
-- [ ] **W4.4 Hapus akun** (0,25)
+- [x] **W4.4 Hapus akun** (0,25)
   - **File:** `routes/(app)/account/delete/+page.svelte`
   - **Selesai bila:** `409 owns_shared_organization` menampilkan pesan §7.3 + tautan; sukses → `/login` dengan toast.
 
