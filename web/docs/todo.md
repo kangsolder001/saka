@@ -118,10 +118,10 @@
   - **File:** `web/src/routes/(public)/+layout.svelte`, `web/src/routes/(app)/+layout.svelte`, `web/src/lib/auth/guards.ts`
   - **Lakukan:** `ensureSession()` (§6.2). Layout `(app)`: tampilkan layar memuat selama `unknown`; `anonymous` → `goto('/login?redirect=' + encodeURIComponent(path))`. Set `onSessionEnded` client → bersihkan cache query, toast "Sesi berakhir", ke `/login`. Helper `safeRedirect(value): string` (hanya path internal, §11.5) dengan unit test.
   - **Selesai bila:** membuka `/orgs` tanpa login berakhir di `/login?redirect=%2Forgs`.
-- [ ] **W2.2 Layout publik** (0,25)
+- [x] **W2.2 Layout publik** (0,25)
   - **File:** `web/src/routes/(public)/+layout.svelte`, `web/src/lib/components/app/AuthCard.svelte`
   - **Lakukan:** kartu tengah (§4.4) dengan slot judul, deskripsi, isi, footer; pemilih bahasa dan tema di pojok kanan atas.
-- [ ] **W2.3 Pemilih tema dan bahasa** (0,25)
+- [x] **W2.3 Pemilih tema dan bahasa** (0,25)
   - **File:** `web/src/lib/components/app/ThemeSwitcher.svelte`, `LanguageSwitcher.svelte`
   - **Selesai bila:** keduanya bertahan setelah reload.
 - [ ] **W2.4 Data `me` dan organisasi aktif** (0,25)

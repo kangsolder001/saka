@@ -38,5 +38,12 @@
 	"field_error_user_id_another_member": "Pilih anggota lain",
 	"field_error_plan_unknown": "Plan tidak dikenal",
 	"field_error_invalid": "Nilai tidak valid",
-	"auth_session_ended": "Sesi berakhir"
+	"auth_session_ended": "Sesi berakhir",
+	"common_theme": "Tema",
+	"common_theme_light": "Terang",
+	"common_theme_dark": "Gelap",
+	"common_theme_system": "Sistem",
+	"common_language": "Bahasa",
+	"common_language_id": "Bahasa Indonesia",
+	"common_language_en": "English"
 }

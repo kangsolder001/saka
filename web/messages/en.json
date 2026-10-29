@@ -38,5 +38,12 @@
 	"field_error_user_id_another_member": "Please select another member",
 	"field_error_plan_unknown": "Unknown plan",
 	"field_error_invalid": "Invalid value",
-	"auth_session_ended": "Session ended"
+	"auth_session_ended": "Session ended",
+	"common_theme": "Theme",
+	"common_theme_light": "Light",
+	"common_theme_dark": "Dark",
+	"common_theme_system": "System",
+	"common_language": "Language",
+	"common_language_id": "Bahasa Indonesia",
+	"common_language_en": "English"
 }
