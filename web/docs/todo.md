@@ -80,7 +80,7 @@
   - **File:** `web/src/lib/auth/session.svelte.ts`
   - **Lakukan:** objek `session` dengan `$state`: `status: SessionStatus`, `accessToken: string | null`, `expiresAt: number | null`, `user: AuthUser | null`. Fungsi `setSession(tokenResponse, now = Date.now())`, `clearSession()`, `isExpiringSoon(now, marginMs = 30_000)`.
   - **Selesai bila:** unit test `setSession`/`clearSession`/`isExpiringSoon`.
-- [ ] **W1.4 Refresh single-flight + Web Locks** (0,75)
+- [x] **W1.4 Refresh single-flight + Web Locks** (0,75)
   - **File:** `web/src/lib/auth/refresh.ts`, `refresh.test.ts`
   - **Lakukan:** `refreshSession(): Promise<boolean>` sesuai §6.3: satu promise bersama per tab; di dalam `navigator.locks.request('saka-auth-refresh', ...)` bila tersedia; `fetch(`${API_BASE}/auth/refresh`, { method: 'POST', credentials: 'include' })`; `200` → `setSession`, return `true`; selain itu `clearSession()`, return `false`. Promise bersama di-reset setelah selesai. Dapat diuji dengan menyuntikkan `fetch` dan `locks` (parameter opsional atau fungsi `createRefresher(deps)`).
   - **Selesai bila:** test: dua panggilan bersamaan = satu `fetch`; panggilan setelah selesai = `fetch` baru; tanpa `navigator.locks` tetap bekerja; `401` → sesi dibersihkan.
