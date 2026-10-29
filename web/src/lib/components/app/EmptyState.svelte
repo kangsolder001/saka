@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Inbox } from 'lucide-svelte';
 	import * as m from '$lib/paraglide/messages';
-	import type { Component, Snippet } from 'svelte';
+	import type { Snippet } from 'svelte';
 
 	let {
 		title,

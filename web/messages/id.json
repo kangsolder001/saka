@@ -77,6 +77,7 @@
 	"badge_status_draft": "Draf",
 	"badge_status_void": "Dibatalkan",
 	"badge_status_canceling": "Akan Berakhir",
+	"badge_status_uncollectible": "Tidak Tertagih",
 	"badge_role_owner": "Pemilik",
 	"badge_role_admin": "Admin",
 	"badge_role_member": "Anggota",

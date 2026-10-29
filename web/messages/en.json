@@ -77,6 +77,7 @@
 	"badge_status_draft": "Draft",
 	"badge_status_void": "Void",
 	"badge_status_canceling": "Canceling",
+	"badge_status_uncollectible": "Uncollectible",
 	"badge_role_owner": "Owner",
 	"badge_role_admin": "Admin",
 	"badge_role_member": "Member",

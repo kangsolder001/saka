@@ -127,17 +127,17 @@
 - [x] **W2.4 Data `me` dan organisasi aktif** (0,25)
   - **File:** `web/src/lib/features/account/api.ts`, `web/src/lib/features/org/api.ts`
   - **Lakukan:** `createMeQuery()` (`GET /me`), `createOrganizationQuery(orgId)` (`GET /orgs/{orgId}`). Fungsi `lastOrgId` get/set di `localStorage` (dibungkus try/catch).
-- [ ] **W2.5 App shell responsif: sidebar desktop, drawer mobile, pemilih organisasi, menu user** (0,5)
+- [x] **W2.5 App shell responsif: sidebar desktop, drawer mobile, pemilih organisasi, menu user** (0,5)
   - **File:** `web/src/lib/components/app/AppShell.svelte`, `OrgSwitcher.svelte`, `UserMenu.svelte`, `web/src/routes/(app)/orgs/[orgId]/+layout.svelte`
   - **Lakukan:** komponen `sidebar` shadcn-svelte; navigasi §5.3 dengan item aktif; di mobile (<768px) berubah menjadi drawer off-canvas (`Sheet`) dengan backdrop overlay redup, tombol close SVG, dan auto-close saat item ditekan; touch target tombol & navigasi minimum 44px (§4.4). `OrgSwitcher` dari `me.organizations`. `UserMenu`: nama/email, Akun, Tema, Bahasa, Keluar (logout §6.4 termasuk `BroadcastChannel`). Layout `orgs/[orgId]` mengambil organisasi; `404` → `ErrorState` "Organisasi tidak ditemukan".
   - **Selesai bila:** navigasi dan layout bekerja mulus tanpa overflow horizontal di desktop, tablet, dan mobile (320px–375px).
-- [ ] **W2.6 Komponen keadaan** (0,25)
+- [x] **W2.6 Komponen keadaan** (0,25)
   - **File:** `web/src/lib/components/app/EmptyState.svelte`, `ErrorState.svelte`, `PageHeader.svelte`, `PageSkeleton.svelte`, `LoadMore.svelte`
   - **Lakukan:** `ErrorState` menerima `error: unknown`, memakai `errorMessage`, menampilkan `traceId` untuk `INTERNAL_ERROR`, dan tombol "Coba lagi" opsional.
-- [ ] **W2.7 `StatusBadge`, `RoleBadge`, `ConfirmDialog`** (0,25)
+- [x] **W2.7 `StatusBadge`, `RoleBadge`, `ConfirmDialog`** (0,25)
   - **File:** `web/src/lib/components/app/StatusBadge.svelte`, `RoleBadge.svelte`, `ConfirmDialog.svelte`
   - **Lakukan:** `StatusBadge` menerima `kind: 'subscription' | 'invoice'` dan `status`, memetakan sesuai §4.3. `ConfirmDialog`: judul, deskripsi, label tombol, varian `destructive`, opsi `confirmText` (wajib mengetik teks tertentu, dipakai hapus organisasi), fokus awal tombol Batal.
-- [ ] **W2.8 Banner global** (0,25)
+- [x] **W2.8 Banner global** (0,25)
   - **File:** `web/src/lib/components/app/Banner.svelte`, `EmailVerificationBanner.svelte`
   - **Lakukan:** `Banner` varian `info|warning|neutral` dengan slot aksi. `EmailVerificationBanner` sesuai §6.5 (`POST /auth/resend-verification`).
 

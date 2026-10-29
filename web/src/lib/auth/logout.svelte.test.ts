@@ -20,7 +20,9 @@ describe('logout', () => {
 	});
 
 	it('clears session and query cache, posts broadcast and navigates to /login', async () => {
-		const postSpy = vi.spyOn(client, 'POST').mockResolvedValue({} as any);
+		const postSpy = vi
+			.spyOn(client, 'POST')
+			.mockResolvedValue({} as Awaited<ReturnType<typeof client.POST>>);
 		const clearSpy = vi.spyOn(queryClient, 'clear');
 
 		await logout();
