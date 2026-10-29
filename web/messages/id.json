@@ -29,5 +29,13 @@
 	"error_reason_revoked": "Undangan telah dibatalkan.",
 	"error_reason_accepted": "Undangan sudah diterima.",
 	"error_reason_declined": "Undangan sudah ditolak.",
-	"error_reason_organization_deleted": "Organisasi sudah dihapus."
+	"error_reason_organization_deleted": "Organisasi sudah dihapus.",
+	"field_error_required": "Wajib diisi",
+	"field_error_current_password_incorrect": "Password saat ini salah",
+	"field_error_new_password_same": "Password baru harus berbeda dari password saat ini",
+	"field_error_new_email_same": "Email baru sama dengan email saat ini",
+	"field_error_token_invalid": "Tautan tidak valid atau sudah kedaluwarsa",
+	"field_error_user_id_another_member": "Pilih anggota lain",
+	"field_error_plan_unknown": "Plan tidak dikenal",
+	"field_error_invalid": "Nilai tidak valid"
 }

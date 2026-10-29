@@ -29,5 +29,13 @@
 	"error_reason_revoked": "Invitation has been revoked.",
 	"error_reason_accepted": "Invitation has already been accepted.",
 	"error_reason_declined": "Invitation has been declined.",
-	"error_reason_organization_deleted": "Organization has been deleted."
+	"error_reason_organization_deleted": "Organization has been deleted.",
+	"field_error_required": "This field is required",
+	"field_error_current_password_incorrect": "Current password is incorrect",
+	"field_error_new_password_same": "New password must be different from current password",
+	"field_error_new_email_same": "New email must be different from current email",
+	"field_error_token_invalid": "Link is invalid or expired",
+	"field_error_user_id_another_member": "Please select another member",
+	"field_error_plan_unknown": "Unknown plan",
+	"field_error_invalid": "Invalid value"
 }

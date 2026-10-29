@@ -96,7 +96,7 @@
   - **File:** `web/src/lib/api/error-message.ts`, `error-message.test.ts`, `messages/*.json`
   - **Lakukan:** `errorMessage(err: unknown): string` sesuai tabel §7.1 dan §7.3 (kunci i18n `error_<code_lower>` dan `error_reason_<reason>`). Untuk `RATE_LIMITED` sertakan durasi (menit dibulatkan ke atas, atau detik bila < 60).
   - **Selesai bila:** test tiap kode dan reason menghasilkan kunci yang benar.
-- [ ] **W1.8 Helper form** (0,5)
+- [x] **W1.8 Helper form** (0,5)
   - **File:** `web/src/lib/forms/form.svelte.ts`, `web/src/lib/forms/field-errors.ts`, test untuk keduanya
   - **Lakukan:** `createForm({ schema, initial, onSubmit })` sesuai §7.2 (nilai `$state`, `errors`, `formError`, `submitting`, `submit(event)`, `reset()`, `setFieldError(field, message)`). `fieldErrorMessage(field, reason)` memetakan tabel §7.2. Fokus ke field error pertama memakai `document.querySelector('[name="<field>"]')`.
   - **Selesai bila:** test: Zod gagal → tidak memanggil `onSubmit`; `VALIDATION_ERROR` → `errors` terisi; reason tidak dikenal → pesan umum; error lain → `formError`; `submitting` true selama proses.
