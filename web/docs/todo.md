@@ -257,17 +257,17 @@ Halaman akun memakai sub-navigasi (tab) Profil / Keamanan / Sesi / Hapus akun di
 
 ## W7 — Penyelesaian & Acceptance (2 hari)
 
-- [ ] **W7.1 Helper E2E** (0,25)
+- [x] **W7.1 Helper E2E** (0,25)
   - **File:** `web/tests/e2e/helpers/mailpit.ts` (ambil email terbaru untuk alamat tertentu lewat `http://localhost:8025/api/v1/search?query=to:<email>` lalu ekstrak tautan), `helpers/users.ts` (email unik per test), `playwright.config.ts` (`baseURL: http://localhost:3000`, `webServer` menjalankan `pnpm dev`).
-- [ ] **W7.2 Skenario E2E §11.2 nomor 1–4** (0,5)
-- [ ] **W7.3 Skenario E2E §11.2 nomor 5–8** (0,5)
-- [ ] **W7.4 Audit teks, warna, dan icon** (0,25)
+- [x] **W7.2 Skenario E2E §11.2 nomor 1–4** (0,5)
+- [x] **W7.3 Skenario E2E §11.2 nomor 5–8** (0,5)
+- [x] **W7.4 Audit teks, warna, dan icon** (0,25)
   - **Lakukan:** pastikan tidak ada teks UI hardcode (cek manual tiap `.svelte` di `routes` dan `features`), tidak ada emotikon/emoji di komponen (hanya SVG icon), dan `grep -rnE "(bg|text|border)-(red|green|blue|indigo|zinc|gray|slate|amber|emerald)-[0-9]" src/routes src/lib/features src/lib/components/app` kosong.
-- [ ] **W7.5 Audit aksesibilitas dan responsivitas (mobile & desktop)** (0,25) — §4.4, §11.4
+- [x] **W7.5 Audit aksesibilitas dan responsivitas (mobile & desktop)** (0,25) — §4.4, §11.4
   - **Lakukan:** navigasi seluruh alur dengan keyboard saja; cek label, fokus dialog, `aria-label` ikon. Uji audit responsivitas pada viewport 320px (iPhone SE), 375px/390px, 768px (tablet), dan 1280px+ (desktop): pastikan *zero horizontal overflow* pada body, tabel tidak terpotong (tersedia scroll horizontal atau mode tumpuk), touch target minimum 44px di mobile, modal dialog pas di viewport, dan banner membungkus rapi.
-- [ ] **W7.6 Panduan deploy dan README** (0,25)
+- [x] **W7.6 Panduan deploy dan README** (0,25)
   - **File:** `web/docs/deploy.md` (contoh Nginx/Caddy same-origin dengan proxy `/api`, fallback SPA ke `index.html`, header keamanan termasuk CSP, varian subdomain dengan `PUBLIC_API_BASE_URL` + `app.cors_allowed_origins`), `web/README.md` (setup singkat, perintah), tautan dari `README.md` root.
-- [ ] **W7.7 Centang kriteria selesai §12 spec** (0,1)
+- [x] **W7.7 Centang kriteria selesai §12 spec** (0,1)
 
 **Selesai bila (W7):** semua kotak §12 spec tercentang.
 

@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render } from 'vitest-browser-svelte';
 import PlansPage from './+page.svelte';
-import type { Plan, Subscription, CheckoutResponse, ChangePlanResponse } from '$lib/api/types';
+import type { Plan, Subscription, CheckoutResponse } from '$lib/api/types';
 
 const mockPlans: Plan[] = [
 	{

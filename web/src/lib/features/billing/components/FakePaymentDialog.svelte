@@ -54,6 +54,13 @@
 		error = null;
 
 		try {
+			if (currentOrgId && currentInvoice) {
+				sessionStorage.setItem(
+					'saka.pendingPayment',
+					JSON.stringify({ orgId: currentOrgId, invoiceId: currentInvoice.id })
+				);
+			}
+
 			if (import.meta.env.DEV) {
 				const { simulateFakePayment } = await import('$lib/dev/fake-payment');
 				await simulateFakePayment({

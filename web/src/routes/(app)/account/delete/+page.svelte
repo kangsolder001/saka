@@ -66,11 +66,11 @@
 		<Card.Content class="space-y-6">
 			<!-- Warning Banner -->
 			<div
-				class="flex items-start gap-3 rounded-lg border border-amber-500/20 bg-amber-500/10 p-4 text-sm text-foreground"
+				class="flex items-start gap-3 rounded-lg border border-warning/20 bg-warning-muted p-4 text-sm text-foreground"
 			>
-				<AlertTriangle class="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" />
+				<AlertTriangle class="mt-0.5 size-5 shrink-0 text-warning" />
 				<div class="space-y-1">
-					<p class="font-medium text-amber-800 dark:text-amber-300">
+					<p class="font-medium text-warning">
 						{m.common_warning()}
 					</p>
 					<p class="text-muted-foreground">{m.account_delete_warning()}</p>

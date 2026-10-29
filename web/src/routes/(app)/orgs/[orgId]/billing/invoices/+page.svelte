@@ -22,7 +22,7 @@
 
 	let invoicesQuery = createInfiniteInvoicesQuery(() => orgId);
 
-	let allInvoices = $derived(invoicesQuery.data?.pages.flatMap((page: any) => page.items) ?? []);
+	let allInvoices = $derived(invoicesQuery.data?.pages.flatMap((page) => page.items) ?? []);
 
 	function handleRowClick(invoiceId: string) {
 		goto(`/orgs/${orgId}/billing/invoices/${invoiceId}`);

@@ -14,11 +14,9 @@
 	let { variant = 'info', class: className, children, action }: Props = $props();
 
 	const variantStyles: Record<BannerVariant, string> = {
-		info: 'bg-blue-50 text-blue-900 border-blue-200 dark:bg-blue-950/40 dark:text-blue-200 dark:border-blue-900',
-		warning:
-			'bg-amber-50 text-amber-900 border-amber-200 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-900',
-		neutral:
-			'bg-muted/70 text-muted-foreground border-border dark:bg-muted/30 dark:text-muted-foreground dark:border-border'
+		info: 'bg-info-muted text-info border-info/30',
+		warning: 'bg-warning-muted text-warning border-warning/30',
+		neutral: 'bg-muted/70 text-muted-foreground border-border'
 	};
 </script>
 

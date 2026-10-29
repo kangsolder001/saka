@@ -30,7 +30,7 @@
 </script>
 
 <Banner variant="warning" class={className}>
-	<Mail class="size-4 shrink-0 text-amber-700 dark:text-amber-300" />
+	<Mail class="size-4 shrink-0 text-warning" />
 	<span>{m.banner_email_unverified_msg()}</span>
 
 	{#snippet action()}
@@ -39,7 +39,7 @@
 			size="sm"
 			disabled={sending}
 			onclick={handleResend}
-			class="h-7 border-amber-300 bg-amber-100/50 text-amber-900 hover:bg-amber-100 hover:text-amber-950 dark:border-amber-700 dark:bg-amber-900/30 dark:text-amber-200 dark:hover:bg-amber-900/50"
+			class="h-7 border-warning/40 bg-warning-muted text-warning hover:bg-warning/20"
 		>
 			{sending ? m.banner_resending() : m.banner_resend_verification()}
 		</Button>

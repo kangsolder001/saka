@@ -137,34 +137,22 @@
 
 				{#if sub.trial_ends_at}
 					<p class="text-sm text-muted-foreground" data-testid="billing-trial-info">
-						{m.billing_trial_ends_at
-							? m.billing_trial_ends_at({ date: formatDate(sub.trial_ends_at) })
-							: `Trial berakhir: ${formatDate(sub.trial_ends_at)}`}
+						{m.billing_trial_ends_at({ date: formatDate(sub.trial_ends_at) })}
 					</p>
 				{/if}
 
 				{#if sub.grace_until}
-					<p
-						class="text-sm font-medium text-amber-700 dark:text-amber-400"
-						data-testid="billing-grace-info"
-					>
-						{m.billing_grace_until
-							? m.billing_grace_until({ date: formatDate(sub.grace_until) })
-							: `Masa tenggang berakhir: ${formatDate(sub.grace_until)}`}
+					<p class="text-sm font-medium text-warning" data-testid="billing-grace-info">
+						{m.billing_grace_until({ date: formatDate(sub.grace_until) })}
 					</p>
 				{/if}
 
 				{#if sub.pending_plan}
-					<p
-						class="text-sm font-medium text-blue-700 dark:text-blue-400"
-						data-testid="billing-pending-downgrade-info"
-					>
-						{m.billing_banner_downgrade_scheduled
-							? m.billing_banner_downgrade_scheduled({
-									plan: sub.pending_plan,
-									date: formatDate(sub.current_period_end)
-								})
-							: `Plan berganti ke ${sub.pending_plan} pada ${formatDate(sub.current_period_end)}`}
+					<p class="text-sm font-medium text-info" data-testid="billing-pending-downgrade-info">
+						{m.billing_banner_downgrade_scheduled({
+							plan: sub.pending_plan,
+							date: formatDate(sub.current_period_end)
+						})}
 					</p>
 				{/if}
 			</div>

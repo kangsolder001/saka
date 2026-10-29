@@ -44,12 +44,12 @@
 		{#if scheduledDowngradeDialog.warnings.length > 0}
 			<div class="space-y-2 py-3" data-testid="downgrade-warnings-list">
 				<p class="text-xs font-semibold tracking-wider text-muted-foreground uppercase">
-					{m.common_warning ? m.common_warning() : 'Peringatan'}
+					{m.common_warning()}
 				</p>
 				<ul class="space-y-2 text-xs text-muted-foreground">
 					{#each scheduledDowngradeDialog.warnings as warning (warning.limit)}
 						<li
-							class="rounded border border-amber-200 bg-amber-50 p-2 text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-200"
+							class="rounded border border-warning/30 bg-warning-muted p-2 text-warning"
 							data-testid={`warning-item-${warning.limit}`}
 						>
 							{m.billing_downgrade_warning_item({

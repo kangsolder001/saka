@@ -651,13 +651,13 @@ E2E belum dijalankan di CI (butuh seluruh backend); target CI bisa ditambah kemu
 
 Frontend versi pertama selesai bila:
 
-- [ ] Semua halaman §5 ada dan memakai endpoint yang tertulis, dengan keadaan memuat/error/kosong.
-- [ ] Alur auth §6 berjalan, termasuk refresh single-flight dan antar tab.
-- [ ] Semua aksi organisasi, anggota, undangan, akun, dan billing di §8–§9 bisa dilakukan dari UI sesuai role.
-- [ ] Light/dark mode dan bahasa id/en lengkap, tidak ada teks yang tidak diterjemahkan.
-- [ ] Unit test §11.1 dan skenario E2E §11.2 lulus; pemeriksaan §11.3 lulus di CI.
-- [ ] Tidak ada warna mentah di komponen (`grep` kelas warna Tailwind bawaan kosong di `src/lib/components/app`, `src/lib/features`, `src/routes`).
-- [ ] Build production tidak memuat kode simulasi pembayaran (`grep -r "fake-webhook-secret" build/` kosong).
+- [x] Semua halaman §5 ada dan memakai endpoint yang tertulis, dengan keadaan memuat/error/kosong.
+- [x] Alur auth §6 berjalan, termasuk refresh single-flight dan antar tab.
+- [x] Semua aksi organisasi, anggota, undangan, akun, dan billing di §8–§9 bisa dilakukan dari UI sesuai role.
+- [x] Light/dark mode dan bahasa id/en lengkap, tidak ada teks yang tidak diterjemahkan.
+- [x] Unit test §11.1 dan skenario E2E §11.2 lulus; pemeriksaan §11.3 lulus di CI.
+- [x] Tidak ada warna mentah di komponen (`grep` kelas warna Tailwind bawaan kosong di `src/lib/components/app`, `src/lib/features`, `src/routes`).
+- [x] Build production tidak memuat kode simulasi pembayaran (`grep -r "fake-webhook-secret" build/` kosong).
 
 ## 13. Di Luar Cakupan Versi Pertama
 

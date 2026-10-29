@@ -172,17 +172,15 @@
 			<!-- 3. Unpaid Invoice Card (Owner only, if open invoice exists) -->
 			{#if openInvoice}
 				<div
-					class="flex flex-col justify-between rounded-lg border border-amber-500/30 bg-amber-500/5 p-5"
+					class="flex flex-col justify-between rounded-lg border border-warning/30 bg-warning-muted p-5"
 					data-testid="dashboard-unpaid-invoice-card"
 				>
 					<div class="flex flex-col gap-3">
 						<div class="flex items-center justify-between">
-							<span
-								class="text-xs font-semibold tracking-wider text-amber-700 uppercase dark:text-amber-400"
-							>
+							<span class="text-xs font-semibold tracking-wider text-warning uppercase">
 								{m.dashboard_unpaid_invoice_title()}
 							</span>
-							<FileText class="size-4 text-amber-600 dark:text-amber-400" />
+							<FileText class="size-4 text-warning" />
 						</div>
 
 						<div>
@@ -190,23 +188,23 @@
 								{formatMoney(openInvoice.amount, openInvoice.currency)}
 							</div>
 							<p class="mt-0.5 text-xs text-muted-foreground">
-								Invoice #{openInvoice.number ?? openInvoice.id.slice(0, 8)}
+								{m.billing_tab_invoices()} #{openInvoice.number ?? openInvoice.id.slice(0, 8)}
 							</p>
 						</div>
 
 						{#if openInvoice.due_at}
-							<p class="text-xs text-amber-800 dark:text-amber-300">
-								Due: {formatDate(openInvoice.due_at)}
+							<p class="text-xs text-warning">
+								{m.billing_invoices_col_due()}: {formatDate(openInvoice.due_at)}
 							</p>
 						{/if}
 					</div>
 
-					<div class="mt-5 border-t border-amber-500/20 pt-3">
+					<div class="mt-5 border-t border-warning/20 pt-3">
 						<Button
 							variant="default"
 							size="sm"
 							href={`/orgs/${orgId}/billing`}
-							class="min-h-[44px] w-full bg-amber-600 text-xs text-white hover:bg-amber-700"
+							class="min-h-[44px] w-full text-xs"
 						>
 							{m.dashboard_unpaid_invoice_pay()}
 						</Button>

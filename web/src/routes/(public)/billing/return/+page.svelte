@@ -152,7 +152,7 @@
 		>
 			<Loader2 class="h-8 w-8 animate-spin text-muted-foreground" aria-hidden="true" />
 			<p class="text-sm font-medium text-muted-foreground">
-				{m.billing_return_checking ? m.billing_return_checking() : 'Memeriksa status pembayaran...'}
+				{m.billing_return_checking()}
 			</p>
 		</div>
 	{:else if status === 'paid'}
@@ -161,20 +161,16 @@
 			data-testid="billing-return-paid"
 		>
 			<div
-				class="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400"
+				class="flex h-12 w-12 items-center justify-center rounded-full bg-success-muted text-success"
 			>
 				<CheckCircle2 class="h-6 w-6" aria-hidden="true" />
 			</div>
 			<div class="flex flex-col gap-1">
 				<h1 class="text-xl font-bold tracking-tight text-foreground">
-					{m.billing_return_success_title
-						? m.billing_return_success_title()
-						: 'Pembayaran Berhasil'}
+					{m.billing_return_success_title()}
 				</h1>
 				<p class="text-sm text-muted-foreground">
-					{m.billing_return_success_desc
-						? m.billing_return_success_desc()
-						: 'Terima kasih! Pembayaran Anda telah diterima dan langganan telah aktif.'}
+					{m.billing_return_success_desc()}
 				</p>
 			</div>
 			<Button
@@ -182,7 +178,7 @@
 				class="mt-2 min-h-[44px] w-full"
 				data-testid="billing-return-billing-btn"
 			>
-				{m.billing_return_btn_billing ? m.billing_return_btn_billing() : 'Ke Billing'}
+				{m.billing_return_btn_billing()}
 			</Button>
 		</div>
 	{:else if status === 'invalid'}
@@ -191,20 +187,16 @@
 			data-testid="billing-return-invalid"
 		>
 			<div
-				class="flex h-12 w-12 items-center justify-center rounded-full bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400"
+				class="flex h-12 w-12 items-center justify-center rounded-full bg-warning-muted text-warning"
 			>
 				<AlertCircle class="h-6 w-6" aria-hidden="true" />
 			</div>
 			<div class="flex flex-col gap-1">
 				<h1 class="text-xl font-bold tracking-tight text-foreground">
-					{m.billing_return_invalid_title
-						? m.billing_return_invalid_title()
-						: 'Invoice Tidak Berlaku'}
+					{m.billing_return_invalid_title()}
 				</h1>
 				<p class="text-sm text-muted-foreground">
-					{m.billing_return_invalid_desc
-						? m.billing_return_invalid_desc()
-						: 'Invoice tidak berlaku lagi'}
+					{m.billing_return_invalid_desc()}
 				</p>
 			</div>
 			<Button
@@ -213,7 +205,7 @@
 				class="mt-2 min-h-[44px] w-full"
 				data-testid="billing-return-plans-btn"
 			>
-				{m.billing_return_btn_plans ? m.billing_return_btn_plans() : 'Pilih Plan'}
+				{m.billing_return_btn_plans()}
 			</Button>
 		</div>
 	{:else if status === 'timeout'}
@@ -221,21 +213,15 @@
 			class="flex flex-col items-center justify-center gap-4 text-center"
 			data-testid="billing-return-timeout"
 		>
-			<div
-				class="flex h-12 w-12 items-center justify-center rounded-full bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400"
-			>
+			<div class="flex h-12 w-12 items-center justify-center rounded-full bg-info-muted text-info">
 				<Clock class="h-6 w-6" aria-hidden="true" />
 			</div>
 			<div class="flex flex-col gap-1">
 				<h1 class="text-xl font-bold tracking-tight text-foreground">
-					{m.billing_return_timeout_title
-						? m.billing_return_timeout_title()
-						: 'Pembayaran Sedang Diproses'}
+					{m.billing_return_timeout_title()}
 				</h1>
 				<p class="text-sm text-muted-foreground">
-					{m.billing_return_timeout_desc
-						? m.billing_return_timeout_desc()
-						: 'Pembayaran sedang diproses. Status akan diperbarui otomatis dan kami mengirim email konfirmasi.'}
+					{m.billing_return_timeout_desc()}
 				</p>
 			</div>
 			<Button
@@ -243,7 +229,7 @@
 				class="mt-2 min-h-[44px] w-full"
 				data-testid="billing-return-billing-btn"
 			>
-				{m.billing_return_btn_billing ? m.billing_return_btn_billing() : 'Ke Billing'}
+				{m.billing_return_btn_billing()}
 			</Button>
 		</div>
 	{/if}

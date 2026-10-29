@@ -112,7 +112,7 @@
 				disabled={form.submitting || loadingInvitation}
 			/>
 			{#if form.errors.name}
-				<p class="text-xs text-destructive">{form.errors.name}</p>
+				<p class="text-xs text-destructive" role="alert">{form.errors.name}</p>
 			{/if}
 		</div>
 
@@ -130,7 +130,7 @@
 				readonly={!!invitationToken}
 			/>
 			{#if form.errors.email}
-				<p class="text-xs text-destructive">{form.errors.email}</p>
+				<p class="text-xs text-destructive" role="alert">{form.errors.email}</p>
 			{/if}
 		</div>
 
@@ -148,7 +148,7 @@
 				disabled={form.submitting || loadingInvitation}
 			/>
 			{#if form.errors.password}
-				<p class="text-xs text-destructive">{form.errors.password}</p>
+				<p class="text-xs text-destructive" role="alert">{form.errors.password}</p>
 			{/if}
 		</div>
 
@@ -167,7 +167,7 @@
 					disabled={form.submitting || loadingInvitation}
 				/>
 				{#if form.errors.organization_name}
-					<p class="text-xs text-destructive">{form.errors.organization_name}</p>
+					<p class="text-xs text-destructive" role="alert">{form.errors.organization_name}</p>
 				{/if}
 			</div>
 		{/if}

@@ -111,6 +111,7 @@ internal/
 migrations/       migrasi SQL goose
 templates/email/  template email (html dan teks)
 docs/             dokumentasi (Bahasa Indonesia)
+web/              frontend Single Page Application (SvelteKit, Tailwind CSS v4, Bits UI)
 ```
 
 Tiap modul punya `queries/*.sql` dan paket `<modul>db` hasil `sqlc` (tanpa ORM). Interface dideklarasikan oleh pemakainya, modul tidak mengimpor satu sama lain secara melingkar. Gambaran lengkap, aturan lintas modul dan konvensi ada di [CLAUDE.md](CLAUDE.md).
@@ -128,6 +129,22 @@ Tiap modul punya `queries/*.sql` dan paket `<modul>db` hasil `sqlc` (tanpa ORM).
 | [docs/loadtest.md](docs/loadtest.md) | uji beban ringan dan hasilnya |
 | [docs/rls.md](docs/rls.md) | desain Row Level Security |
 | [docs/plan.md](docs/plan.md), [docs/todo.md](docs/todo.md) | rencana fase dan progres |
+| [web/README.md](web/README.md) | ikhtisar frontend web SPA, stack teknologi, dan perintah |
+| [web/docs/deploy.md](web/docs/deploy.md) | panduan deployment frontend, konfigurasi Nginx/Caddy, CSP, dan redirect pembayaran Midtrans |
+
+## Frontend Web (SPA)
+
+Frontend antarmuka pengguna berada di folder `web/`, dibangun sebagai Single Page Application (SPA) statis menggunakan Svelte 5, SvelteKit, Tailwind CSS v4, shadcn-svelte/Bits UI, TanStack Query, dan Paraglide i18n.
+
+- **Panduan Pengembang & Penyiapan:** [web/README.md](web/README.md)
+- **Spesifikasi Teknis Frontend:** [web/docs/spec.md](web/docs/spec.md)
+- **Panduan Deployment Produksi (Nginx / Caddy, CSP, SSL):** [web/docs/deploy.md](web/docs/deploy.md)
+
+Jalankan server dev frontend:
+```bash
+cd web && pnpm install && pnpm dev
+```
+Aplikasi frontend akan berjalan di `http://localhost:3000` dengan proxy otomatis ke backend Go (`localhost:8080`).
 
 ## API sekilas
 

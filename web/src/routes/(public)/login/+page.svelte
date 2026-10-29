@@ -72,7 +72,7 @@
 				disabled={form.submitting}
 			/>
 			{#if form.errors.email}
-				<p class="text-xs text-destructive">{form.errors.email}</p>
+				<p class="text-xs text-destructive" role="alert">{form.errors.email}</p>
 			{/if}
 		</div>
 
@@ -99,7 +99,7 @@
 				disabled={form.submitting}
 			/>
 			{#if form.errors.password}
-				<p class="text-xs text-destructive">{form.errors.password}</p>
+				<p class="text-xs text-destructive" role="alert">{form.errors.password}</p>
 			{/if}
 		</div>
 
