@@ -104,7 +104,7 @@
   - **File:** `web/src/lib/format/money.ts`, `date.ts`, test
   - **Lakukan:** `formatMoney(amount, currency, locale)`, `formatDate(iso, locale)`, `formatDateTime(iso, locale)`, `formatRelative(iso, now, locale)` (pakai `Intl.RelativeTimeFormat`, satuan hari/jam/menit).
   - **Selesai bila:** test: `formatMoney(99000, 'IDR', 'id-ID')` mengandung `99.000`; tanpa desimal; relatif "dalam 3 hari" / "in 3 days".
-- [ ] **W1.10 Test kesamaan kunci i18n** (0,1)
+- [x] **W1.10 Test kesamaan kunci i18n** (0,1)
   - **File:** `web/src/lib/i18n/messages.test.ts`
   - **Selesai bila:** test gagal bila `id.json` dan `en.json` punya kunci berbeda (sebutkan kunci yang hilang).
 
