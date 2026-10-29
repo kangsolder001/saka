@@ -9,11 +9,15 @@
 	import { toast } from 'svelte-sonner';
 	import * as m from '$lib/paraglide/messages';
 	import { Loader2 } from 'lucide-svelte';
+	import { initAuthBroadcast } from '$lib/auth/broadcast';
 	import type { Snippet } from 'svelte';
 
 	let { children }: { children: Snippet } = $props();
 
+	let unsubscribeBroadcast: (() => void) | null = null;
+
 	onMount(() => {
+		unsubscribeBroadcast = initAuthBroadcast();
 		setOnSessionEnded(() => {
 			queryClient.clear();
 			toast.error(m.auth_session_ended ? m.auth_session_ended() : 'Sesi berakhir');
@@ -25,6 +29,7 @@
 
 	onDestroy(() => {
 		setOnSessionEnded(null);
+		unsubscribeBroadcast?.();
 	});
 
 	$effect(() => {

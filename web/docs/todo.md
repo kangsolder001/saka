@@ -149,25 +149,25 @@
 
 Pola halaman form: `+page.svelte` di `routes/(public)/<path>/`, skema Zod di `features/auth/schemas.ts`, panggilan API di `features/auth/api.ts`. **W3.1 menjadi contoh yang ditiru halaman form lain.**
 
-- [ ] **W3.1 Login** (0,5) — §6.4
+- [x] **W3.1 Login** (0,5) — §6.4
   - **File:** `routes/(public)/login/+page.svelte`, `features/auth/schemas.ts` (`loginSchema`), `features/auth/api.ts` (`login()`)
   - **Selesai bila:** login berhasil ke `redirect` atau `/`; `401`, `403 account_*`, `429` menampilkan pesan §6.4; sudah login → langsung dialihkan.
-- [ ] **W3.2 Registrasi + cek email** (0,5) — §6.4
+- [x] **W3.2 Registrasi + cek email** (0,5) — §6.4
   - **File:** `routes/(public)/register/+page.svelte`, `routes/(public)/register/check-email/+page.svelte`
   - **Lakukan:** termasuk mode `?invitation=` (email terkunci, `organization_name` tersembunyi dan diisi nama user).
   - **Selesai bila:** `409` di field email; validasi password (8–72, tidak sama dengan email) di klien.
-- [ ] **W3.3 Lupa dan reset password** (0,25)
+- [x] **W3.3 Lupa dan reset password** (0,25)
   - **File:** `routes/(public)/forgot-password/+page.svelte`, `routes/(public)/reset-password/+page.svelte`
-- [ ] **W3.4 Verifikasi email dan konfirmasi ganti email** (0,25)
+- [x] **W3.4 Verifikasi email dan konfirmasi ganti email** (0,25)
   - **File:** `routes/(public)/verify-email/+page.svelte`, `routes/(public)/confirm-email-change/+page.svelte`, komponen bersama `features/auth/components/TokenActionPage.svelte` (panggil sekali saat mount, tampilkan memuat/sukses/gagal)
   - **Selesai bila:** request hanya terkirim satu kali walau komponen dirender ulang.
-- [ ] **W3.5 Terima undangan** (0,5) — §6.4 langkah 1–6
+- [x] **W3.5 Terima undangan** (0,5) — §6.4 langkah 1–6
   - **File:** `routes/(public)/accept-invitation/+page.svelte`, `features/invitations/api.ts`
   - **Selesai bila:** semua cabang (belum login + akun ada/tidak, email beda, belum terverifikasi, berhasil, tolak, tautan tidak berlaku per `reason`) bisa dicoba manual.
-- [ ] **W3.6 Logout dan sinkron antar tab** (0,25)
+- [x] **W3.6 Logout dan sinkron antar tab** (0,25)
   - **File:** `web/src/lib/auth/logout.ts`, `web/src/lib/auth/broadcast.ts`
   - **Selesai bila:** logout di satu tab membuat tab lain kembali ke `/login`.
-- [ ] **W3.7 Redirect root** (0,25)
+- [x] **W3.7 Redirect root** (0,25)
   - **File:** `routes/(app)/+page.svelte`
   - **Lakukan:** `/` → `lastOrgId` (bila masih ada di `me.organizations`) → organisasi pertama → `/orgs/new`.
 
