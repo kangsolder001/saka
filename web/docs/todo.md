@@ -114,7 +114,7 @@
 
 ## W2 — App Shell & Komponen Bersama (2 hari)
 
-- [ ] **W2.1 Struktur route dan guard** (0,25)
+- [x] **W2.1 Struktur route dan guard** (0,25)
   - **File:** `web/src/routes/(public)/+layout.svelte`, `web/src/routes/(app)/+layout.svelte`, `web/src/lib/auth/guards.ts`
   - **Lakukan:** `ensureSession()` (§6.2). Layout `(app)`: tampilkan layar memuat selama `unknown`; `anonymous` → `goto('/login?redirect=' + encodeURIComponent(path))`. Set `onSessionEnded` client → bersihkan cache query, toast "Sesi berakhir", ke `/login`. Helper `safeRedirect(value): string` (hanya path internal, §11.5) dengan unit test.
   - **Selesai bila:** membuka `/orgs` tanpa login berakhir di `/login?redirect=%2Forgs`.

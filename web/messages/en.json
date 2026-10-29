@@ -37,5 +37,6 @@
 	"field_error_token_invalid": "Link is invalid or expired",
 	"field_error_user_id_another_member": "Please select another member",
 	"field_error_plan_unknown": "Unknown plan",
-	"field_error_invalid": "Invalid value"
+	"field_error_invalid": "Invalid value",
+	"auth_session_ended": "Session ended"
 }

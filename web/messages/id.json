@@ -37,5 +37,6 @@
 	"field_error_token_invalid": "Tautan tidak valid atau sudah kedaluwarsa",
 	"field_error_user_id_another_member": "Pilih anggota lain",
 	"field_error_plan_unknown": "Plan tidak dikenal",
-	"field_error_invalid": "Nilai tidak valid"
+	"field_error_invalid": "Nilai tidak valid",
+	"auth_session_ended": "Sesi berakhir"
 }
